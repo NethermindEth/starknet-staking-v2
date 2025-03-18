@@ -10,8 +10,6 @@ import (
 	"github.com/NethermindEth/starknet.go/account"
 )
 
-// go get github.com/deckarep/golang-set/v2
-
 type AccountData struct {
 	address string
 	privKey string
@@ -55,7 +53,6 @@ func main() {
 	pendingAttestations := make(map[uint64]AttestRequiredWithValidity)
 
 	// Attestations in their sending window
-	// activeAttestations := make([]AttestRequired, 0)
 	activeAttestations := make(map[uint64][]AttestRequired)
 
 	// Subscribe to the block headers
@@ -200,22 +197,4 @@ func sendAllActiveAttestations(
 			delete(activeAttestations, untilBlockNumber)
 		}
 	}
-
-	// for i := 0; i < len(activeAttestations); {
-	// 	if currentBlockNumber <= activeAttestations[i].untilBlockNumber {
-	// 		// Send attestation to dispatcher
-	// 		dispatcher.AttestRequired <- activeAttestations[i]
-	// 		i++
-	// 	} else {
-	// 		// Add attestation to remove it in dispatcher
-	// 		attestationsToRemoveInDispatcher = append(attestationsToRemoveInDispatcher, *activeAttestations[i].blockHash)
-
-	// 		// Remove attestation from active if out of window (currentBlockNumber should always be i+1 here)
-	// 		if len(activeAttestations) > 1 {
-	// 			activeAttestations[i] = activeAttestations[len(activeAttestations)-1]
-	// 		} else {
-	// 			activeAttestations = []AttestRequired{}
-	// 		}
-	// 	}
-	// }
 }
