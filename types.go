@@ -10,6 +10,7 @@ type Address felt.Felt
 
 type Balance felt.Felt
 
+type BlockNumber = uint64
 type BlockHash = felt.Felt
 
 // HeadersSubscriptionResponse is the response from the subscription to new block headers
@@ -28,12 +29,12 @@ type AttestationInfo struct {
 	Stake                     uint128.Uint128 `json:"stake"`
 	EpochLen                  uint64          `json:"epoch_len"`
 	EpochId                   uint64          `json:"epoch_id"`
-	CurrentEpochStartingBlock uint64          `json:"current_epoch_starting_block"`
+	CurrentEpochStartingBlock BlockNumber     `json:"current_epoch_starting_block"`
 }
 
 type AttestRequiredWithValidity struct {
 	AttestRequired
-	untilBlockNumber uint64
+	untilBlockNumber BlockNumber
 }
 
 type AttestRequired struct {

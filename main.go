@@ -50,10 +50,10 @@ func main() {
 	}
 
 	// Attestations waiting for their window (only 1 / block at most as MIN_ATTESTATION_WINDOW is constant)
-	pendingAttestations := make(map[uint64]AttestRequiredWithValidity)
+	pendingAttestations := make(map[BlockNumber]AttestRequiredWithValidity)
 
 	// Attestations in their sending window
-	activeAttestations := make(map[uint64][]AttestRequired)
+	activeAttestations := make(map[BlockNumber][]AttestRequired)
 
 	// Subscribe to the block headers
 	blockHeaderFeed := make(chan rpcv8.BlockHeader) // could maybe make it buffered to allow for margin?
@@ -100,7 +100,7 @@ func main() {
 	// Should also track re-org and check if the re-org means we have to attest again or not
 }
 
-func fetchEpochInfo(account *account.Account) (AttestationInfo, uint64, uint64, error) {
+func fetchEpochInfo(account *account.Account) (AttestationInfo, uint64, BlockNumber, error) {
 	attestationInfo, attestInfoErr := fetchAttestationInfo(account)
 	if attestInfoErr != nil {
 		return AttestationInfo{}, 0, 0, attestInfoErr
@@ -116,7 +116,7 @@ func fetchEpochInfo(account *account.Account) (AttestationInfo, uint64, uint64, 
 	return attestationInfo, attestationWindow, blockNumberToAttestTo, nil
 }
 
-func computeBlockNumberToAttestTo(account *account.Account, attestationInfo AttestationInfo, attestationWindow uint64) uint64 {
+func computeBlockNumberToAttestTo(account *account.Account, attestationInfo AttestationInfo, attestationWindow uint64) BlockNumber {
 	startingBlock := attestationInfo.CurrentEpochStartingBlock + attestationInfo.EpochLen
 
 	// TODO: might be hash(stake, hash(epoch_id, address))
@@ -136,8 +136,8 @@ func computeBlockNumberToAttestTo(account *account.Account, attestationInfo Atte
 
 func schedulePendingAttestations(
 	currentBlockHeader *rpcv8.BlockHeader,
-	blockNumberToAttestTo uint64,
-	pendingAttestations map[uint64]AttestRequiredWithValidity,
+	blockNumberToAttestTo BlockNumber,
+	pendingAttestations map[BlockNumber]AttestRequiredWithValidity,
 	attestationInfo *AttestationInfo,
 	attestationWindow uint64,
 ) {
@@ -154,9 +154,9 @@ func schedulePendingAttestations(
 }
 
 func movePendingAttestationsToActive(
-	pendingAttestations map[uint64]AttestRequiredWithValidity,
-	activeAttestations map[uint64][]AttestRequired,
-	currentBlockNumber uint64,
+	pendingAttestations map[BlockNumber]AttestRequiredWithValidity,
+	activeAttestations map[BlockNumber][]AttestRequired,
+	currentBlockNumber BlockNumber,
 ) {
 	// If we are at the beginning of some attestation window
 	if pending, pendingExists := pendingAttestations[currentBlockNumber]; pendingExists {
@@ -174,9 +174,9 @@ func movePendingAttestationsToActive(
 }
 
 func sendAllActiveAttestations(
-	activeAttestations map[uint64][]AttestRequired,
+	activeAttestations map[BlockNumber][]AttestRequired,
 	dispatcher *EventDispatcher,
-	currentBlockNumber uint64,
+	currentBlockNumber BlockNumber,
 ) {
 	for untilBlockNumber, attestations := range activeAttestations {
 		if currentBlockNumber <= untilBlockNumber {
