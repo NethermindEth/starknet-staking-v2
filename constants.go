@@ -12,7 +12,7 @@ const ATTESTATION_CONTRACT_ADDRESS string = "0xETC"
 var stakingContractAddress, _ = new(felt.Felt).SetString(STAKING_CONTRACT_ADDRESS)
 var attestationContractAddress, _ = new(felt.Felt).SetString(ATTESTATION_CONTRACT_ADDRESS)
 
-const MIN_ATTESTATION_WINDOW uint8 = 10
+const MIN_ATTESTATION_WINDOW uint64 = 10
 
 var sepoliaStrkTokenAddress, _ = new(felt.Felt).SetString(SEPOLIA_TOKENS.Strk)
 

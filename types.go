@@ -28,3 +28,12 @@ type AttestationInfo struct {
 	EpochId                   uint64          `json:"epoch_id"`
 	CurrentEpochStartingBlock uint64          `json:"current_epoch_starting_block"`
 }
+
+type AttestRequiredWithValidity struct {
+	AttestRequired
+	untilBlockNumber uint64
+}
+
+type AttestRequired struct {
+	blockHash *felt.Felt
+}

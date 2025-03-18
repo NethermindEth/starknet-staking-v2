@@ -140,7 +140,7 @@ func fetchAttestationInfo(account *account.Account) (AttestationInfo, error) {
 	}, nil
 }
 
-func fetchAttestationWindow(account *account.Account) (uint8, error) {
+func fetchAttestationWindow(account *account.Account) (uint64, error) {
 	result, err := account.Call(
 		context.Background(),
 		rpc.FunctionCall{
@@ -159,7 +159,7 @@ func fetchAttestationWindow(account *account.Account) (uint8, error) {
 		return 0, entrypointResponseError("attestation_window")
 	}
 
-	return uint8(result[0].Uint64()), nil
+	return result[0].Uint64(), nil
 }
 
 func fetchValidatorBalance(account *account.Account) (Balance, error) {
