@@ -188,7 +188,7 @@ func sendAllActiveAttestations(
 			// Notify dispatcher of attestations to remove
 			dispatcher.AttestationsToRemove <- utils.Map(
 				attestations,
-				func(attestation AttestRequired) felt.Felt {
+				func(attestation AttestRequired) BlockHash {
 					return *attestation.blockHash
 				},
 			)

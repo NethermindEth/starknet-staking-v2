@@ -43,14 +43,14 @@ type StakeUpdated struct{}
 type EventDispatcher struct {
 	StakeUpdated         chan StakeUpdated
 	AttestRequired       chan AttestRequired
-	AttestationsToRemove chan []felt.Felt
+	AttestationsToRemove chan []BlockHash
 }
 
 func NewEventDispatcher() EventDispatcher {
 	return EventDispatcher{
 		AttestRequired:       make(chan AttestRequired),
 		StakeUpdated:         make(chan StakeUpdated),
-		AttestationsToRemove: make(chan []felt.Felt),
+		AttestationsToRemove: make(chan []BlockHash),
 	}
 }
 
@@ -63,7 +63,7 @@ func (d *EventDispatcher) Dispatch(
 	var currentEpoch uint64
 	stakedAmountPerEpoch := NewStakedAmount()
 
-	activeAttestations := make(map[felt.Felt]AttestationStatus)
+	activeAttestations := make(map[BlockHash]AttestationStatus)
 
 	for {
 		select {
@@ -153,7 +153,7 @@ func invokeAttest(
 }
 
 // Repeat an Attest event after the `delay` in seconds
-func repeatAttest(attestChan chan<- AttestRequired, event AttestRequired, delay uint64, activeAttestations map[felt.Felt]AttestationStatus) {
+func repeatAttest(attestChan chan<- AttestRequired, event AttestRequired, delay uint64, activeAttestations map[BlockHash]AttestationStatus) {
 	// Will retry sending attestation at the next block (if still within window) and/or after sleep
 	//
 	// Problem: If we sleep, we have no idea if the current block after waking up is still within attestation window
@@ -179,7 +179,7 @@ func trackAttest(
 	attestChan chan AttestRequired,
 	event AttestRequired,
 	txResp *rpc.TransactionResponse,
-	activeAttestations map[felt.Felt]AttestationStatus,
+	activeAttestations map[BlockHash]AttestationStatus,
 ) {
 	startTime := time.Now()
 	txStatus, err := trackTransactionStatus(provider, txResp.TransactionHash)

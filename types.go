@@ -10,6 +10,8 @@ type Address felt.Felt
 
 type Balance felt.Felt
 
+type BlockHash = felt.Felt
+
 // HeadersSubscriptionResponse is the response from the subscription to new block headers
 type HeadersSubscriptionResponse struct {
 	JsonRPC string `json:"jsonrpc"`
@@ -35,5 +37,5 @@ type AttestRequiredWithValidity struct {
 }
 
 type AttestRequired struct {
-	blockHash *felt.Felt
+	blockHash *BlockHash
 }
