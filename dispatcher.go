@@ -7,7 +7,6 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
-	"github.com/NethermindEth/starknet.go/utils"
 )
 
 const defaultAttestDelay = 10
@@ -108,53 +107,6 @@ for_loop:
 	}
 }
 
-func invokeAttest(
-	account *account.Account, attest *AttestRequired,
-) (*rpc.TransactionResponse, error) {
-	// Todo this might be worth doing async
-	nonce, err := nonce(account)
-	if err != nil {
-		return nil, err
-	}
-
-	contractAddrFelt := attestationContractAddress.ToFelt()
-	blockHashFelt := attest.blockHash.ToFelt()
-	fnCall := rpc.FunctionCall{
-		ContractAddress:    &contractAddrFelt,
-		EntryPointSelector: utils.GetSelectorFromNameFelt("attest"),
-		Calldata:           []*felt.Felt{&blockHashFelt},
-	}
-
-	invokeCalldata, err := account.FmtCalldata([]rpc.FunctionCall{fnCall})
-	if err != nil {
-		return nil, err
-	}
-
-	invoke := rpc.BroadcastInvokev3Txn{
-		InvokeTxnV3: rpc.InvokeTxnV3{
-			Type:          rpc.TransactionType_Invoke,
-			SenderAddress: account.AccountAddress,
-			Calldata:      invokeCalldata,
-			Version:       rpc.TransactionV3,
-			// Signature: , // Set during signing below
-			Nonce: nonce,
-			// ResourceBounds: ,
-			// Tip: rpc.U64, // Investigate if this is applicable, perhaps it can be a way of
-			//               // prioritizing this transaction if there is congestion
-			// PayMasterData: , // I don't know if this is applicable, investigate. Maybe not in v1
-			// AccountDeploymentData: , // It shouldn't be required
-			// NonceDataMode: , // Investigate what goes here
-			// FeeMode: , // Investigate
-		},
-	}
-
-	if err = account.SignInvokeTransaction(context.Background(), &invoke.InvokeTxnV3); err != nil {
-		return nil, err
-	}
-
-	return account.SendTransaction(context.Background(), invoke)
-}
-
 // do something with response
 // Have it checked that is included in pending block
 // Have it checked that it was included in the latest block (success, close the goroutine)
@@ -165,7 +117,7 @@ func invokeAttest(
 func trackAttest(
 	provider *rpc.Provider,
 	event AttestRequired,
-	txResp *rpc.TransactionResponse,
+	txResp *rpc.AddInvokeTransactionResponse,
 	activeAttestations map[BlockHash]AttestationStatus,
 ) {
 	txStatus, err := trackTransactionStatus(provider, txResp.TransactionHash)
