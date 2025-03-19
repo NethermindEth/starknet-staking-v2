@@ -2,17 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
-	rpcv8 "github.com/NethermindEth/juno/rpc/v8"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
-	"github.com/gorilla/websocket"
 	"lukechampine.com/uint128"
 )
 
@@ -59,59 +56,28 @@ func balance(address *Address) Balance {
 	return Balance{}
 }
 
-// Given an account, returns it's nonce
-func nonce(account *account.Account) (*felt.Felt, error) {
-	return account.Nonce(context.Background(), rpc.BlockID{Tag: "latest"}, account.AccountAddress)
-}
+func subscribeToBlockHeader(providerUrl string, blockHeaderFeed chan<- *rpc.BlockHeader) {
+	fmt.Println("Starting websocket connection...")
 
-// Subscribe to block headers
-func subscribeToBlockHeaders(providerUrl string, blockHeaderChan chan<- rpcv8.BlockHeader) {
 	// Take the providerUrl parts (host & port) and build the ws url
-	wsURL := "ws://" + "localhost" + ":" + "6061" + "/v0_8"
+	wsProviderUrl := "ws://" + "localhost" + ":" + "6061" + "/v0_8"
 
-	// Connect to the WebSocket
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	defer conn.Close()
+	// Initialize connection to WS provider
+	wsClient, err := rpc.NewWebsocketProvider(wsProviderUrl)
 	if err != nil {
-		fmt.Println("Error connecting to WebSocket:", err)
-		// TODO: implement a retry mechanism ?
+		panic(fmt.Sprintf("Error dialing the WS provider: %s", err))
+	}
+	defer wsClient.Close()       // Close the WS client when the program finishes
+	defer close(blockHeaderFeed) // Close the headers channel
+
+	fmt.Println("Established connection with the client")
+
+	sub, err := wsClient.SubscribeNewHeads(context.Background(), blockHeaderFeed, nil)
+	if err != nil {
+		panic(fmt.Sprintf("Error subscribing to new block headers: %s", err))
 	}
 
-	// JSON RPC request to subscribe to new block headers
-	subscribeMessage := `{
-		"jsonrpc": "2.0",
-		"id": 1,
-		"method": "starknet_subscribeNewHeads"
-	}`
-
-	// Send the subscription request
-	if err := conn.WriteMessage(websocket.TextMessage, []byte(subscribeMessage)); err != nil {
-		fmt.Println("Error sending subscription request:", err)
-		// TODO: implement a retry mechanism ?
-	}
-
-	// TODO: implement a logger
-	fmt.Println("Subscribed to new Starknet block headers...")
-
-	// Listen for new block headers
-	for {
-		msgType, msgBytes, err := conn.ReadMessage()
-		fmt.Println("Message type:", msgType)
-		if err != nil {
-			fmt.Println("Error reading message:", err)
-			// TODO: implement a retry mechanism ?
-		}
-
-		// TODO: in logger
-		// fmt.Println("New block header:", string(msgBytes))
-
-		var response HeadersSubscriptionResponse
-		if err = json.Unmarshal(msgBytes, &response); err != nil {
-			fmt.Println("Error unmarshaling JSON:", err)
-		} else {
-			blockHeaderChan <- response.Params.Result
-		}
-	}
+	fmt.Println("Successfully subscribed to the node. Subscription ID:", sub.ID())
 }
 
 func fetchAttestationInfo(account *account.Account) (AttestationInfo, error) {

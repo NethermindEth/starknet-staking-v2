@@ -5,9 +5,9 @@ import (
 
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
-	rpcv8 "github.com/NethermindEth/juno/rpc/v8"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
+	"github.com/NethermindEth/starknet.go/rpc"
 )
 
 type AccountData struct {
@@ -38,6 +38,10 @@ func main() {
 
 	// ------
 
+	// Subscribe to the block headers
+	blockHeaderFeed := make(chan *rpc.BlockHeader) // could maybe make it buffered to allow for margin?
+	go subscribeToBlockHeader(config.providerUrl, blockHeaderFeed)
+
 	// Initially, fetch necessary info
 	//
 	// Note 1 (attest info): No need to listen to real-time events, and fetching once per epoch should work,
@@ -55,15 +59,11 @@ func main() {
 	// Attestations in their sending window
 	activeAttestations := make(map[BlockNumber][]AttestRequired)
 
-	// Subscribe to the block headers
-	blockHeaderFeed := make(chan rpcv8.BlockHeader) // could maybe make it buffered to allow for margin?
-	go subscribeToBlockHeaders(config.providerUrl, blockHeaderFeed)
-
 	for blockHeader := range blockHeaderFeed {
 		fmt.Println("Block header:", blockHeader)
 
 		// Re-fetch epoch info on new epoch (validity guaranteed for 1 epoch even if updates are made)
-		if *blockHeader.Number == attestationInfo.CurrentEpochStartingBlock.ToUint64()+attestationInfo.EpochLen {
+		if blockHeader.BlockNumber == attestationInfo.CurrentEpochStartingBlock.ToUint64()+attestationInfo.EpochLen {
 			previousEpochInfo := attestationInfo
 
 			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(account)
@@ -79,11 +79,11 @@ func main() {
 			}
 		}
 
-		schedulePendingAttestations(&blockHeader, blockNumberToAttestTo, pendingAttestations, &attestationInfo, attestationWindow)
+		schedulePendingAttestations(blockHeader, blockNumberToAttestTo, pendingAttestations, &attestationInfo, attestationWindow)
 
-		movePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(*blockHeader.Number))
+		movePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(blockHeader.BlockNumber))
 
-		sendAllActiveAttestations(activeAttestations, &dispatcher, BlockNumber(*blockHeader.Number))
+		sendAllActiveAttestations(activeAttestations, &dispatcher, BlockNumber(blockHeader.BlockNumber))
 	}
 
 	// --> I think we don't need to listen to stake events, we can get it when fetching AttestationInfo
@@ -135,20 +135,20 @@ func computeBlockNumberToAttestTo(account *account.Account, attestationInfo Atte
 }
 
 func schedulePendingAttestations(
-	currentBlockHeader *rpcv8.BlockHeader,
+	currentBlockHeader *rpc.BlockHeader,
 	blockNumberToAttestTo BlockNumber,
 	pendingAttestations map[BlockNumber]AttestRequiredWithValidity,
 	attestationInfo *AttestationInfo,
 	attestationWindow uint64,
 ) {
 	// If we are at the block number to attest to
-	if BlockNumber(*currentBlockHeader.Number) == blockNumberToAttestTo {
+	if BlockNumber(currentBlockHeader.BlockNumber) == blockNumberToAttestTo {
 		// Schedule the attestation to be sent starting at the beginning of attestation window
-		pendingAttestations[BlockNumber(*currentBlockHeader.Number+MIN_ATTESTATION_WINDOW)] = AttestRequiredWithValidity{
+		pendingAttestations[BlockNumber(currentBlockHeader.BlockNumber+MIN_ATTESTATION_WINDOW)] = AttestRequiredWithValidity{
 			AttestRequired: AttestRequired{
-				blockHash: utils.HeapPtr(BlockHash(*currentBlockHeader.Hash)),
+				blockHash: utils.HeapPtr(BlockHash(*currentBlockHeader.BlockHash)),
 			},
-			untilBlockNumber: BlockNumber(*currentBlockHeader.Number + attestationWindow),
+			untilBlockNumber: BlockNumber(currentBlockHeader.BlockNumber + attestationWindow),
 		}
 	}
 }
