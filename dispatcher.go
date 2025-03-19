@@ -114,10 +114,11 @@ func invokeAttest(
 	}
 
 	contractAddrFelt := attestationContractAddress.ToFelt()
+	blockHashFelt := attest.blockHash.ToFelt()
 	fnCall := rpc.FunctionCall{
 		ContractAddress:    &contractAddrFelt,
 		EntryPointSelector: utils.GetSelectorFromNameFelt("attest"),
-		Calldata:           []*felt.Felt{attest.blockHash},
+		Calldata:           []*felt.Felt{&blockHashFelt},
 	}
 
 	invokeCalldata, err := account.FmtCalldata([]rpc.FunctionCall{fnCall})

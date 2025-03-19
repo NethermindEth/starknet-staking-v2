@@ -31,7 +31,11 @@ func (b BlockNumber) ToUint64() uint64 {
 	return uint64(b)
 }
 
-type BlockHash = felt.Felt
+type BlockHash felt.Felt
+
+func (b BlockHash) ToFelt() felt.Felt {
+	return felt.Felt(b)
+}
 
 // HeadersSubscriptionResponse is the response from the subscription to new block headers
 type HeadersSubscriptionResponse struct {

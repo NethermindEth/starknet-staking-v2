@@ -146,7 +146,7 @@ func schedulePendingAttestations(
 		// Schedule the attestation to be sent starting at the beginning of attestation window
 		pendingAttestations[BlockNumber(*currentBlockHeader.Number+MIN_ATTESTATION_WINDOW)] = AttestRequiredWithValidity{
 			AttestRequired: AttestRequired{
-				blockHash: currentBlockHeader.Hash,
+				blockHash: utils.HeapPtr(BlockHash(*currentBlockHeader.Hash)),
 			},
 			untilBlockNumber: BlockNumber(*currentBlockHeader.Number + attestationWindow),
 		}
