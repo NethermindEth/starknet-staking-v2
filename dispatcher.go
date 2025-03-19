@@ -84,12 +84,10 @@ func (d *EventDispatcher) Dispatch(
 			resp, err := invokeAttest(account, &event)
 			if err != nil {
 				// throw a detailed error of what happened
-
-				go repeatAttest(d.AttestRequired, event, defaultAttestDelay, activeAttestations)
 				continue
 			}
 
-			go trackAttest(provider, d.AttestRequired, event, resp, activeAttestations)
+			go trackAttest(provider, event, resp, activeAttestations)
 		case event, ok := <-d.AttestationsToRemove:
 			if !ok {
 				break
@@ -152,21 +150,6 @@ func invokeAttest(
 	return account.SendTransaction(context.Background(), invoke)
 }
 
-// Repeat an Attest event after the `delay` in seconds
-func repeatAttest(attestChan chan<- AttestRequired, event AttestRequired, delay uint64, activeAttestations map[BlockHash]AttestationStatus) {
-	// Will retry sending attestation at the next block (if still within window) and/or after sleep
-	//
-	// Problem: If we sleep, we have no idea if the current block after waking up is still within attestation window
-	// Solution: Could maybe remove this sleeping retry mechanism, and just wait for next event from main.go.
-	//
-	// And actually after additional thought, sleeping and waking up & sending an event after the max window might cause a bug
-	// resetting the attestation as an active one.
-	activeAttestations[*event.blockHash] = Failed
-
-	time.Sleep(time.Second * time.Duration(delay))
-	attestChan <- event
-}
-
 // do something with response
 // Have it checked that is included in pending block
 // Have it checked that it was included in the latest block (success, close the goroutine)
@@ -176,34 +159,28 @@ func repeatAttest(attestChan chan<- AttestRequired, event AttestRequired, delay 
 // If the transaction was actually reverted log it and repeat the attestation
 func trackAttest(
 	provider *rpc.Provider,
-	attestChan chan AttestRequired,
 	event AttestRequired,
 	txResp *rpc.TransactionResponse,
 	activeAttestations map[BlockHash]AttestationStatus,
 ) {
-	startTime := time.Now()
 	txStatus, err := trackTransactionStatus(provider, txResp.TransactionHash)
 
 	if err != nil {
 		// log exactly what's the error
-
-		elapsedTime := time.Now().Sub(startTime).Seconds()
-		var attestDelay uint64
-		if elapsedTime < defaultAttestDelay {
-			attestDelay = defaultAttestDelay - uint64(elapsedTime)
-		}
-		repeatAttest(attestChan, event, attestDelay, activeAttestations)
 		return
 	}
 
 	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
 		// log exactly the rejection and why was it
-
-		repeatAttest(attestChan, event, defaultAttestDelay, activeAttestations)
 		return
 	}
 
-	// if we got here, then the transaction status was accepted
+	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
+		// log the failure & the reason
+		return
+	}
+
+	// if we got here, then the transaction status was accepted & successful
 	activeAttestations[*event.blockHash] = Successful
 }
 
@@ -233,6 +210,7 @@ func trackTransactionStatus(provider *rpc.Provider, txHash *felt.Felt) (*rpc.Txn
 	// Should we have a finite number of tries?
 	//
 	// I guess here we can return and retry from the next block (we might not even be in attestation window anymore)
+	// And we already waited `defaultAttestDelay` seconds
 	// wdyt ?
 	return trackTransactionStatus(provider, txHash)
 }
