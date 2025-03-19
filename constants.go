@@ -4,15 +4,15 @@ import (
 	"errors"
 )
 
-const STAKING_CONTRACT_ADDRESS string = "0xETC"
-const ATTESTATION_CONTRACT_ADDRESS string = "0xETC"
+const STAKING_CONTRACT_ADDRESS = "0xETC"
+const ATTESTATION_CONTRACT_ADDRESS = "0xETC"
 
-var stakingContractAddress, _ = new(Address).SetString(STAKING_CONTRACT_ADDRESS)
-var attestationContractAddress, _ = new(Address).SetString(ATTESTATION_CONTRACT_ADDRESS)
+var stakingContractAddress = (Address{}).SetString(STAKING_CONTRACT_ADDRESS)
+var attestationContractAddress = (Address{}).SetString(ATTESTATION_CONTRACT_ADDRESS)
 
 const MIN_ATTESTATION_WINDOW uint64 = 10
 
-var sepoliaStrkTokenAddress, _ = new(Address).SetString(SEPOLIA_TOKENS.Strk)
+var sepoliaStrkTokenAddress = (Address{}).SetString(SEPOLIA_TOKENS.Strk)
 
 var MAINNET_TOKENS NetworkTokenAddress = NetworkTokenAddress{
 	Eth:  "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
