@@ -139,7 +139,7 @@ func fetchAttestationInfo(account *account.Account) (AttestationInfo, error) {
 		Stake:                     uint128.Uint128{Lo: stake[0], Hi: stake[1]},
 		EpochLen:                  result[2].Uint64(),
 		EpochId:                   result[3].Uint64(),
-		CurrentEpochStartingBlock: result[4].Uint64(),
+		CurrentEpochStartingBlock: BlockNumber(result[4].Uint64()),
 	}, nil
 }
 

@@ -63,7 +63,7 @@ func main() {
 		fmt.Println("Block header:", blockHeader)
 
 		// Re-fetch epoch info on new epoch (validity guaranteed for 1 epoch even if updates are made)
-		if *blockHeader.Number == attestationInfo.CurrentEpochStartingBlock+attestationInfo.EpochLen {
+		if *blockHeader.Number == attestationInfo.CurrentEpochStartingBlock.ToUint64()+attestationInfo.EpochLen {
 			previousEpochInfo := attestationInfo
 
 			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(account)
@@ -73,7 +73,7 @@ func main() {
 
 			// Sanity check
 			if attestationInfo.EpochId != previousEpochInfo.EpochId+1 ||
-				attestationInfo.CurrentEpochStartingBlock != previousEpochInfo.CurrentEpochStartingBlock+previousEpochInfo.EpochLen {
+				attestationInfo.CurrentEpochStartingBlock.ToUint64() != previousEpochInfo.CurrentEpochStartingBlock.ToUint64()+previousEpochInfo.EpochLen {
 				fmt.Println("Wrong epoch change: from %s to %s", previousEpochInfo, attestationInfo)
 				// TODO: what should we do ?
 			}
@@ -81,9 +81,9 @@ func main() {
 
 		schedulePendingAttestations(&blockHeader, blockNumberToAttestTo, pendingAttestations, &attestationInfo, attestationWindow)
 
-		movePendingAttestationsToActive(pendingAttestations, activeAttestations, *blockHeader.Number)
+		movePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(*blockHeader.Number))
 
-		sendAllActiveAttestations(activeAttestations, &dispatcher, *blockHeader.Number)
+		sendAllActiveAttestations(activeAttestations, &dispatcher, BlockNumber(*blockHeader.Number))
 	}
 
 	// --> I think we don't need to listen to stake events, we can get it when fetching AttestationInfo
@@ -117,7 +117,7 @@ func fetchEpochInfo(account *account.Account) (AttestationInfo, uint64, BlockNum
 }
 
 func computeBlockNumberToAttestTo(account *account.Account, attestationInfo AttestationInfo, attestationWindow uint64) BlockNumber {
-	startingBlock := attestationInfo.CurrentEpochStartingBlock + attestationInfo.EpochLen
+	startingBlock := attestationInfo.CurrentEpochStartingBlock.ToUint64() + attestationInfo.EpochLen
 
 	// TODO: might be hash(stake, hash(epoch_id, address))
 	// or should we use PoseidonArray instead ?
@@ -131,7 +131,7 @@ func computeBlockNumberToAttestTo(account *account.Account, attestationInfo Atte
 	// TODO: hash (felt) will most likely not fit into a uint64 --> use big.Int in that case ?
 	blockOffset := hash.Uint64() % (attestationInfo.EpochLen - attestationWindow)
 
-	return startingBlock + blockOffset
+	return BlockNumber(startingBlock + blockOffset)
 }
 
 func schedulePendingAttestations(
@@ -142,13 +142,13 @@ func schedulePendingAttestations(
 	attestationWindow uint64,
 ) {
 	// If we are at the block number to attest to
-	if *currentBlockHeader.Number == blockNumberToAttestTo {
+	if BlockNumber(*currentBlockHeader.Number) == blockNumberToAttestTo {
 		// Schedule the attestation to be sent starting at the beginning of attestation window
-		pendingAttestations[*currentBlockHeader.Number+MIN_ATTESTATION_WINDOW] = AttestRequiredWithValidity{
+		pendingAttestations[BlockNumber(*currentBlockHeader.Number+MIN_ATTESTATION_WINDOW)] = AttestRequiredWithValidity{
 			AttestRequired: AttestRequired{
 				blockHash: currentBlockHeader.Hash,
 			},
-			untilBlockNumber: *currentBlockHeader.Number + attestationWindow,
+			untilBlockNumber: BlockNumber(*currentBlockHeader.Number + attestationWindow),
 		}
 	}
 }

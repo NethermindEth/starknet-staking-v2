@@ -10,6 +10,10 @@ import (
 
 type Address felt.Felt
 
+func (a Address) ToFelt() felt.Felt {
+	return felt.Felt(a)
+}
+
 func (a Address) SetString(addrStr string) Address {
 	adr, err := new(felt.Felt).SetString(addrStr)
 	if err != nil {
@@ -19,13 +23,14 @@ func (a Address) SetString(addrStr string) Address {
 	return Address(*adr)
 }
 
-func (a Address) ToFelt() felt.Felt {
-	return felt.Felt(a)
-}
-
 type Balance felt.Felt
 
-type BlockNumber = uint64
+type BlockNumber uint64
+
+func (b BlockNumber) ToUint64() uint64 {
+	return uint64(b)
+}
+
 type BlockHash = felt.Felt
 
 // HeadersSubscriptionResponse is the response from the subscription to new block headers
