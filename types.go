@@ -6,7 +6,7 @@ import (
 	"lukechampine.com/uint128"
 )
 
-type Address felt.Felt
+type Address = felt.Felt
 
 type Balance felt.Felt
 

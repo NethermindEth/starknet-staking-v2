@@ -33,7 +33,7 @@ func NewAccount(provider *rpc.Provider, accountData *AccountData) *account.Accou
 	// place holder need to change
 	var publicKey string
 	var privateKey big.Int
-	var accountAddr felt.Felt
+	var accountAddr Address
 	// ----------------------------
 
 	ks := account.NewMemKeystore()
