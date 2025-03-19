@@ -8,7 +8,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/NethermindEth/cairo-vm-go v0.0.0-20241022093807-167daddfd4a4 // indirect
 	github.com/NethermindEth/juno v0.14.2 // indirect
-	github.com/NethermindEth/starknet.go v0.7.4-0.20250311022408-7e29bd76ae72 // indirect
+	github.com/NethermindEth/starknet.go v0.8.0-beta.2 // indirect
 	github.com/alecthomas/participle/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.21.0 // indirect

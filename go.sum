@@ -12,6 +12,8 @@ github.com/NethermindEth/juno v0.14.2 h1:LTCoHj/2eV578YWmYnHtLQBwTH4buPlbLSgPm2e
 github.com/NethermindEth/juno v0.14.2/go.mod h1:ZQND85ez92CHLV3O1P/31H2OtnHFkJk8hS5iBeijtAo=
 github.com/NethermindEth/starknet.go v0.7.4-0.20250311022408-7e29bd76ae72 h1:kjXq/z2fRYZaDXi2VUs+7ZDbTH+8/mcfmPipMtoNqbw=
 github.com/NethermindEth/starknet.go v0.7.4-0.20250311022408-7e29bd76ae72/go.mod h1:slNA8PxtxA/0LQv0FwHnL3lHFDNhVZfTK6U2gjVb7l8=
+github.com/NethermindEth/starknet.go v0.8.0-beta.2 h1:yoTmryLeHFWcHbhxIJji1wMJgTTDL2v3zSdVzuD8FQc=
+github.com/NethermindEth/starknet.go v0.8.0-beta.2/go.mod h1:slNA8PxtxA/0LQv0FwHnL3lHFDNhVZfTK6U2gjVb7l8=
 github.com/alecthomas/participle/v2 v2.0.0 h1:Fgrq+MbuSsJwIkw3fEj9h75vDP0Er5JzepJ0/HNHv0g=
 github.com/alecthomas/participle/v2 v2.0.0/go.mod h1:rAKZdJldHu8084ojcWevWAL8KmEU+AT+Olodb+WoN2Y=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
@@ -161,6 +163,7 @@ golang.org/x/net v0.0.0-20200226121028-0de0cce0169b/go.mod h1:z5CRVTTTmAJ677TzLL
 golang.org/x/net v0.0.0-20201021035429-f5854403a974/go.mod h1:sp8m0HH+o8qH0wwXwYZr8TS3Oi6o0r6Gce1SSxlDquU=
 golang.org/x/net v0.28.0 h1:a9JDOJc5GMUJ0+UDqmLT86WiEy7iWyIhz8gz8E4e5hE=
 golang.org/x/net v0.28.0/go.mod h1:yqtgsTWOOnlGLG9GFRrK3++bGOUEkNBoHZc8MEDWPNg=
+golang.org/x/net v0.36.0 h1:vWF2fRbw4qslQsQzgFqZff+BItCvGFQqKzKIzx1rmoA=
 golang.org/x/net v0.36.0/go.mod h1:bFmbeoIPfrw4sMHNhb4J9f6+tPziuGjq7Jk/38fxi1I=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
