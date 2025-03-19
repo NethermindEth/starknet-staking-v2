@@ -65,11 +65,13 @@ func (d *EventDispatcher) Dispatch(
 
 	activeAttestations := make(map[BlockHash]AttestationStatus)
 
+for_loop:
 	for {
 		select {
 		case event, ok := <-d.AttestRequired:
 			if !ok {
-				break
+				// Should never get closed
+				break for_loop
 			}
 
 			switch status, exists := activeAttestations[*event.blockHash]; {
@@ -90,11 +92,13 @@ func (d *EventDispatcher) Dispatch(
 			go trackAttest(provider, event, resp, activeAttestations)
 		case event, ok := <-d.AttestationsToRemove:
 			if !ok {
-				break
+				// Should never get closed
+				break for_loop
 			}
 			for _, blockHash := range event {
 				delete(activeAttestations, blockHash)
 			}
+			// Might delete this case later if we really don't need it
 		case event, ok := <-d.StakeUpdated:
 			if !ok {
 				break
