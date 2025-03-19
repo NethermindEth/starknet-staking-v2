@@ -148,7 +148,6 @@ func invokeAttest(
 		return nil, err
 	}
 
-	// why not use dedicated fct `account.Provider().AddInvokeTransaction(context.Background(), invoke)` ?
 	return account.SendTransaction(context.Background(), invoke)
 }
 
