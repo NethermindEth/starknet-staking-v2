@@ -4,7 +4,6 @@ import (
 	"log"
 
 	"github.com/NethermindEth/juno/core/felt"
-	rpcv8 "github.com/NethermindEth/juno/rpc/v8"
 	"lukechampine.com/uint128"
 )
 
@@ -35,16 +34,6 @@ type BlockHash felt.Felt
 
 func (b BlockHash) ToFelt() felt.Felt {
 	return felt.Felt(b)
-}
-
-// HeadersSubscriptionResponse is the response from the subscription to new block headers
-type HeadersSubscriptionResponse struct {
-	JsonRPC string `json:"jsonrpc"`
-	Method  string `json:"method"`
-	Params  struct {
-		Result         rpcv8.BlockHeader `json:"result"`
-		SubscriptionID uint64            `json:"subscription_id"`
-	} `json:"params"`
 }
 
 // AttestationInfo is the response from the get_attestation_info_by_operational_address
