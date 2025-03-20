@@ -74,12 +74,13 @@ func main() {
 			// Sanity check
 			if attestationInfo.EpochId != previousEpochInfo.EpochId+1 ||
 				attestationInfo.CurrentEpochStartingBlock.ToUint64() != previousEpochInfo.CurrentEpochStartingBlock.ToUint64()+previousEpochInfo.EpochLen {
-				fmt.Println("Wrong epoch change: from %s to %s", previousEpochInfo, attestationInfo)
+				// TODO: give more details concerning the epoch info
+				fmt.Printf("Wrong epoch change: from %d to %d", previousEpochInfo.EpochId, attestationInfo.EpochId)
 				// TODO: what should we do ?
 			}
 		}
 
-		schedulePendingAttestations(blockHeader, blockNumberToAttestTo, pendingAttestations, &attestationInfo, attestationWindow)
+		schedulePendingAttestations(blockHeader, blockNumberToAttestTo, pendingAttestations, attestationWindow)
 
 		movePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(blockHeader.BlockNumber))
 
@@ -138,7 +139,6 @@ func schedulePendingAttestations(
 	currentBlockHeader *rpc.BlockHeader,
 	blockNumberToAttestTo BlockNumber,
 	pendingAttestations map[BlockNumber]AttestRequiredWithValidity,
-	attestationInfo *AttestationInfo,
 	attestationWindow uint64,
 ) {
 	// If we are at the block number to attest to
