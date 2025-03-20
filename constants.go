@@ -4,8 +4,9 @@ import (
 	"errors"
 )
 
-const STAKING_CONTRACT_ADDRESS = "0xETC"
-const ATTESTATION_CONTRACT_ADDRESS = "0xETC"
+// TODO: update those 2 address once available
+const STAKING_CONTRACT_ADDRESS = "0x123"
+const ATTESTATION_CONTRACT_ADDRESS = "0x123"
 
 var stakingContractAddress = (Address{}).SetString(STAKING_CONTRACT_ADDRESS)
 var attestationContractAddress = (Address{}).SetString(ATTESTATION_CONTRACT_ADDRESS)
