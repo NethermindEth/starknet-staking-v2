@@ -9,7 +9,7 @@ const STAKING_CONTRACT_ADDRESS = "0x123"
 const ATTESTATION_CONTRACT_ADDRESS = "0x123"
 
 var stakingContractAddress = (Address{}).SetString(STAKING_CONTRACT_ADDRESS)
-var attestationContractAddress = (Address{}).SetString(ATTESTATION_CONTRACT_ADDRESS)
+var AttestationContractAddress = (Address{}).SetString(ATTESTATION_CONTRACT_ADDRESS)
 
 const MIN_ATTESTATION_WINDOW uint64 = 10
 const FEE_ESTIMATION_MULTIPLIER float64 = 1.5

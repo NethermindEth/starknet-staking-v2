@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
@@ -27,13 +28,11 @@ func main() {
 
 	provider := NewProvider(config.providerUrl)
 
-	account := NewAccount(provider, &config.accountData)
-
-	validator := Address(felt.Felt{})
-	staked := staked(&validator)
+	account := NewValidatorAccount(provider, &config.accountData)
 
 	dispatcher := NewEventDispatcher()
-	go dispatcher.Dispatch(provider, account, &validator, &staked)
+	dispatcherActiveAttestations := make(map[BlockHash]AttestationStatus)
+	go dispatcher.Dispatch(&account, dispatcherActiveAttestations, &sync.WaitGroup{})
 	// I have to make sure this function closes at the end
 
 	// ------
@@ -48,7 +47,7 @@ func main() {
 	// as any important updates (ie, related to stake & epoch_length) are effective only from the next epoch!
 	//
 	// Note 2 (attest window): Depending on the expected behaviour of attestation window, we might have to listen to `AttestationWindowChanged` event
-	attestationInfo, attestationWindow, blockNumberToAttestTo, err := fetchEpochInfo(account)
+	attestationInfo, attestationWindow, blockNumberToAttestTo, err := fetchEpochInfo(account.account)
 	if err != nil {
 		// TODO: implement a retry mechanism ?
 	}
@@ -66,7 +65,7 @@ func main() {
 		if blockHeader.BlockNumber == attestationInfo.CurrentEpochStartingBlock.ToUint64()+attestationInfo.EpochLen {
 			previousEpochInfo := attestationInfo
 
-			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(account)
+			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(account.account)
 			if err != nil {
 				// TODO: implement a retry mechanism ?
 			}
@@ -146,7 +145,7 @@ func schedulePendingAttestations(
 		// Schedule the attestation to be sent starting at the beginning of attestation window
 		pendingAttestations[BlockNumber(currentBlockHeader.BlockNumber+MIN_ATTESTATION_WINDOW)] = AttestRequiredWithValidity{
 			AttestRequired: AttestRequired{
-				blockHash: utils.Ptr(BlockHash(*currentBlockHeader.BlockHash)),
+				BlockHash: utils.Ptr(BlockHash(*currentBlockHeader.BlockHash)),
 			},
 			untilBlockNumber: BlockNumber(currentBlockHeader.BlockNumber + attestationWindow),
 		}
@@ -189,7 +188,7 @@ func sendAllActiveAttestations(
 			dispatcher.AttestationsToRemove <- utils.Map(
 				attestations,
 				func(attestation AttestRequired) BlockHash {
-					return *attestation.blockHash
+					return *attestation.BlockHash
 				},
 			)
 

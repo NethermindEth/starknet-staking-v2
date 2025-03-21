@@ -21,7 +21,11 @@ func NewProvider(providerUrl string) *rpc.Provider {
 	return provider
 }
 
-func NewAccount(provider *rpc.Provider, accountData *AccountData) *account.Account {
+type ValidatorAccount struct {
+	account *account.Account
+}
+
+func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) ValidatorAccount {
 	// accountData should contain the information required:
 	//  * staker operational address
 	//  * public key
@@ -41,7 +45,16 @@ func NewAccount(provider *rpc.Provider, accountData *AccountData) *account.Accou
 	if err != nil {
 		log.Fatalf("Cannot create new account: %s", err)
 	}
-	return account
+
+	return ValidatorAccount{account: account}
+}
+
+func (v *ValidatorAccount) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
+	return v.account.GetTransactionStatus(ctx, transactionHash)
+}
+
+func (v *ValidatorAccount) BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
+	return v.account.BuildAndSendInvokeTxn(ctx, functionCalls, multiplier)
 }
 
 // TODO: might not need those 2 endpoints if we get info directly from staking contract
@@ -81,7 +94,7 @@ func subscribeToBlockHeader(providerUrl string, blockHeaderFeed chan<- *rpc.Bloc
 }
 
 func fetchAttestationInfo(account *account.Account) (AttestationInfo, error) {
-	contractAddrFelt := attestationContractAddress.ToFelt()
+	contractAddrFelt := AttestationContractAddress.ToFelt()
 
 	functionCall := rpc.FunctionCall{
 		ContractAddress:    &contractAddrFelt,
@@ -110,7 +123,7 @@ func fetchAttestationInfo(account *account.Account) (AttestationInfo, error) {
 }
 
 func fetchAttestationWindow(account *account.Account) (uint64, error) {
-	contractAddrFelt := attestationContractAddress.ToFelt()
+	contractAddrFelt := AttestationContractAddress.ToFelt()
 
 	result, err := account.Call(
 		context.Background(),
@@ -158,10 +171,10 @@ func fetchValidatorBalance(account *account.Account) (Balance, error) {
 }
 
 func invokeAttest(
-	account *account.Account, attest *AttestRequired,
+	account Account, attest *AttestRequired,
 ) (*rpc.AddInvokeTransactionResponse, error) {
-	contractAddrFelt := attestationContractAddress.ToFelt()
-	blockHashFelt := attest.blockHash.ToFelt()
+	contractAddrFelt := AttestationContractAddress.ToFelt()
+	blockHashFelt := attest.BlockHash.ToFelt()
 
 	calls := []rpc.InvokeFunctionCall{{
 		ContractAddress: &contractAddrFelt,

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/starknet.go/rpc"
 	"lukechampine.com/uint128"
 )
 
@@ -51,5 +53,11 @@ type AttestRequiredWithValidity struct {
 }
 
 type AttestRequired struct {
-	blockHash *BlockHash
+	BlockHash *BlockHash
+}
+
+//go:generate mockgen -destination=./mocks/mock_account.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Account
+type Account interface {
+	GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error)
+	BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error)
 }

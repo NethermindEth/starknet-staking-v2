@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 )
 
@@ -53,16 +54,9 @@ func NewEventDispatcher() EventDispatcher {
 	}
 }
 
-func (d *EventDispatcher) Dispatch(
-	provider *rpc.Provider,
-	account *account.Account,
-	validator *Address,
-	stakedAmount *Balance,
-) {
+func (d *EventDispatcher) Dispatch(account Account, activeAttestations map[BlockHash]AttestationStatus, wg *sync.WaitGroup) {
 	var currentEpoch uint64
 	stakedAmountPerEpoch := NewStakedAmount()
-
-	activeAttestations := make(map[BlockHash]AttestationStatus)
 
 for_loop:
 	for {
@@ -73,9 +67,9 @@ for_loop:
 				break for_loop
 			}
 
-			switch status, exists := activeAttestations[*event.blockHash]; {
+			switch status, exists := activeAttestations[*event.BlockHash]; {
 			case !exists, status == Failed:
-				activeAttestations[*event.blockHash] = Ongoing
+				activeAttestations[*event.BlockHash] = Ongoing
 			case status == Ongoing, status == Successful:
 				continue
 			}
@@ -88,7 +82,8 @@ for_loop:
 				continue
 			}
 
-			go trackAttest(provider, event, resp, activeAttestations)
+			wg.Add(1)
+			go TrackAttest(account, event, resp, activeAttestations, wg)
 		case event, ok := <-d.AttestationsToRemove:
 			if !ok {
 				// Should never get closed
@@ -105,6 +100,10 @@ for_loop:
 			stakedAmountPerEpoch.Update(&event)
 		}
 	}
+
+	// If we ever break from the loop, wait for subprocesses to finish to avoid any undefined behaviour / panic
+	wg.Done()
+	wg.Wait()
 }
 
 // do something with response
@@ -114,13 +113,16 @@ for_loop:
 // If not included, then what was the reason? Try to include it again
 // ---
 // If the transaction was actually reverted log it and repeat the attestation
-func trackAttest(
-	provider *rpc.Provider,
+func TrackAttest(
+	account Account,
 	event AttestRequired,
 	txResp *rpc.AddInvokeTransactionResponse,
 	activeAttestations map[BlockHash]AttestationStatus,
+	wg *sync.WaitGroup,
 ) {
-	txStatus, err := trackTransactionStatus(provider, txResp.TransactionHash)
+	defer wg.Done()
+
+	txStatus, err := TrackTransactionStatus(account, txResp.TransactionHash)
 
 	if err != nil {
 		// log exactly what's the error
@@ -133,12 +135,18 @@ func trackAttest(
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
-		// log the failure & the reason
+		// log the failure & the reason, in here `txStatus.FailureReason` probably
 		return
 	}
 
-	// if we got here, then the transaction status was accepted & successful
-	activeAttestations[*event.blockHash] = Successful
+	// If we got here, then the transaction status was accepted & successful
+	//
+	// It might have been deleted from map if routine took some time and in the meantime
+	// the next block got processed (and window for attestation passed). In that case,
+	// we do not want to re-put it into the map
+	if _, exists := activeAttestations[*event.BlockHash]; exists {
+		activeAttestations[*event.BlockHash] = Successful
+	}
 }
 
 // I guess we could sleep & wait a bit here because I believe canceling & then retrying from the next block
@@ -150,9 +158,9 @@ func trackAttest(
 // so that next block's event triggers a retry.
 // - In the "worst" case scenario, our tx will be included twice: we'll get an error from the contract the 2nd time saying "already an attestation for that epoch"
 // - In the "best" case scenario, our tx ends up not getting included the 1st time, so, we did well to let the next block trigger a retry.
-func trackTransactionStatus(provider *rpc.Provider, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
+func TrackTransactionStatus(account Account, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
 	for elapsedSeconds := 0; elapsedSeconds < defaultAttestDelay; elapsedSeconds++ {
-		txStatus, err := provider.GetTransactionStatus(context.Background(), txHash)
+		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
 		if err != nil {
 			return nil, err
 		}
@@ -169,5 +177,5 @@ func trackTransactionStatus(provider *rpc.Provider, txHash *felt.Felt) (*rpc.Txn
 	// I guess here we can return and retry from the next block (we might not even be in attestation window anymore)
 	// And we already waited `defaultAttestDelay` seconds
 	// wdyt ?
-	return trackTransactionStatus(provider, txHash)
+	return nil, errors.New("Tx status did not change for a long time, retrying with next block")
 }
