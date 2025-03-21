@@ -5,8 +5,11 @@ go 1.24.1
 require (
 	github.com/NethermindEth/juno v0.12.2
 	github.com/NethermindEth/starknet.go v0.8.0-beta.2
+	go.uber.org/mock v0.4.0
 	lukechampine.com/uint128 v1.3.0
 )
+
+require github.com/golang/mock v1.6.0
 
 require (
 	github.com/DataDog/zstd v1.5.6-0.20230824185856-869dae002e5e // indirect
