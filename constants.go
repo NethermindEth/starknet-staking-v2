@@ -11,6 +11,7 @@ var stakingContractAddress = (Address{}).SetString(STAKING_CONTRACT_ADDRESS)
 var attestationContractAddress = (Address{}).SetString(ATTESTATION_CONTRACT_ADDRESS)
 
 const MIN_ATTESTATION_WINDOW uint64 = 10
+const FEE_ESTIMATION_MULTIPLIER float64 = 1.5
 
 var sepoliaStrkTokenAddress = (Address{}).SetString(SEPOLIA_TOKENS.Strk)
 

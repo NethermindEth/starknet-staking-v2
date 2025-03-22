@@ -169,5 +169,5 @@ func invokeAttest(
 		CallData:        []*felt.Felt{&blockHashFelt},
 	}}
 
-	return account.BuildAndSendInvokeTxn(context.Background(), calls, 1.5)
+	return account.BuildAndSendInvokeTxn(context.Background(), calls, FEE_ESTIMATION_MULTIPLIER)
 }
