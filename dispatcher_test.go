@@ -22,10 +22,9 @@ func TestDispatch(t *testing.T) {
 
 	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
 
-	dispatcher := main.NewEventDispatcher()
-
 	t.Run("Simple successful scenario: only 1 attest to make", func(t *testing.T) {
 		// Setup
+		dispatcher := main.NewEventDispatcher()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestationContractAddress.ToFelt()
@@ -36,7 +35,7 @@ func TestDispatch(t *testing.T) {
 		}}
 		addTxHash := utils.HexToFelt(t, "0x123")
 		mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
-		mockAccount.EXPECT().BuildAndSendInvokeTxn(context.Background(), calls, 1.5).Return(&mockedAddTxResp, nil)
+		mockAccount.EXPECT().BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).Return(&mockedAddTxResp, nil)
 
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), addTxHash).
@@ -46,8 +45,8 @@ func TestDispatch(t *testing.T) {
 			}, nil)
 
 		// Start routine
-		wg := &sync.WaitGroup{}
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
+		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
 
@@ -57,11 +56,87 @@ func TestDispatch(t *testing.T) {
 		close(dispatcher.AttestRequired)
 
 		// Wait for routine (and subroutines) to finish
-		// Note: Dispatch alreadys waits inside for subroutines but still call it here for the test
+		// Note: Dispatch already waits inside for subroutines but still call it to wait here too
 		wg.Wait()
 
 		// Assert
 		status, exists := activeAttestations[blockHash]
+		require.Equal(t, true, exists)
+		require.Equal(t, main.Successful, status)
+	})
+
+	t.Run("Same attestRequired events are ignored if already ongoing or successful", func(t *testing.T) {
+		// Setup
+		dispatcher := main.NewEventDispatcher()
+		blockHashFelt := new(felt.Felt).SetUint64(1)
+
+		contractAddrFelt := main.AttestationContractAddress.ToFelt()
+		calls := []rpc.InvokeFunctionCall{{
+			ContractAddress: &contractAddrFelt,
+			FunctionName:    "attest",
+			CallData:        []*felt.Felt{blockHashFelt},
+		}}
+		addTxHash := utils.HexToFelt(t, "0x123")
+		mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
+		// We expect this to be called only once (even though 3 events are sent)
+		mockAccount.EXPECT().
+			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			DoAndReturn(func(ctx context.Context, calls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
+				// The spawned routine will sleep 1 second so that we can assert ongoing status (see below)
+				time.Sleep(time.Second * 1)
+				return &mockedAddTxResp, nil
+			}).Times(1)
+
+		// We expect this to be called only once (even though 3 events are sent)
+		mockAccount.EXPECT().
+			GetTransactionStatus(context.Background(), addTxHash).
+			Return(&rpc.TxnStatusResp{
+				FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
+				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+			}, nil).
+			Times(1)
+
+		// Start routine
+		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
+
+		// Send the same event x3
+		blockHash := main.BlockHash(*blockHashFelt)
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+
+		// Mid-execution assertion: attestation is ongoing (1st go routine has not finished executing as it sleeps for 1 sec)
+		//
+		// This middle-exec assert might be a bit dangerous (could sleep here 0.1s maybe to be sure?)
+		// will fail if thread here reaches the assert below before dispatcher main routine sets the status as ongoing
+		status, exists := activeAttestations[blockHash]
+		require.Equal(t, true, exists)
+		require.Equal(t, main.Ongoing, status)
+
+		// This 2nd event gets ignored when status is ongoing
+		// Proof: only 1 call to BuildAndSendInvokeTxn nor GetTransactionStatus is asserted
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+
+		// This time sleep is more than enough to make sure the 1st go routine has time to execute (2nd event got ignored)
+		time.Sleep(time.Second * 2)
+
+		// Mid-execution assertion: attestation is successful (1st go routine has indeed finished executing)
+		status, exists = activeAttestations[blockHash]
+		require.Equal(t, true, exists)
+		require.Equal(t, main.Successful, status)
+
+		// This 3rd event gets ignored also when status is successful
+		// Proof: only 1 call to BuildAndSendInvokeTxn nor GetTransactionStatus is asserted
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		close(dispatcher.AttestRequired)
+
+		// Wait for routine (and subroutines) to finish
+		// Note: Dispatch already waits inside for subroutines but still call it to wait here too
+		wg.Wait()
+
+		// Re-assert (3rd event got ignored)
+		status, exists = activeAttestations[blockHash]
 		require.Equal(t, true, exists)
 		require.Equal(t, main.Successful, status)
 	})

@@ -107,8 +107,9 @@ for_loop:
 		}
 	}
 
-	// If we ever break from the loop, wait for subprocesses to finish to avoid any undefined behaviour / panic
 	wg.Done()
+	// If we ever break from the loop, wait for subprocesses to finish to avoid any undefined behaviour
+	// where routines access data that got deallocated after this routine returns
 	wg.Wait()
 }
 
