@@ -85,7 +85,7 @@ func TestTrackAttest(t *testing.T) {
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing
 
-		main.TrackAttest(mockAccount, event, txRes, activeAttestations, &sync.WaitGroup{})
+		main.TrackAttest(mockAccount, event, txRes, activeAttestations)
 
 		actualStatus, exists := activeAttestations[blockHash]
 		require.Equal(t, main.Ongoing, actualStatus)
@@ -107,7 +107,7 @@ func TestTrackAttest(t *testing.T) {
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing
 
-		main.TrackAttest(mockAccount, event, txRes, activeAttestations, &sync.WaitGroup{})
+		main.TrackAttest(mockAccount, event, txRes, activeAttestations)
 
 		actualStatus, exists := activeAttestations[blockHash]
 		require.Equal(t, main.Ongoing, actualStatus)
@@ -130,7 +130,7 @@ func TestTrackAttest(t *testing.T) {
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing
 
-		main.TrackAttest(mockAccount, event, txRes, activeAttestations, &sync.WaitGroup{})
+		main.TrackAttest(mockAccount, event, txRes, activeAttestations)
 
 		actualStatus, exists := activeAttestations[blockHash]
 		require.Equal(t, main.Ongoing, actualStatus)
@@ -153,7 +153,7 @@ func TestTrackAttest(t *testing.T) {
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing
 
-		main.TrackAttest(mockAccount, event, txRes, activeAttestations, &sync.WaitGroup{})
+		main.TrackAttest(mockAccount, event, txRes, activeAttestations)
 
 		actualStatus, exists := activeAttestations[blockHash]
 		require.Equal(t, main.Successful, actualStatus)

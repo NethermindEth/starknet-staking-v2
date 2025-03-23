@@ -83,7 +83,10 @@ for_loop:
 			}
 
 			wg.Add(1)
-			go TrackAttest(account, event, resp, activeAttestations, wg)
+			go func() {
+				defer wg.Done()
+				TrackAttest(account, event, resp, activeAttestations)
+			}()
 		case event, ok := <-d.AttestationsToRemove:
 			if !ok {
 				// Should never get closed
@@ -118,10 +121,7 @@ func TrackAttest(
 	event AttestRequired,
 	txResp *rpc.AddInvokeTransactionResponse,
 	activeAttestations map[BlockHash]AttestationStatus,
-	wg *sync.WaitGroup,
 ) {
-	defer wg.Done()
-
 	txStatus, err := TrackTransactionStatus(account, txResp.TransactionHash)
 
 	if err != nil {
