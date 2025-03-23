@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
@@ -72,7 +73,7 @@ func TestTrackAttest(t *testing.T) {
 
 	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
 
-	t.Run("attestation is not succesful if error", func(t *testing.T) {
+	t.Run("attestation is not successful if error", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockAccount.EXPECT().
@@ -92,7 +93,7 @@ func TestTrackAttest(t *testing.T) {
 		require.Equal(t, true, exists)
 	})
 
-	t.Run("attestation is not succesful if REJECTED", func(t *testing.T) {
+	t.Run("attestation is not successful if REJECTED", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockAccount.EXPECT().
@@ -114,7 +115,7 @@ func TestTrackAttest(t *testing.T) {
 		require.Equal(t, true, exists)
 	})
 
-	t.Run("attestation is not succesful if accepted but REVERTED", func(t *testing.T) {
+	t.Run("attestation is not successful if accepted but REVERTED", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockAccount.EXPECT().
@@ -182,8 +183,11 @@ func TestTrackTransactionStatus(t *testing.T) {
 	})
 
 	t.Run("Returns an error if tx status does not change for `defaultAttestDelay` seconds", func(t *testing.T) {
-		// TODO: mock time sleep
-		t.Skip()
+		// Mock time.Sleep (absolutely no reason to wait in that test)
+		main.SleepFn = func(d time.Duration) {
+			// Do nothing
+		}
+
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockAccount.EXPECT().
@@ -194,11 +198,13 @@ func TestTrackTransactionStatus(t *testing.T) {
 			// equal to `defaultAttestDelay`
 			Times(10)
 
-		// TODO: can we mock the time.Sleep? to make it faster
 		status, err := main.TrackTransactionStatus(mockAccount, txHash)
 
 		require.Nil(t, status)
 		require.Equal(t, errors.New("Tx status did not change for a long time, retrying with next block"), err)
+
+		// Reset time.Sleep function
+		main.SleepFn = time.Sleep
 	})
 
 	t.Run("Returns the status if different from RECEIVED, here ACCEPTED_ON_L2", func(t *testing.T) {

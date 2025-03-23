@@ -12,6 +12,9 @@ import (
 
 const defaultAttestDelay = 10
 
+// Created a function variable for mocking purposes in tests
+var SleepFn = time.Sleep
+
 // Keep track of the stake amount through the different epochs
 // Because there is a latency the most current stake doesn't need to match
 // to the current epoch attestation
@@ -167,7 +170,7 @@ func TrackTransactionStatus(account AccountInterface, txHash *felt.Felt) (*rpc.T
 		if txStatus.FinalityStatus != rpc.TxnStatus_Received {
 			return txStatus, nil
 		}
-		time.Sleep(time.Second)
+		SleepFn(time.Second)
 	}
 
 	// If we are here, it means the transaction didn't change it's status for a long time.
