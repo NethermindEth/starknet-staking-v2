@@ -86,7 +86,7 @@ func subscribeToBlockHeader(providerUrl string, blockHeaderFeed chan<- *rpc.Bloc
 	// Initialize connection to WS provider
 	wsClient, err := rpc.NewWebsocketProvider(wsProviderUrl)
 	if err != nil {
-		panic(fmt.Sprintf("Error dialing the WS provider: %s", err))
+		log.Fatalf("Error dialing the WS provider: %s", err)
 	}
 	defer wsClient.Close()       // Close the WS client when the program finishes
 	defer close(blockHeaderFeed) // Close the headers channel
@@ -95,7 +95,7 @@ func subscribeToBlockHeader(providerUrl string, blockHeaderFeed chan<- *rpc.Bloc
 
 	sub, err := wsClient.SubscribeNewHeads(context.Background(), blockHeaderFeed, nil)
 	if err != nil {
-		panic(fmt.Sprintf("Error subscribing to new block headers: %s", err))
+		log.Fatalf("Error subscribing to new block headers: %s", err)
 	}
 
 	fmt.Println("Successfully subscribed to the node. Subscription ID:", sub.ID())
