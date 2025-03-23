@@ -7,7 +7,6 @@ import (
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
-	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 )
 
@@ -28,11 +27,12 @@ func main() {
 
 	provider := NewProvider(config.providerUrl)
 
-	account := NewValidatorAccount(provider, &config.accountData)
+	validatorAccount := NewValidatorAccount(provider, &config.accountData)
 
 	dispatcher := NewEventDispatcher()
-	dispatcherActiveAttestations := make(map[BlockHash]AttestationStatus)
-	go dispatcher.Dispatch(&account, dispatcherActiveAttestations, &sync.WaitGroup{})
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go dispatcher.Dispatch(validatorAccount, make(map[BlockHash]AttestationStatus), wg)
 	// I have to make sure this function closes at the end
 
 	// ------
@@ -47,7 +47,7 @@ func main() {
 	// as any important updates (ie, related to stake & epoch_length) are effective only from the next epoch!
 	//
 	// Note 2 (attest window): Depending on the expected behaviour of attestation window, we might have to listen to `AttestationWindowChanged` event
-	attestationInfo, attestationWindow, blockNumberToAttestTo, err := fetchEpochInfo(account.account)
+	attestationInfo, attestationWindow, blockNumberToAttestTo, err := fetchEpochInfo(validatorAccount)
 	if err != nil {
 		// TODO: implement a retry mechanism ?
 	}
@@ -65,7 +65,7 @@ func main() {
 		if blockHeader.BlockNumber == attestationInfo.CurrentEpochStartingBlock.ToUint64()+attestationInfo.EpochLen {
 			previousEpochInfo := attestationInfo
 
-			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(account.account)
+			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(validatorAccount)
 			if err != nil {
 				// TODO: implement a retry mechanism ?
 			}
@@ -100,7 +100,7 @@ func main() {
 	// Should also track re-org and check if the re-org means we have to attest again or not
 }
 
-func fetchEpochInfo(account *account.Account) (AttestationInfo, uint64, BlockNumber, error) {
+func fetchEpochInfo(account AccountInterface) (AttestationInfo, uint64, BlockNumber, error) {
 	attestationInfo, attestInfoErr := fetchAttestationInfo(account)
 	if attestInfoErr != nil {
 		return AttestationInfo{}, 0, 0, attestInfoErr
@@ -116,17 +116,18 @@ func fetchEpochInfo(account *account.Account) (AttestationInfo, uint64, BlockNum
 	return attestationInfo, attestationWindow, blockNumberToAttestTo, nil
 }
 
-func computeBlockNumberToAttestTo(account *account.Account, attestationInfo AttestationInfo, attestationWindow uint64) BlockNumber {
+func computeBlockNumberToAttestTo(account AccountInterface, attestationInfo AttestationInfo, attestationWindow uint64) BlockNumber {
 	startingBlock := attestationInfo.CurrentEpochStartingBlock.ToUint64() + attestationInfo.EpochLen
 
 	// TODO: might be hash(stake, hash(epoch_id, address))
 	// or should we use PoseidonArray instead ?
+	accountAddress := account.Address()
 	hash := crypto.Poseidon(
 		crypto.Poseidon(
 			new(felt.Felt).SetBigInt(attestationInfo.Stake.Big()),
 			new(felt.Felt).SetUint64(attestationInfo.EpochId),
 		),
-		account.AccountAddress,
+		&accountAddress,
 	)
 	// TODO: hash (felt) will most likely not fit into a uint64 --> use big.Int in that case ?
 	blockOffset := hash.Uint64() % (attestationInfo.EpochLen - attestationWindow)

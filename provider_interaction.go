@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
+	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
@@ -21,11 +22,10 @@ func NewProvider(providerUrl string) *rpc.Provider {
 	return provider
 }
 
-type ValidatorAccount struct {
-	account *account.Account
-}
+// We create a type (implementing an interface) to be able to mock the account for testing purposes
+type ValidatorAccount account.Account
 
-func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) ValidatorAccount {
+func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) *ValidatorAccount {
 	// accountData should contain the information required:
 	//  * staker operational address
 	//  * public key
@@ -46,15 +46,23 @@ func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) Valid
 		log.Fatalf("Cannot create new account: %s", err)
 	}
 
-	return ValidatorAccount{account: account}
+	return junoUtils.Ptr(ValidatorAccount(*account))
 }
 
 func (v *ValidatorAccount) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
-	return v.account.GetTransactionStatus(ctx, transactionHash)
+	return ((*account.Account)(v)).GetTransactionStatus(ctx, transactionHash)
 }
 
 func (v *ValidatorAccount) BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
-	return v.account.BuildAndSendInvokeTxn(ctx, functionCalls, multiplier)
+	return ((*account.Account)(v)).BuildAndSendInvokeTxn(ctx, functionCalls, multiplier)
+}
+
+func (v *ValidatorAccount) Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
+	return ((*account.Account)(v)).Call(ctx, call, blockId)
+}
+
+func (v *ValidatorAccount) Address() felt.Felt {
+	return *v.AccountAddress
 }
 
 // TODO: might not need those 2 endpoints if we get info directly from staking contract
@@ -93,13 +101,14 @@ func subscribeToBlockHeader(providerUrl string, blockHeaderFeed chan<- *rpc.Bloc
 	fmt.Println("Successfully subscribed to the node. Subscription ID:", sub.ID())
 }
 
-func fetchAttestationInfo(account *account.Account) (AttestationInfo, error) {
+func fetchAttestationInfo(account AccountInterface) (AttestationInfo, error) {
 	contractAddrFelt := AttestationContractAddress.ToFelt()
+	accountAddress := account.Address()
 
 	functionCall := rpc.FunctionCall{
 		ContractAddress:    &contractAddrFelt,
 		EntryPointSelector: utils.GetSelectorFromNameFelt("get_attestation_info_by_operational_address"),
-		Calldata:           []*felt.Felt{account.AccountAddress},
+		Calldata:           []*felt.Felt{&accountAddress},
 	}
 
 	result, err := account.Call(context.Background(), functionCall, rpc.BlockID{Tag: "latest"})
@@ -122,7 +131,7 @@ func fetchAttestationInfo(account *account.Account) (AttestationInfo, error) {
 	}, nil
 }
 
-func fetchAttestationWindow(account *account.Account) (uint64, error) {
+func fetchAttestationWindow(account AccountInterface) (uint64, error) {
 	contractAddrFelt := AttestationContractAddress.ToFelt()
 
 	result, err := account.Call(
@@ -171,7 +180,7 @@ func fetchValidatorBalance(account *account.Account) (Balance, error) {
 }
 
 func invokeAttest(
-	account Account, attest *AttestRequired,
+	account AccountInterface, attest *AttestRequired,
 ) (*rpc.AddInvokeTransactionResponse, error) {
 	contractAddrFelt := AttestationContractAddress.ToFelt()
 	blockHashFelt := attest.BlockHash.ToFelt()

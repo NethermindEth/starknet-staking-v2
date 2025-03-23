@@ -19,7 +19,7 @@ func TestDispatch(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockAccount(mockCtrl)
+	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
 
 	dispatcher := main.NewEventDispatcher()
 
@@ -70,7 +70,7 @@ func TestTrackAttest(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockAccount(mockCtrl)
+	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
 
 	t.Run("attestation is not succesful if error", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
@@ -165,7 +165,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockAccount(mockCtrl)
+	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
 
 	t.Run("GetTransactionStatus returns an error", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
@@ -182,6 +182,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 	})
 
 	t.Run("Returns an error if tx status does not change for `defaultAttestDelay` seconds", func(t *testing.T) {
+		// TODO: mock time sleep
 		t.Skip()
 		txHash := new(felt.Felt).SetUint64(1)
 

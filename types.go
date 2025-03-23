@@ -57,7 +57,19 @@ type AttestRequired struct {
 }
 
 //go:generate mockgen -destination=./mocks/mock_account.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Account
-type Account interface {
+type AccountInterface interface {
+	// Methods from account.Account
 	GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error)
 	BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error)
+	Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
+
+	// Custom Methods
+	//
+	// Want to return `Address` type here but it means creating a separate pkg
+	// because otherwise mockgen tries to import this "main" pkg in its mock file
+	// which is not allowed.
+	// I think we should put this "types" file into a different pkg to be able to:
+	// 1. Return `Address` type here
+	// 2. Use "go generate" mock for this interface (only generating mock using `mockgen` cmd works now)
+	Address() felt.Felt
 }
