@@ -35,8 +35,8 @@ func (s *stakedAmount) Get(epoch uint64) {
 type AttestationStatus uint8
 
 const (
-	Successful AttestationStatus = iota + 1
-	Ongoing
+	Ongoing AttestationStatus = iota + 1
+	Successful
 	Failed
 )
 
@@ -95,6 +95,8 @@ for_loop:
 				// Should never get closed
 				break for_loop
 			}
+			// TODO: when deleting, could check the status and if it's not successful,
+			// then log the block was not successfuly attested!
 			for _, blockHash := range event {
 				delete(activeAttestations, blockHash)
 			}
@@ -130,16 +132,19 @@ func TrackAttest(
 
 	if err != nil {
 		// log exactly what's the error
+		setStatusIfExists(activeAttestations, event.BlockHash, Failed)
 		return
 	}
 
 	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
 		// log exactly the rejection and why was it
+		setStatusIfExists(activeAttestations, event.BlockHash, Failed)
 		return
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
 		// log the failure & the reason, in here `txStatus.FailureReason` probably
+		setStatusIfExists(activeAttestations, event.BlockHash, Failed)
 		return
 	}
 
@@ -148,8 +153,13 @@ func TrackAttest(
 	// It might have been deleted from map if routine took some time and in the meantime
 	// the next block got processed (and window for attestation passed). In that case,
 	// we do not want to re-put it into the map
-	if _, exists := activeAttestations[*event.BlockHash]; exists {
-		activeAttestations[*event.BlockHash] = Successful
+	setStatusIfExists(activeAttestations, event.BlockHash, Successful)
+	// log attestation was successful
+}
+
+func setStatusIfExists(activeAttestations map[BlockHash]AttestationStatus, blockHash *BlockHash, status AttestationStatus) {
+	if _, exists := activeAttestations[*blockHash]; exists {
+		activeAttestations[*blockHash] = status
 	}
 }
 

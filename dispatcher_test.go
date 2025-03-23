@@ -164,7 +164,7 @@ func TestTrackAttest(t *testing.T) {
 		main.TrackAttest(mockAccount, event, txRes, activeAttestations)
 
 		actualStatus, exists := activeAttestations[blockHash]
-		require.Equal(t, main.Ongoing, actualStatus)
+		require.Equal(t, main.Failed, actualStatus)
 		require.Equal(t, true, exists)
 	})
 
@@ -186,7 +186,7 @@ func TestTrackAttest(t *testing.T) {
 		main.TrackAttest(mockAccount, event, txRes, activeAttestations)
 
 		actualStatus, exists := activeAttestations[blockHash]
-		require.Equal(t, main.Ongoing, actualStatus)
+		require.Equal(t, main.Failed, actualStatus)
 		require.Equal(t, true, exists)
 	})
 
@@ -209,7 +209,7 @@ func TestTrackAttest(t *testing.T) {
 		main.TrackAttest(mockAccount, event, txRes, activeAttestations)
 
 		actualStatus, exists := activeAttestations[blockHash]
-		require.Equal(t, main.Ongoing, actualStatus)
+		require.Equal(t, main.Failed, actualStatus)
 		require.Equal(t, true, exists)
 	})
 
