@@ -11,8 +11,8 @@ import (
 
 type Address felt.Felt
 
-func (a Address) ToFelt() felt.Felt {
-	return felt.Felt(a)
+func (a *Address) ToFelt() felt.Felt {
+	return felt.Felt(*a)
 }
 
 func AddressFromString(addrStr string) Address {
@@ -34,8 +34,8 @@ func (b BlockNumber) ToUint64() uint64 {
 
 type BlockHash felt.Felt
 
-func (b BlockHash) ToFelt() felt.Felt {
-	return felt.Felt(b)
+func (b *BlockHash) ToFelt() felt.Felt {
+	return felt.Felt(*b)
 }
 
 // AttestationInfo is the response from the get_attestation_info_by_operational_address
