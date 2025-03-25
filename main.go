@@ -32,7 +32,7 @@ func main() {
 	dispatcher := NewEventDispatcher()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go dispatcher.Dispatch(validatorAccount, make(map[BlockHash]AttestationStatus), wg)
+	go dispatcher.Dispatch(&validatorAccount, make(map[BlockHash]AttestationStatus), wg)
 	// I have to make sure this function closes at the end
 
 	// ------
@@ -47,7 +47,7 @@ func main() {
 	// as any important updates (ie, related to stake & epoch_length) are effective only from the next epoch!
 	//
 	// Note 2 (attest window): Depending on the expected behaviour of attestation window, we might have to listen to `AttestationWindowChanged` event
-	attestationInfo, attestationWindow, blockNumberToAttestTo, err := fetchEpochInfo(validatorAccount)
+	attestationInfo, attestationWindow, blockNumberToAttestTo, err := fetchEpochInfo(&validatorAccount)
 	if err != nil {
 		// TODO: implement a retry mechanism ?
 	}
@@ -65,7 +65,7 @@ func main() {
 		if blockHeader.BlockNumber == attestationInfo.CurrentEpochStartingBlock.ToUint64()+attestationInfo.EpochLen {
 			previousEpochInfo := attestationInfo
 
-			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(validatorAccount)
+			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(&validatorAccount)
 			if err != nil {
 				// TODO: implement a retry mechanism ?
 			}

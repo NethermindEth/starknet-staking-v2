@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
-	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
@@ -25,7 +24,7 @@ func NewProvider(providerUrl string) *rpc.Provider {
 // We create a type (implementing an interface) to be able to mock the account for testing purposes
 type ValidatorAccount account.Account
 
-func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) *ValidatorAccount {
+func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) ValidatorAccount {
 	// accountData should contain the information required:
 	//  * staker operational address
 	//  * public key
@@ -46,7 +45,7 @@ func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) *Vali
 		log.Fatalf("Cannot create new account: %s", err)
 	}
 
-	return junoUtils.Ptr(ValidatorAccount(*account))
+	return ValidatorAccount(*account)
 }
 
 func (v *ValidatorAccount) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
