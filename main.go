@@ -100,7 +100,7 @@ func main() {
 	// Should also track re-org and check if the re-org means we have to attest again or not
 }
 
-func fetchEpochInfo(account AccountInterface) (AttestationInfo, uint64, BlockNumber, error) {
+func fetchEpochInfo(account Accounter) (AttestationInfo, uint64, BlockNumber, error) {
 	attestationInfo, attestInfoErr := fetchAttestationInfo(account)
 	if attestInfoErr != nil {
 		return AttestationInfo{}, 0, 0, attestInfoErr
@@ -116,7 +116,7 @@ func fetchEpochInfo(account AccountInterface) (AttestationInfo, uint64, BlockNum
 	return attestationInfo, attestationWindow, blockNumberToAttestTo, nil
 }
 
-func computeBlockNumberToAttestTo(account AccountInterface, attestationInfo AttestationInfo, attestationWindow uint64) BlockNumber {
+func computeBlockNumberToAttestTo(account Accounter, attestationInfo AttestationInfo, attestationWindow uint64) BlockNumber {
 	startingBlock := attestationInfo.CurrentEpochStartingBlock.ToUint64() + attestationInfo.EpochLen
 
 	// TODO: might be hash(stake, hash(epoch_id, address))

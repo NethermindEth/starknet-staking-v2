@@ -101,7 +101,7 @@ func subscribeToBlockHeader(providerUrl string, blockHeaderFeed chan<- *rpc.Bloc
 	fmt.Println("Successfully subscribed to the node. Subscription ID:", sub.ID())
 }
 
-func fetchAttestationInfo(account AccountInterface) (AttestationInfo, error) {
+func fetchAttestationInfo(account Accounter) (AttestationInfo, error) {
 	contractAddrFelt := AttestationContractAddress.ToFelt()
 	accountAddress := account.Address()
 
@@ -131,7 +131,7 @@ func fetchAttestationInfo(account AccountInterface) (AttestationInfo, error) {
 	}, nil
 }
 
-func fetchAttestationWindow(account AccountInterface) (uint64, error) {
+func fetchAttestationWindow(account Accounter) (uint64, error) {
 	contractAddrFelt := AttestationContractAddress.ToFelt()
 
 	result, err := account.Call(
@@ -180,7 +180,7 @@ func fetchValidatorBalance(account *account.Account) (Balance, error) {
 }
 
 func invokeAttest(
-	account AccountInterface, attest *AttestRequired,
+	account Accounter, attest *AttestRequired,
 ) (*rpc.AddInvokeTransactionResponse, error) {
 	contractAddrFelt := AttestationContractAddress.ToFelt()
 	blockHashFelt := attest.BlockHash.ToFelt()
