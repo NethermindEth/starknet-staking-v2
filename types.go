@@ -15,7 +15,7 @@ func (a Address) ToFelt() felt.Felt {
 	return felt.Felt(a)
 }
 
-func (a Address) SetString(addrStr string) Address {
+func AddressFromString(addrStr string) Address {
 	adr, err := new(felt.Felt).SetString(addrStr)
 	if err != nil {
 		log.Fatalf("Could not create felt address from addr %s, error: %s", addrStr, err)

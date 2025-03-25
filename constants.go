@@ -8,13 +8,13 @@ import (
 const STAKING_CONTRACT_ADDRESS = "0x123"
 const ATTESTATION_CONTRACT_ADDRESS = "0x123"
 
-var stakingContractAddress = (Address{}).SetString(STAKING_CONTRACT_ADDRESS)
-var AttestationContractAddress = (Address{}).SetString(ATTESTATION_CONTRACT_ADDRESS)
+var stakingContractAddress = AddressFromString(STAKING_CONTRACT_ADDRESS)
+var AttestationContractAddress = AddressFromString(ATTESTATION_CONTRACT_ADDRESS)
 
 const MIN_ATTESTATION_WINDOW uint64 = 10
 const FEE_ESTIMATION_MULTIPLIER float64 = 1.5
 
-var sepoliaStrkTokenAddress = (Address{}).SetString(SEPOLIA_TOKENS.Strk)
+var sepoliaStrkTokenAddress = AddressFromString(SEPOLIA_TOKENS.Strk)
 
 var MAINNET_TOKENS NetworkTokenAddress = NetworkTokenAddress{
 	Eth:  "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
