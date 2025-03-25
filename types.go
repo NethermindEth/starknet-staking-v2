@@ -53,7 +53,7 @@ type AttestRequiredWithValidity struct {
 }
 
 type AttestRequired struct {
-	BlockHash *BlockHash
+	BlockHash BlockHash
 }
 
 //go:generate mockgen -destination=./mocks/mock_account.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Account

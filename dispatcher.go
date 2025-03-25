@@ -70,9 +70,9 @@ for_loop:
 				break for_loop
 			}
 
-			switch status, exists := activeAttestations[*event.BlockHash]; {
+			switch status, exists := activeAttestations[event.BlockHash]; {
 			case !exists, status == Failed:
-				activeAttestations[*event.BlockHash] = Ongoing
+				activeAttestations[event.BlockHash] = Ongoing
 			case status == Ongoing, status == Successful:
 				continue
 			}
@@ -132,19 +132,19 @@ func TrackAttest(
 
 	if err != nil {
 		// log exactly what's the error
-		setStatusIfExists(activeAttestations, event.BlockHash, Failed)
+		setStatusIfExists(activeAttestations, &event.BlockHash, Failed)
 		return
 	}
 
 	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
 		// log exactly the rejection and why was it
-		setStatusIfExists(activeAttestations, event.BlockHash, Failed)
+		setStatusIfExists(activeAttestations, &event.BlockHash, Failed)
 		return
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
 		// log the failure & the reason, in here `txStatus.FailureReason` probably
-		setStatusIfExists(activeAttestations, event.BlockHash, Failed)
+		setStatusIfExists(activeAttestations, &event.BlockHash, Failed)
 		return
 	}
 
@@ -153,7 +153,7 @@ func TrackAttest(
 	// It might have been deleted from map if routine took some time and in the meantime
 	// the next block got processed (and window for attestation passed). In that case,
 	// we do not want to re-put it into the map
-	setStatusIfExists(activeAttestations, event.BlockHash, Successful)
+	setStatusIfExists(activeAttestations, &event.BlockHash, Successful)
 	// log attestation was successful
 }
 

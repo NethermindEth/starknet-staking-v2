@@ -52,7 +52,7 @@ func TestDispatch(t *testing.T) {
 
 		// Send event
 		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 		close(dispatcher.AttestRequired)
 
 		// Wait for routine (and subroutines) to finish
@@ -108,7 +108,7 @@ func TestDispatch(t *testing.T) {
 
 		// Send the same event x3
 		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 
 		// Mid-execution assertion: attestation is ongoing (1st go routine has not finished executing as it sleeps for 1 sec)
 		//
@@ -120,7 +120,7 @@ func TestDispatch(t *testing.T) {
 
 		// This 2nd event gets ignored when status is ongoing
 		// Proof: only 1 call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 
 		// This time sleep is more than enough to make sure the 1st go routine has time to execute (2nd event got ignored)
 		time.Sleep(time.Second * 2)
@@ -132,7 +132,7 @@ func TestDispatch(t *testing.T) {
 
 		// This 3rd event gets ignored also when status is successful
 		// Proof: only 1 call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 		close(dispatcher.AttestRequired)
 
 		// Wait for routine (and subroutines) to finish
@@ -190,7 +190,7 @@ func TestDispatch(t *testing.T) {
 
 		// Send the same event x3
 		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 
 		// Mid-execution assertion: attestation is ongoing (1st go routine has not finished executing as it sleeps for 1 sec)
 		//
@@ -202,7 +202,7 @@ func TestDispatch(t *testing.T) {
 
 		// This 2nd event gets ignored when status is ongoing
 		// Proof: only 1 call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted so far
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 
 		// This time sleep is more than enough to make sure the 1st go routine has time to execute (2nd event got ignored)
 		time.Sleep(time.Second * 2)
@@ -231,7 +231,7 @@ func TestDispatch(t *testing.T) {
 
 		// This 3rd event does not get ignored as previous attestation has failed
 		// Proof: a 2nd call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 		close(dispatcher.AttestRequired)
 
 		// Wait for routine (and subroutines) to finish
@@ -313,7 +313,7 @@ func TestDispatch(t *testing.T) {
 
 		// Send event A
 		blockHashA := main.BlockHash(*blockHashFeltA)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHashA}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHashA}
 
 		// To give time for the spawned routine to execute
 		time.Sleep(time.Second / 5)
@@ -325,7 +325,7 @@ func TestDispatch(t *testing.T) {
 
 		// Send event B
 		blockHashB := main.BlockHash(*blockHashFeltB)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHashB}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHashB}
 
 		// To give time for the spawned routine to execute
 		time.Sleep(time.Second / 5)
@@ -399,7 +399,7 @@ func TestDispatch(t *testing.T) {
 
 		// Send event
 		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
 
 		// To give time for the disptach routine to set the status
 		time.Sleep(time.Second / 5)
@@ -444,7 +444,7 @@ func TestTrackAttest(t *testing.T) {
 			Return(nil, errors.New("some internal error"))
 
 		blockHash := main.BlockHash(*txHash)
-		event := main.AttestRequired{BlockHash: &blockHash}
+		event := main.AttestRequired{BlockHash: blockHash}
 		txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing
@@ -466,7 +466,7 @@ func TestTrackAttest(t *testing.T) {
 			}, nil)
 
 		blockHash := main.BlockHash(*txHash)
-		event := main.AttestRequired{BlockHash: &blockHash}
+		event := main.AttestRequired{BlockHash: blockHash}
 		txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing
@@ -489,7 +489,7 @@ func TestTrackAttest(t *testing.T) {
 			}, nil)
 
 		blockHash := main.BlockHash(*txHash)
-		event := main.AttestRequired{BlockHash: &blockHash}
+		event := main.AttestRequired{BlockHash: blockHash}
 		txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing
@@ -512,7 +512,7 @@ func TestTrackAttest(t *testing.T) {
 			}, nil)
 
 		blockHash := main.BlockHash(*txHash)
-		event := main.AttestRequired{BlockHash: &blockHash}
+		event := main.AttestRequired{BlockHash: blockHash}
 		txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
 		activeAttestations[blockHash] = main.Ongoing

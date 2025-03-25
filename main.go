@@ -146,7 +146,7 @@ func schedulePendingAttestations(
 		// Schedule the attestation to be sent starting at the beginning of attestation window
 		pendingAttestations[BlockNumber(currentBlockHeader.BlockNumber+MIN_ATTESTATION_WINDOW)] = AttestRequiredWithValidity{
 			AttestRequired: AttestRequired{
-				BlockHash: utils.Ptr(BlockHash(*currentBlockHeader.BlockHash)),
+				BlockHash: BlockHash(*currentBlockHeader.BlockHash),
 			},
 			untilBlockNumber: BlockNumber(currentBlockHeader.BlockNumber + attestationWindow),
 		}
@@ -189,7 +189,7 @@ func sendAllActiveAttestations(
 			dispatcher.AttestationsToRemove <- utils.Map(
 				attestations,
 				func(attestation AttestRequired) BlockHash {
-					return *attestation.BlockHash
+					return attestation.BlockHash
 				},
 			)
 
