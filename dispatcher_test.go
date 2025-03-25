@@ -351,6 +351,83 @@ func TestDispatch(t *testing.T) {
 		_, exists = activeAttestations[blockHashB]
 		require.Equal(t, false, exists)
 	})
+
+	t.Run("AttestationsToRemove event indefinitely removes the block hash to attest to", func(t *testing.T) {
+		// What this test tests:
+		// - an AttestRequired event A is sent (takes some time)
+		// - an AttestationsToRemove event containing A is sent (deleting A from the map)
+		// - the AttestRequired event A finally finishes (successful/failed, whatever) and should not set the status in map (as it got deleted)
+
+		// Setup
+		dispatcher := main.NewEventDispatcher()
+
+		blockHashFelt := new(felt.Felt).SetUint64(1)
+		contractAddrFelt := main.AttestationContractAddress.ToFelt()
+		calls := []rpc.InvokeFunctionCall{{
+			ContractAddress: &contractAddrFelt,
+			FunctionName:    "attest",
+			CallData:        []*felt.Felt{blockHashFelt},
+		}}
+		addTxHash := utils.HexToFelt(t, "0x123")
+		mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
+
+		// We expect BuildAndSendInvokeTxn to be called
+		mockAccount.EXPECT().
+			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			Return(&mockedAddTxResp, nil).
+			Times(1)
+
+		// We expect GetTransactionStatus to be called
+		mockAccount.EXPECT().
+			GetTransactionStatus(context.Background(), addTxHash).
+			DoAndReturn(func(ctx context.Context, hash *felt.Felt) (*rpc.TxnStatusResp, error) {
+				// Takes enough time for the event to get deleted
+				time.Sleep(time.Second * 2)
+
+				return &rpc.TxnStatusResp{
+					FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
+					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+				}, nil
+			}).
+			Times(1)
+
+		// Start routine
+		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
+
+		// Send event
+		blockHash := main.BlockHash(*blockHashFelt)
+		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: &blockHash}
+
+		// To give time for the disptach routine to set the status
+		time.Sleep(time.Second / 5)
+
+		// Mid-execution assertion: attestation is ongoing
+		status, exists := activeAttestations[blockHash]
+		require.Equal(t, true, exists)
+		require.Equal(t, main.Ongoing, status)
+
+		// Send AttestationsToRemove event
+		dispatcher.AttestationsToRemove <- []main.BlockHash{blockHash}
+
+		// To give time for the disptach routine to delete the entry in the map
+		time.Sleep(time.Second / 5)
+
+		// Assert that attest got deleted
+		_, exists = activeAttestations[blockHash]
+		require.Equal(t, false, exists)
+
+		close(dispatcher.AttestRequired)
+		// Wait for dispatch routine to finish
+		// Note: Dispatch already waits inside for subroutines but still call it to wait here too
+		wg.Wait()
+
+		// Assert that spawned routine did not re-set the (successful) status in the map
+		_, exists = activeAttestations[blockHash]
+		require.Equal(t, false, exists)
+	})
 }
 
 func TestTrackAttest(t *testing.T) {
