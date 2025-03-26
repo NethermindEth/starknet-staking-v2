@@ -7,6 +7,7 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
+	"github.com/holiman/uint256"
 	"github.com/sourcegraph/conc"
 )
 
@@ -137,10 +138,15 @@ func computeBlockNumberToAttestTo(account Accounter, attestationInfo Attestation
 		&accountAddress,
 	)
 
-	// todo: use Uint256
-	blockOffset := hash % (attestationInfo.EpochLen - attestationWindow)
+	hashUint256, err := uint256.FromHex(hash.String())
+	if err != nil {
+		return BlockNumber(0)
+	}
 
-	return BlockNumber(startingBlock + blockOffset)
+	var blockOffsetUint256 *uint256.Int
+	blockOffsetUint256 = blockOffsetUint256.Mod(hashUint256, uint256.NewInt(attestationInfo.EpochLen-attestationWindow))
+
+	return BlockNumber(startingBlock + blockOffsetUint256.Uint64())
 }
 
 func SchedulePendingAttestations(
