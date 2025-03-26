@@ -81,7 +81,7 @@ func main() {
 
 		SchedulePendingAttestations(blockHeader, blockNumberToAttestTo, pendingAttestations, attestationWindow)
 
-		movePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(blockHeader.BlockNumber))
+		MovePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(blockHeader.BlockNumber))
 
 		sendAllActiveAttestations(activeAttestations, &dispatcher, BlockNumber(blockHeader.BlockNumber))
 	}
@@ -153,7 +153,7 @@ func SchedulePendingAttestations(
 	}
 }
 
-func movePendingAttestationsToActive(
+func MovePendingAttestationsToActive(
 	pendingAttestations map[BlockNumber]AttestRequiredWithValidity,
 	activeAttestations map[BlockNumber][]AttestRequired,
 	currentBlockNumber BlockNumber,
@@ -162,7 +162,7 @@ func movePendingAttestationsToActive(
 	if pending, pendingExists := pendingAttestations[currentBlockNumber]; pendingExists {
 		// Initialize map for attestations active until end of the window
 		if _, activeExists := activeAttestations[pending.UntilBlockNumber]; !activeExists {
-			activeAttestations[pending.UntilBlockNumber] = make([]AttestRequired, 1)
+			activeAttestations[pending.UntilBlockNumber] = make([]AttestRequired, 0, 1)
 		}
 
 		// Move pending attestation to active
