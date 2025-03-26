@@ -64,18 +64,6 @@ func (v *ValidatorAccount) Address() felt.Felt {
 	return *v.AccountAddress
 }
 
-// TODO: might not need those 2 endpoints if we get info directly from staking contract
-
-// Given a validator address returns the staked amount
-func staked(address *Address) Balance {
-	return Balance{}
-}
-
-// Given an address returns it's balance
-func balance(address *Address) Balance {
-	return Balance{}
-}
-
 func subscribeToBlockHeader(providerUrl string, blockHeaderFeed chan<- *rpc.BlockHeader) {
 	fmt.Println("Starting websocket connection...")
 
@@ -154,6 +142,7 @@ func fetchAttestationWindow(account Accounter) (uint64, error) {
 	return result[0].Uint64(), nil
 }
 
+// For near future when tracking validator's balance
 func fetchValidatorBalance(account *account.Account) (Balance, error) {
 	contractAddrFelt := sepoliaStrkTokenAddress.ToFelt()
 

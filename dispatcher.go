@@ -23,11 +23,7 @@ const (
 	Failed
 )
 
-// requires filling with the right values
-type StakeUpdated struct{}
-
 type EventDispatcher[Account Accounter] struct {
-	StakeUpdated         chan StakeUpdated
 	AttestRequired       chan AttestRequired
 	AttestationsToRemove chan []BlockHash
 }
@@ -35,7 +31,6 @@ type EventDispatcher[Account Accounter] struct {
 func NewEventDispatcher[Account Accounter]() EventDispatcher[Account] {
 	return EventDispatcher[Account]{
 		AttestRequired:       make(chan AttestRequired),
-		StakeUpdated:         make(chan StakeUpdated),
 		AttestationsToRemove: make(chan []BlockHash),
 	}
 }
