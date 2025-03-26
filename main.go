@@ -79,7 +79,7 @@ func main() {
 			}
 		}
 
-		schedulePendingAttestations(blockHeader, blockNumberToAttestTo, pendingAttestations, attestationWindow)
+		SchedulePendingAttestations(blockHeader, blockNumberToAttestTo, pendingAttestations, attestationWindow)
 
 		movePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(blockHeader.BlockNumber))
 
@@ -135,7 +135,7 @@ func computeBlockNumberToAttestTo(account Accounter, attestationInfo Attestation
 	return BlockNumber(startingBlock + blockOffset)
 }
 
-func schedulePendingAttestations(
+func SchedulePendingAttestations(
 	currentBlockHeader *rpc.BlockHeader,
 	blockNumberToAttestTo BlockNumber,
 	pendingAttestations map[BlockNumber]AttestRequiredWithValidity,
@@ -148,7 +148,7 @@ func schedulePendingAttestations(
 			AttestRequired: AttestRequired{
 				BlockHash: BlockHash(*currentBlockHeader.BlockHash),
 			},
-			untilBlockNumber: BlockNumber(currentBlockHeader.BlockNumber + attestationWindow),
+			UntilBlockNumber: BlockNumber(currentBlockHeader.BlockNumber + attestationWindow),
 		}
 	}
 }
@@ -161,12 +161,12 @@ func movePendingAttestationsToActive(
 	// If we are at the beginning of some attestation window
 	if pending, pendingExists := pendingAttestations[currentBlockNumber]; pendingExists {
 		// Initialize map for attestations active until end of the window
-		if _, activeExists := activeAttestations[pending.untilBlockNumber]; !activeExists {
-			activeAttestations[pending.untilBlockNumber] = make([]AttestRequired, 1)
+		if _, activeExists := activeAttestations[pending.UntilBlockNumber]; !activeExists {
+			activeAttestations[pending.UntilBlockNumber] = make([]AttestRequired, 1)
 		}
 
 		// Move pending attestation to active
-		activeAttestations[pending.untilBlockNumber] = append(activeAttestations[pending.untilBlockNumber], pending.AttestRequired)
+		activeAttestations[pending.UntilBlockNumber] = append(activeAttestations[pending.UntilBlockNumber], pending.AttestRequired)
 
 		// Remove from pending
 		delete(pendingAttestations, currentBlockNumber)

@@ -49,7 +49,7 @@ type AttestationInfo struct {
 
 type AttestRequiredWithValidity struct {
 	AttestRequired
-	untilBlockNumber BlockNumber
+	UntilBlockNumber BlockNumber
 }
 
 type AttestRequired struct {
