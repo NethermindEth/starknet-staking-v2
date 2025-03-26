@@ -83,7 +83,8 @@ func main() {
 
 		MovePendingAttestationsToActive(pendingAttestations, activeAttestations, BlockNumber(blockHeader.BlockNumber))
 
-		sendAllActiveAttestations(activeAttestations, &dispatcher, BlockNumber(blockHeader.BlockNumber))
+		// Should it be called in a go routine ? what about race conditions for the next for loop iteration ?
+		SendAllActiveAttestations(activeAttestations, &dispatcher, BlockNumber(blockHeader.BlockNumber))
 	}
 
 	// --> I think we don't need to listen to stake events, we can get it when fetching AttestationInfo
@@ -173,13 +174,13 @@ func MovePendingAttestationsToActive(
 	}
 }
 
-func sendAllActiveAttestations(
+func SendAllActiveAttestations(
 	activeAttestations map[BlockNumber][]AttestRequired,
 	dispatcher *EventDispatcher,
 	currentBlockNumber BlockNumber,
 ) {
 	for untilBlockNumber, attestations := range activeAttestations {
-		if currentBlockNumber <= untilBlockNumber {
+		if currentBlockNumber < untilBlockNumber {
 			// Send attestations to dispatcher
 			for _, attestation := range attestations {
 				dispatcher.AttestRequired <- attestation
