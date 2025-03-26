@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
+	"github.com/sourcegraph/conc"
 )
 
 type AccountData struct {
@@ -23,6 +23,9 @@ type Config struct {
 }
 
 func main() {
+	// todo: Move the bulk of what has been implemented here to recv.go
+	// Implement CLI here after
+
 	var config Config // read from somewhere
 
 	provider := NewProvider(config.providerUrl)
@@ -30,9 +33,12 @@ func main() {
 	validatorAccount := NewValidatorAccount(provider, &config.accountData)
 
 	dispatcher := NewEventDispatcher()
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go dispatcher.Dispatch(&validatorAccount, make(map[BlockHash]AttestationStatus), wg)
+
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(&validatorAccount, make(map[BlockHash]AttestationStatus), wg)
+	})
+	defer wg.Wait()
 	// I have to make sure this function closes at the end
 
 	// ------
@@ -62,7 +68,7 @@ func main() {
 		fmt.Println("Block header:", blockHeader)
 
 		// Re-fetch epoch info on new epoch (validity guaranteed for 1 epoch even if updates are made)
-		if blockHeader.BlockNumber == attestationInfo.CurrentEpochStartingBlock.ToUint64()+attestationInfo.EpochLen {
+		if blockHeader.BlockNumber == attestationInfo.CurrentEpochStartingBlock.Uint64()+attestationInfo.EpochLen {
 			previousEpochInfo := attestationInfo
 
 			attestationInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(&validatorAccount)
@@ -72,7 +78,7 @@ func main() {
 
 			// Sanity check
 			if attestationInfo.EpochId != previousEpochInfo.EpochId+1 ||
-				attestationInfo.CurrentEpochStartingBlock.ToUint64() != previousEpochInfo.CurrentEpochStartingBlock.ToUint64()+previousEpochInfo.EpochLen {
+				attestationInfo.CurrentEpochStartingBlock.Uint64() != previousEpochInfo.CurrentEpochStartingBlock.Uint64()+previousEpochInfo.EpochLen {
 				// TODO: give more details concerning the epoch info
 				fmt.Printf("Wrong epoch change: from %d to %d", previousEpochInfo.EpochId, attestationInfo.EpochId)
 				// TODO: what should we do ?
@@ -118,7 +124,7 @@ func fetchEpochInfo(account Accounter) (AttestationInfo, uint64, BlockNumber, er
 }
 
 func computeBlockNumberToAttestTo(account Accounter, attestationInfo AttestationInfo, attestationWindow uint64) BlockNumber {
-	startingBlock := attestationInfo.CurrentEpochStartingBlock.ToUint64() + attestationInfo.EpochLen
+	startingBlock := attestationInfo.CurrentEpochStartingBlock.Uint64() + attestationInfo.EpochLen
 
 	// TODO: might be hash(stake, hash(epoch_id, address))
 	// or should we use PoseidonArray instead ?
@@ -130,8 +136,9 @@ func computeBlockNumberToAttestTo(account Accounter, attestationInfo Attestation
 		),
 		&accountAddress,
 	)
-	// TODO: hash (felt) will most likely not fit into a uint64 --> use big.Int in that case ?
-	blockOffset := hash.Uint64() % (attestationInfo.EpochLen - attestationWindow)
+
+	// todo: use Uint256
+	blockOffset := hash % (attestationInfo.EpochLen - attestationWindow)
 
 	return BlockNumber(startingBlock + blockOffset)
 }

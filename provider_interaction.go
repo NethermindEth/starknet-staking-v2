@@ -178,8 +178,8 @@ func fetchValidatorBalance(account *account.Account) (Balance, error) {
 	return Balance(*result[0]), nil
 }
 
-func invokeAttest(
-	account Accounter, attest *AttestRequired,
+func invokeAttest[Account Accounter](
+	account Account, attest *AttestRequired,
 ) (*rpc.AddInvokeTransactionResponse, error) {
 	contractAddrFelt := AttestationContractAddress.ToFelt()
 	blockHashFelt := attest.BlockHash.ToFelt()

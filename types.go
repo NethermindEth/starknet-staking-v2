@@ -28,7 +28,7 @@ type Balance felt.Felt
 
 type BlockNumber uint64
 
-func (b BlockNumber) ToUint64() uint64 {
+func (b BlockNumber) Uint64() uint64 {
 	return uint64(b)
 }
 
