@@ -13,31 +13,31 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockAccountInterface is a mock of AccountInterface interface.
-type MockAccountInterface struct {
+// MockAccounter is a mock of Accounter interface.
+type MockAccounter struct {
 	ctrl     *gomock.Controller
-	recorder *MockAccountInterfaceMockRecorder
+	recorder *MockAccounterMockRecorder
 }
 
-// MockAccountInterfaceMockRecorder is the mock recorder for MockAccountInterface.
-type MockAccountInterfaceMockRecorder struct {
-	mock *MockAccountInterface
+// MockAccounterMockRecorder is the mock recorder for MockAccounter.
+type MockAccounterMockRecorder struct {
+	mock *MockAccounter
 }
 
-// NewMockAccountInterface creates a new mock instance.
-func NewMockAccountInterface(ctrl *gomock.Controller) *MockAccountInterface {
-	mock := &MockAccountInterface{ctrl: ctrl}
-	mock.recorder = &MockAccountInterfaceMockRecorder{mock}
+// NewMockAccounter creates a new mock instance.
+func NewMockAccounter(ctrl *gomock.Controller) *MockAccounter {
+	mock := &MockAccounter{ctrl: ctrl}
+	mock.recorder = &MockAccounterMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockAccountInterface) EXPECT() *MockAccountInterfaceMockRecorder {
+func (m *MockAccounter) EXPECT() *MockAccounterMockRecorder {
 	return m.recorder
 }
 
 // Address mocks base method.
-func (m *MockAccountInterface) Address() felt.Felt {
+func (m *MockAccounter) Address() felt.Felt {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Address")
 	ret0, _ := ret[0].(felt.Felt)
@@ -45,13 +45,13 @@ func (m *MockAccountInterface) Address() felt.Felt {
 }
 
 // Address indicates an expected call of Address.
-func (mr *MockAccountInterfaceMockRecorder) Address() *gomock.Call {
+func (mr *MockAccounterMockRecorder) Address() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockAccountInterface)(nil).Address))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockAccounter)(nil).Address))
 }
 
 // BuildAndSendInvokeTxn mocks base method.
-func (m *MockAccountInterface) BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
+func (m *MockAccounter) BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BuildAndSendInvokeTxn", ctx, functionCalls, multiplier)
 	ret0, _ := ret[0].(*rpc.AddInvokeTransactionResponse)
@@ -60,13 +60,13 @@ func (m *MockAccountInterface) BuildAndSendInvokeTxn(ctx context.Context, functi
 }
 
 // BuildAndSendInvokeTxn indicates an expected call of BuildAndSendInvokeTxn.
-func (mr *MockAccountInterfaceMockRecorder) BuildAndSendInvokeTxn(ctx, functionCalls, multiplier interface{}) *gomock.Call {
+func (mr *MockAccounterMockRecorder) BuildAndSendInvokeTxn(ctx, functionCalls, multiplier interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildAndSendInvokeTxn", reflect.TypeOf((*MockAccountInterface)(nil).BuildAndSendInvokeTxn), ctx, functionCalls, multiplier)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildAndSendInvokeTxn", reflect.TypeOf((*MockAccounter)(nil).BuildAndSendInvokeTxn), ctx, functionCalls, multiplier)
 }
 
 // Call mocks base method.
-func (m *MockAccountInterface) Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
+func (m *MockAccounter) Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Call", ctx, call, blockId)
 	ret0, _ := ret[0].([]*felt.Felt)
@@ -75,13 +75,13 @@ func (m *MockAccountInterface) Call(ctx context.Context, call rpc.FunctionCall, 
 }
 
 // Call indicates an expected call of Call.
-func (mr *MockAccountInterfaceMockRecorder) Call(ctx, call, blockId interface{}) *gomock.Call {
+func (mr *MockAccounterMockRecorder) Call(ctx, call, blockId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockAccountInterface)(nil).Call), ctx, call, blockId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockAccounter)(nil).Call), ctx, call, blockId)
 }
 
 // GetTransactionStatus mocks base method.
-func (m *MockAccountInterface) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
+func (m *MockAccounter) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTransactionStatus", ctx, transactionHash)
 	ret0, _ := ret[0].(*rpc.TxnStatusResp)
@@ -90,7 +90,7 @@ func (m *MockAccountInterface) GetTransactionStatus(ctx context.Context, transac
 }
 
 // GetTransactionStatus indicates an expected call of GetTransactionStatus.
-func (mr *MockAccountInterfaceMockRecorder) GetTransactionStatus(ctx, transactionHash interface{}) *gomock.Call {
+func (mr *MockAccounterMockRecorder) GetTransactionStatus(ctx, transactionHash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionStatus", reflect.TypeOf((*MockAccountInterface)(nil).GetTransactionStatus), ctx, transactionHash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionStatus", reflect.TypeOf((*MockAccounter)(nil).GetTransactionStatus), ctx, transactionHash)
 }

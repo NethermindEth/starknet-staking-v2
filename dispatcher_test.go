@@ -3,7 +3,6 @@ package main_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/golang/mock/gomock"
+	"github.com/sourcegraph/conc"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,11 +20,11 @@ func TestDispatch(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
+	mockAccount := mocks.NewMockAccounter(mockCtrl)
 
 	t.Run("Simple successful scenario: only 1 attest to make", func(t *testing.T) {
 		// Setup
-		dispatcher := main.NewEventDispatcher()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestationContractAddress.ToFelt()
@@ -46,9 +46,8 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
+		wg := &conc.WaitGroup{}
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, activeAttestations, wg) })
 
 		// Send event
 		blockHash := main.BlockHash(*blockHashFelt)
@@ -71,7 +70,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event is ignored if an attest is already successful
 
 		// Setup
-		dispatcher := main.NewEventDispatcher()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestationContractAddress.ToFelt()
@@ -102,9 +101,8 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
+		wg := &conc.WaitGroup{}
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, activeAttestations, wg) })
 
 		// Send the same event x3
 		blockHash := main.BlockHash(*blockHashFelt)
@@ -151,7 +149,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event is considered if previous attestation has failed
 
 		// Setup
-		dispatcher := main.NewEventDispatcher()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestationContractAddress.ToFelt()
@@ -184,9 +182,8 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
+		wg := &conc.WaitGroup{}
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, activeAttestations, wg) })
 
 		// Send the same event x3
 		blockHash := main.BlockHash(*blockHashFelt)
@@ -252,7 +249,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestationsToRemove event containing A is sent
 
 		// Setup
-		dispatcher := main.NewEventDispatcher()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 
 		// For event A
 		blockHashFeltA := new(felt.Felt).SetUint64(1)
@@ -307,9 +304,8 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
+		wg := &conc.WaitGroup{}
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, activeAttestations, wg) })
 
 		// Send event A
 		blockHashA := main.BlockHash(*blockHashFeltA)
@@ -359,7 +355,7 @@ func TestDispatch(t *testing.T) {
 		// - the AttestRequired event A finally finishes (successful/failed, whatever) and should not set the status in map (as it got deleted)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 		contractAddrFelt := main.AttestationContractAddress.ToFelt()
@@ -393,9 +389,8 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		activeAttestations := make(map[main.BlockHash]main.AttestationStatus)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go dispatcher.Dispatch(mockAccount, activeAttestations, wg)
+		wg := &conc.WaitGroup{}
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, activeAttestations, wg) })
 
 		// Send event
 		blockHash := main.BlockHash(*blockHashFelt)
@@ -434,7 +429,7 @@ func TestTrackAttest(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
+	mockAccount := mocks.NewMockAccounter(mockCtrl)
 
 	t.Run("attestation is not successful if error", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
@@ -529,7 +524,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockAccountInterface(mockCtrl)
+	mockAccount := mocks.NewMockAccounter(mockCtrl)
 
 	t.Run("GetTransactionStatus returns an error", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)

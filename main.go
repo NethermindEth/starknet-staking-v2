@@ -32,7 +32,7 @@ func main() {
 
 	validatorAccount := NewValidatorAccount(provider, &config.accountData)
 
-	dispatcher := NewEventDispatcher()
+	dispatcher := NewEventDispatcher[*ValidatorAccount]()
 
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
@@ -181,9 +181,9 @@ func MovePendingAttestationsToActive(
 	}
 }
 
-func SendAllActiveAttestations(
+func SendAllActiveAttestations[Account Accounter](
 	activeAttestations map[BlockNumber][]AttestRequired,
-	dispatcher *EventDispatcher,
+	dispatcher *EventDispatcher[Account],
 	currentBlockNumber BlockNumber,
 ) {
 	for untilBlockNumber, attestations := range activeAttestations {

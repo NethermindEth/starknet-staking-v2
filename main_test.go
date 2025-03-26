@@ -6,6 +6,7 @@ import (
 
 	"github.com/NethermindEth/juno/utils"
 	main "github.com/NethermindEth/starknet-staking-v2"
+	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/stretchr/testify/require"
 )
@@ -149,7 +150,7 @@ func TestSendAllActiveAttestations(t *testing.T) {
 		// Attest window is now passed (max window bound is current block number)
 		activeAttestations[main.BlockNumber(14)] = attestationsToRemove
 
-		dispatcher := main.NewEventDispatcher()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 
 		currentBlockNumber := main.BlockNumber(14)
 
@@ -201,7 +202,7 @@ func TestSendAllActiveAttestations(t *testing.T) {
 
 // Test helper function to register received events to assert on them
 // Note: to exit this function, just close 1 of the 2 channels
-func registerReceivedEventsInDispatcher(t *testing.T, dispatcher *main.EventDispatcher, receivedAttestRequired map[main.AttestRequired]struct{}, receivedAttestationsToRemove map[main.BlockHash]struct{}) {
+func registerReceivedEventsInDispatcher[T main.Accounter](t *testing.T, dispatcher *main.EventDispatcher[T], receivedAttestRequired map[main.AttestRequired]struct{}, receivedAttestationsToRemove map[main.BlockHash]struct{}) {
 	t.Helper()
 
 	for {

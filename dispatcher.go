@@ -40,8 +40,8 @@ func NewEventDispatcher[Account Accounter]() EventDispatcher[Account] {
 	}
 }
 
-func (d *EventDispatcher[Accounter]) Dispatch(
-	account Accounter,
+func (d *EventDispatcher[Account]) Dispatch(
+	account Account,
 	activeAttestations map[BlockHash]AttestationStatus,
 	wg *conc.WaitGroup,
 ) {
@@ -138,7 +138,7 @@ func setStatusIfExists(activeAttestations map[BlockHash]AttestationStatus, block
 // so that next block's event triggers a retry.
 // - In the "worst" case scenario, our tx will be included twice: we'll get an error from the contract the 2nd time saying "already an attestation for that epoch"
 // - In the "best" case scenario, our tx ends up not getting included the 1st time, so, we did well to let the next block trigger a retry.
-func TrackTransactionStatus(account Accounter, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
+func TrackTransactionStatus[Account Accounter](account Account, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
 	for elapsedSeconds := 0; elapsedSeconds < defaultAttestDelay; elapsedSeconds++ {
 		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
 		if err != nil {
