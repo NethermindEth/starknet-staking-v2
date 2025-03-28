@@ -34,14 +34,13 @@ type ValidatorAccount account.Account
 
 func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) ValidatorAccount {
 	publicKey := accountData.pubKey
-	privateKey, ok := new(big.Int).SetString(accountData.privKey, 16)
+	privateKey, ok := new(big.Int).SetString(accountData.privKey, 0)
 	if !ok {
 		log.Fatalf("Cannot turn private key %s into a big int", privateKey)
 	}
 	accountAddr := AddressFromString(accountData.address)
 
-	ks := account.NewMemKeystore()
-	ks.Put(publicKey, privateKey)
+	ks := account.SetNewMemKeystore(publicKey, privateKey)
 
 	accountAddrFelt := accountAddr.ToFelt()
 	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey, ks, 2)
@@ -68,11 +67,11 @@ func (v *ValidatorAccount) Address() *felt.Felt {
 	return v.AccountAddress
 }
 
-// I believe all this functions down here should be methods
+// I believe all these functions down here should be methods
 // Postponing for now to not affect test code
 
 func fetchAttestInfo[Account Accounter](account Account) (EpochInfo, error) {
-	contractAddrFelt := AttestContract.ToFelt()
+	contractAddrFelt := StakingContract.ToFelt()
 	accountAddress := account.Address()
 
 	functionCall := rpc.FunctionCall{
@@ -90,7 +89,6 @@ func fetchAttestInfo[Account Accounter](account Account) (EpochInfo, error) {
 		return EpochInfo{}, entrypointResponseError("get_attestation_info_by_operational_address")
 	}
 
-	// TODO: verify once endpoint is available
 	stake := result[1].Bits()
 	return EpochInfo{
 		StakerAddress:             Address(*result[0]),
@@ -126,7 +124,7 @@ func fetchAttestWindow[Account Accounter](account Account) (uint64, error) {
 }
 
 // For near future when tracking validator's balance
-func fetchValidatorBalance(account *account.Account) (Balance, error) {
+func fetchValidatorBalance[Account Accounter](account Account) (Balance, error) {
 	contractAddrFelt := StrkTokenContract.ToFelt()
 
 	result, err := account.Call(
@@ -134,7 +132,7 @@ func fetchValidatorBalance(account *account.Account) (Balance, error) {
 		rpc.FunctionCall{
 			ContractAddress:    &contractAddrFelt,
 			EntryPointSelector: utils.GetSelectorFromNameFelt("balanceOf"),
-			Calldata:           []*felt.Felt{account.AccountAddress},
+			Calldata:           []*felt.Felt{account.Address()},
 		},
 		rpc.BlockID{Tag: "latest"},
 	)

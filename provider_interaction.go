@@ -16,7 +16,7 @@ func NewProvider(providerUrl string) *rpc.Provider {
 	return provider
 }
 
-// Returns a Go channel where BlockHeaders are recieved
+// Returns a Go channel where BlockHeaders are received
 func BlockHeaderSubscription(providerUrl string) (
 	*rpc.WsProvider, chan *rpc.BlockHeader,
 ) {

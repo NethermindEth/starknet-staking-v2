@@ -1,6 +1,8 @@
 package main
 
 import (
+	"math/big"
+
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
@@ -29,23 +31,20 @@ func main() {
 }
 
 func computeBlockNumberToAttestTo(account Accounter, attestationInfo EpochInfo, attestationWindow uint64) BlockNumber {
-	startingBlock := attestationInfo.CurrentEpochStartingBlock.Uint64() + attestationInfo.EpochLen
-
-	// TODO: might be hash(stake, hash(epoch_id, address))
-	// or should we use PoseidonArray instead ?
 	accountAddress := account.Address()
-	hash := crypto.Poseidon(
-		crypto.Poseidon(
-			new(felt.Felt).SetBigInt(attestationInfo.Stake.Big()),
-			new(felt.Felt).SetUint64(attestationInfo.EpochId),
-		),
+	hash := crypto.PoseidonArray(
+		new(felt.Felt).SetBigInt(attestationInfo.Stake.Big()),
+		new(felt.Felt).SetUint64(attestationInfo.EpochId),
 		accountAddress,
 	)
 
-	// todo: use Uint256
-	blockOffset := hash % (attestationInfo.EpochLen - attestationWindow)
+	var hashBigInt *big.Int = new(big.Int)
+	hashBigInt = hash.BigInt(hashBigInt)
 
-	return BlockNumber(startingBlock + blockOffset)
+	var blockOffsetBigInt *big.Int = new(big.Int)
+	blockOffsetBigInt = blockOffsetBigInt.Mod(hashBigInt, big.NewInt(int64(attestationInfo.EpochLen-attestationWindow)))
+
+	return BlockNumber(attestationInfo.CurrentEpochStartingBlock.Uint64() + blockOffsetBigInt.Uint64())
 }
 
 func SchedulePendingAttestations(
@@ -57,7 +56,7 @@ func SchedulePendingAttestations(
 	// If we are at the block number to attest to
 	if BlockNumber(currentBlockHeader.BlockNumber) == blockNumberToAttestTo {
 		// Schedule the attestation to be sent starting at the beginning of attestation window
-		pendingAttestations[BlockNumber(currentBlockHeader.BlockNumber+MIN_ATTESTATION_WINDOW)] = AttestRequiredWithValidity{
+		pendingAttestations[BlockNumber(currentBlockHeader.BlockNumber+MIN_ATTESTATION_WINDOW-1)] = AttestRequiredWithValidity{
 			AttestRequired: AttestRequired{
 				BlockHash: BlockHash(*currentBlockHeader.BlockHash),
 			},

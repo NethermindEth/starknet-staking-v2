@@ -1,13 +1,13 @@
 package main_test
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils"
 	main "github.com/NethermindEth/starknet-staking-v2"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet.go/rpc"
+	"github.com/sourcegraph/conc"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,7 +43,7 @@ func TestSchedulePendingAttestations(t *testing.T) {
 		// Assert
 		require.Equal(t, 1, len(pendingAttestations))
 
-		attestation, exists := pendingAttestations[main.BlockNumber(currentBlockHeader.BlockNumber+main.MIN_ATTESTATION_WINDOW)]
+		attestation, exists := pendingAttestations[main.BlockNumber(currentBlockHeader.BlockNumber+main.MIN_ATTESTATION_WINDOW-1)]
 		require.Equal(t, true, exists)
 		require.Equal(t, main.AttestRequiredWithValidity{
 			AttestRequired: main.AttestRequired{
@@ -64,7 +64,7 @@ func TestMovePendingAttestationsToActive(t *testing.T) {
 			},
 			Until: main.BlockNumber(1 + 20),
 		}
-		pendingAttestations[main.BlockNumber(1+main.MIN_ATTESTATION_WINDOW)] = scheduledAttest
+		pendingAttestations[main.BlockNumber(1+main.MIN_ATTESTATION_WINDOW-1)] = scheduledAttest
 
 		activeAttestations := make(map[main.BlockNumber][]main.AttestRequired)
 
@@ -76,7 +76,7 @@ func TestMovePendingAttestationsToActive(t *testing.T) {
 
 		// Assert pending attestations hasn't changed
 		require.Equal(t, 1, len(pendingAttestations))
-		expectedScheduledAttest, exists := pendingAttestations[main.BlockNumber(1+main.MIN_ATTESTATION_WINDOW)]
+		expectedScheduledAttest, exists := pendingAttestations[main.BlockNumber(1+main.MIN_ATTESTATION_WINDOW-1)]
 		require.Equal(t, true, exists)
 		require.Equal(t, scheduledAttest, expectedScheduledAttest)
 
@@ -92,7 +92,7 @@ func TestMovePendingAttestationsToActive(t *testing.T) {
 			},
 			Until: main.BlockNumber(1 + 20),
 		}
-		pendingAttestations[main.BlockNumber(1+main.MIN_ATTESTATION_WINDOW)] = scheduledAttest
+		pendingAttestations[main.BlockNumber(1+main.MIN_ATTESTATION_WINDOW-1)] = scheduledAttest
 
 		activeAttestations := make(map[main.BlockNumber][]main.AttestRequired)
 
@@ -117,7 +117,7 @@ func TestSendAllActiveAttestations(t *testing.T) {
 		// Setup
 		activeAttestations := make(map[main.BlockNumber][]main.AttestRequired)
 
-		// Second set of active attestations
+		// A set of active attestations
 		attestationsUntilBlock21 := []main.AttestRequired{
 			{
 				BlockHash: main.BlockHash(*utils.HexToFelt(t, "0x123")),
@@ -126,7 +126,7 @@ func TestSendAllActiveAttestations(t *testing.T) {
 		// Still within attest window (current block number is 14)
 		activeAttestations[main.BlockNumber(21)] = attestationsUntilBlock21
 
-		// First set of active attestations
+		// Another set of active attestations
 		attestationsUntilBlock15 := []main.AttestRequired{
 			{
 				BlockHash: main.BlockHash(*utils.HexToFelt(t, "0x456")),
@@ -157,12 +157,10 @@ func TestSendAllActiveAttestations(t *testing.T) {
 		// Mock dispatcher: register received events
 		receivedAttestRequired := make(map[main.AttestRequired]struct{})
 		receivedAttestationsToRemove := make(map[main.BlockHash]struct{})
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg := &conc.WaitGroup{}
+		wg.Go(func() {
 			registerReceivedEventsInDispatcher(t, &dispatcher, receivedAttestRequired, receivedAttestationsToRemove)
-		}()
+		})
 
 		// Call
 		main.SendAllActiveAttestations(activeAttestations, &dispatcher, currentBlockNumber)
@@ -187,7 +185,7 @@ func TestSendAllActiveAttestations(t *testing.T) {
 
 		require.Equal(t, expectedAttestationsToRemove, receivedAttestationsToRemove)
 
-		// Assert active attestations to remove have indeed been removed
+		// Assert active attestations to be removed have indeed been removed
 		require.Equal(t, 2, len(activeAttestations))
 
 		entryBlock15, exists := activeAttestations[main.BlockNumber(15)]

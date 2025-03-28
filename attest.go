@@ -2,12 +2,9 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/sourcegraph/conc"
 )
-
-type Aaaaa struct {
-	EpochInfo EpochInfo
-}
 
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
@@ -33,8 +30,15 @@ func Attest(config *Config) {
 		// configuration we might log the error and do a re-try just to make sure
 	}
 
+	// Attestations waiting for their window (only 1 / block at most as MIN_ATTESTATION_WINDOW is constant)
+	// - key is the start of the attestation window
+	// - if current block number is the block to attest to, we add [it + MIN_ATTESTATION_WINDOW - 1] to this map
+	// - if the current block number is a key in the map, we move to the active map
 	pendingAttests := make(map[BlockNumber]AttestRequiredWithValidity)
 
+	// Attestations in their sending window
+	// - key is the end of the attestation window
+	// - all entries in this map are sent to the dispatcher (at every block we receive)
 	activeAttests := make(map[BlockNumber][]AttestRequired)
 
 	for blockHeader := range headersFeed {
@@ -42,6 +46,7 @@ func Attest(config *Config) {
 
 		// Re-fetch epoch info on new epoch (validity guaranteed for 1 epoch even if updates are made)
 		if blockHeader.BlockNumber == attestInfo.CurrentEpochStartingBlock.Uint64()+attestInfo.EpochLen {
+			// TODO: log new epoch start
 			previousEpochInfo := attestInfo
 
 			attestInfo, attestationWindow, blockNumberToAttestTo, err = fetchEpochInfo(&validatorAccount)

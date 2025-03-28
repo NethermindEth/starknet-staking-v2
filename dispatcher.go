@@ -58,6 +58,7 @@ func (d *EventDispatcher[Account]) Dispatch(
 			resp, err := invokeAttest(account, &event)
 			if err != nil {
 				// throw a detailed error of what happened
+				activeAttestations[event.BlockHash] = Failed
 				continue
 			}
 
@@ -72,7 +73,6 @@ func (d *EventDispatcher[Account]) Dispatch(
 			for _, blockHash := range event {
 				delete(activeAttestations, blockHash)
 			}
-			// Might delete this case later if we really don't need it
 		}
 	}
 }
@@ -137,10 +137,10 @@ func setStatusIfExists(activeAttestations map[BlockHash]AttestStatus, blockHash 
 func TrackTransactionStatus[Account Accounter](account Account, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
 	for elapsedSeconds := 0; elapsedSeconds < defaultAttestDelay; elapsedSeconds++ {
 		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
-		if err != nil {
+		if err != nil && err.Error() != "Transaction hash not found" {
 			return nil, err
 		}
-		if txStatus.FinalityStatus != rpc.TxnStatus_Received {
+		if err == nil && txStatus.FinalityStatus != rpc.TxnStatus_Received {
 			return txStatus, nil
 		}
 		Sleep(time.Second)
