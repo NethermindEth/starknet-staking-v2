@@ -5,9 +5,9 @@ go 1.24.1
 require (
 	github.com/NethermindEth/juno v0.12.2
 	github.com/NethermindEth/starknet.go v0.8.0-beta.2
-	github.com/golang/mock v1.6.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.10.0
+	go.uber.org/mock v0.5.0
 	lukechampine.com/uint128 v1.3.0
 )
 

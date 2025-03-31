@@ -12,7 +12,7 @@ import (
 	"lukechampine.com/uint128"
 )
 
-//go:generate mockgen -destination=./mocks/mock_account.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Account
+//go:generate mockgen -destination=./mocks/mock_account.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Accounter
 type Accounter interface {
 	// Methods from account.Account
 	GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error)
@@ -161,7 +161,7 @@ func fetchEpochInfo[Account Accounter](account Account) (EpochInfo, uint64, Bloc
 		return EpochInfo{}, 0, 0, err
 	}
 
-	blockNum := computeBlockNumberToAttestTo(account, epochInfo, attestWindow)
+	blockNum := ComputeBlockNumberToAttestTo(account, epochInfo, attestWindow)
 
 	return epochInfo, attestWindow, blockNum, nil
 }

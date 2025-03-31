@@ -11,9 +11,9 @@ import (
 	main "github.com/NethermindEth/starknet-staking-v2"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet.go/rpc"
-	"github.com/golang/mock/gomock"
 	"github.com/sourcegraph/conc"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func TestDispatch(t *testing.T) {
@@ -24,7 +24,7 @@ func TestDispatch(t *testing.T) {
 
 	t.Run("Simple scenario: only 1 attest that succeeds", func(t *testing.T) {
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccount]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestContract.ToFelt()
@@ -70,7 +70,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event A is emitted and ignored (as 1st one finished & succeeded)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccount]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestContract.ToFelt()
@@ -149,7 +149,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event is considered (as 2nd one finished & failed)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccount]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestContract.ToFelt()
@@ -246,7 +246,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event A is emitted and considered (as 1st one failed)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccount]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddrFelt := main.AttestContract.ToFelt()
@@ -320,7 +320,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestationsToRemove event for A & B is sent
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccount]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 
 		// For event A
 		blockHashFeltA := new(felt.Felt).SetUint64(1)
@@ -426,7 +426,7 @@ func TestDispatch(t *testing.T) {
 		// - the AttestRequired event A finally finishes (successful/failed, whatever) and should not set the status in map (as the entry got deleted)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccount]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter]()
 
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 		contractAddrFelt := main.AttestContract.ToFelt()

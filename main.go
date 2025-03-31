@@ -30,7 +30,7 @@ func main() {
 	Attest(&config)
 }
 
-func computeBlockNumberToAttestTo(account Accounter, attestationInfo EpochInfo, attestationWindow uint64) BlockNumber {
+func ComputeBlockNumberToAttestTo[Account Accounter](account Account, attestationInfo EpochInfo, attestationWindow uint64) BlockNumber {
 	accountAddress := account.Address()
 	hash := crypto.PoseidonArray(
 		new(felt.Felt).SetBigInt(attestationInfo.Stake.Big()),
