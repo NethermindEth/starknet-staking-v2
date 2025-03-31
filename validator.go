@@ -70,7 +70,7 @@ func (v *ValidatorAccount) Address() *felt.Felt {
 // I believe all these functions down here should be methods
 // Postponing for now to not affect test code
 
-func fetchAttestInfo[Account Accounter](account Account) (EpochInfo, error) {
+func fetchEpochInfo[Account Accounter](account Account) (EpochInfo, error) {
 	contractAddrFelt := StakingContract.ToFelt()
 	accountAddress := account.Address()
 
@@ -150,20 +150,35 @@ func fetchValidatorBalance[Account Accounter](account Account) (Balance, error) 
 
 // I believe this functions returns many things, it should probably be grouped under
 // a unique type
-func fetchEpochInfo[Account Accounter](account Account) (EpochInfo, uint64, BlockNumber, error) {
-	epochInfo, err := fetchAttestInfo(account)
+func fetchEpochAndAttestInfo[Account Accounter](account Account) (EpochInfo, AttestInfo, error) {
+	epochInfo, err := fetchEpochInfo(account)
 	if err != nil {
-		return EpochInfo{}, 0, 0, err
+		return EpochInfo{}, AttestInfo{}, err
 	}
 
+	attestInfo, err := fetchAttestInfo(account, epochInfo)
+	if err != nil {
+		return EpochInfo{}, AttestInfo{}, err
+	}
+
+	return epochInfo, attestInfo, nil
+}
+
+func fetchAttestInfo[Account Accounter](account Account, epochInfo EpochInfo) (AttestInfo, error) {
 	attestWindow, err := fetchAttestWindow(account)
 	if err != nil {
-		return EpochInfo{}, 0, 0, err
+		return AttestInfo{}, err
 	}
 
 	blockNum := ComputeBlockNumberToAttestTo(account, epochInfo, attestWindow)
 
-	return epochInfo, attestWindow, blockNum, nil
+	attestInfo := AttestInfo{
+		TargetBlock: blockNum,
+		WindowStart: blockNum + BlockNumber(MIN_ATTESTATION_WINDOW),
+		WindowEnd:   blockNum + BlockNumber(attestWindow),
+	}
+
+	return attestInfo, nil
 }
 
 func invokeAttest[Account Accounter](account Account, attest *AttestRequired) (

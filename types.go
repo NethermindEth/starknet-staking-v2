@@ -36,7 +36,6 @@ func (b *BlockHash) ToFelt() felt.Felt {
 	return felt.Felt(*b)
 }
 
-// EpochInfo is the response from the get_attestation_info_by_operational_address
 type EpochInfo struct {
 	StakerAddress             Address         `json:"staker_address"`
 	Stake                     uint128.Uint128 `json:"stake"`
@@ -45,11 +44,13 @@ type EpochInfo struct {
 	CurrentEpochStartingBlock BlockNumber     `json:"current_epoch_starting_block"`
 }
 
-type AttestRequiredWithValidity struct {
-	AttestRequired
-	Until BlockNumber
-}
-
 type AttestRequired struct {
 	BlockHash BlockHash
+}
+
+type AttestInfo struct {
+	TargetBlock     BlockNumber
+	TargetBlockHash BlockHash
+	WindowStart     BlockNumber
+	WindowEnd       BlockNumber
 }
