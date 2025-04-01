@@ -36,8 +36,12 @@ func Attest(config *Config) {
 	// Should also track re-org and check if the re-org means we have to attest again or not
 }
 
-func ProcessBlockHeaders[Account Accounter](headersFeed chan *rpc.BlockHeader, account Account, dispatcher *EventDispatcher[Account]) {
-	epochInfo, attestInfo, err := fetchEpochAndAttestInfo(account)
+func ProcessBlockHeaders[Account Accounter](
+	headersFeed chan *rpc.BlockHeader,
+	account Account,
+	dispatcher *EventDispatcher[Account],
+) {
+	epochInfo, attestInfo, err := FetchEpochAndAttestInfo(account)
 	if err != nil {
 		// If we fail at this point it means there is probably something wrong with the
 		// configuration we might log the error and do a re-try just to make sure
@@ -51,7 +55,7 @@ func ProcessBlockHeaders[Account Accounter](headersFeed chan *rpc.BlockHeader, a
 			// TODO: log new epoch start
 			previousEpochInfo := epochInfo
 
-			epochInfo, attestInfo, err = fetchEpochAndAttestInfo(account)
+			epochInfo, attestInfo, err = FetchEpochAndAttestInfo(account)
 			if err != nil {
 				// TODO: implement a retry mechanism ?
 			}

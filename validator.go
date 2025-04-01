@@ -70,14 +70,13 @@ func (v *ValidatorAccount) Address() *felt.Felt {
 // I believe all these functions down here should be methods
 // Postponing for now to not affect test code
 
-func fetchEpochInfo[Account Accounter](account Account) (EpochInfo, error) {
+func FetchEpochInfo[Account Accounter](account Account) (EpochInfo, error) {
 	contractAddrFelt := StakingContract.ToFelt()
-	accountAddress := account.Address()
 
 	functionCall := rpc.FunctionCall{
 		ContractAddress:    &contractAddrFelt,
 		EntryPointSelector: utils.GetSelectorFromNameFelt("get_attestation_info_by_operational_address"),
-		Calldata:           []*felt.Felt{accountAddress},
+		Calldata:           []*felt.Felt{account.Address()},
 	}
 
 	result, err := account.Call(context.Background(), functionCall, rpc.BlockID{Tag: "latest"})
@@ -92,14 +91,14 @@ func fetchEpochInfo[Account Accounter](account Account) (EpochInfo, error) {
 	stake := result[1].Bits()
 	return EpochInfo{
 		StakerAddress:             Address(*result[0]),
-		Stake:                     uint128.Uint128{Lo: stake[0], Hi: stake[1]},
+		Stake:                     uint128.New(stake[0], stake[1]),
 		EpochLen:                  result[2].Uint64(),
 		EpochId:                   result[3].Uint64(),
 		CurrentEpochStartingBlock: BlockNumber(result[4].Uint64()),
 	}, nil
 }
 
-func fetchAttestWindow[Account Accounter](account Account) (uint64, error) {
+func FetchAttestWindow[Account Accounter](account Account) (uint64, error) {
 	contractAddrFelt := AttestContract.ToFelt()
 
 	result, err := account.Call(
@@ -124,7 +123,7 @@ func fetchAttestWindow[Account Accounter](account Account) (uint64, error) {
 }
 
 // For near future when tracking validator's balance
-func fetchValidatorBalance[Account Accounter](account Account) (Balance, error) {
+func FetchValidatorBalance[Account Accounter](account Account) (Balance, error) {
 	contractAddrFelt := StrkTokenContract.ToFelt()
 
 	result, err := account.Call(
@@ -150,24 +149,15 @@ func fetchValidatorBalance[Account Accounter](account Account) (Balance, error) 
 
 // I believe this functions returns many things, it should probably be grouped under
 // a unique type
-func fetchEpochAndAttestInfo[Account Accounter](account Account) (EpochInfo, AttestInfo, error) {
-	epochInfo, err := fetchEpochInfo(account)
+func FetchEpochAndAttestInfo[Account Accounter](account Account) (EpochInfo, AttestInfo, error) {
+	epochInfo, err := FetchEpochInfo(account)
 	if err != nil {
 		return EpochInfo{}, AttestInfo{}, err
 	}
 
-	attestInfo, err := fetchAttestInfo(account, epochInfo)
-	if err != nil {
-		return EpochInfo{}, AttestInfo{}, err
-	}
-
-	return epochInfo, attestInfo, nil
-}
-
-func fetchAttestInfo[Account Accounter](account Account, epochInfo EpochInfo) (AttestInfo, error) {
-	attestWindow, err := fetchAttestWindow(account)
-	if err != nil {
-		return AttestInfo{}, err
+	attestWindow, windowErr := FetchAttestWindow(account)
+	if windowErr != nil {
+		return EpochInfo{}, AttestInfo{}, windowErr
 	}
 
 	blockNum := ComputeBlockNumberToAttestTo(account, epochInfo, attestWindow)
@@ -178,10 +168,10 @@ func fetchAttestInfo[Account Accounter](account Account, epochInfo EpochInfo) (A
 		WindowEnd:   blockNum + BlockNumber(attestWindow),
 	}
 
-	return attestInfo, nil
+	return epochInfo, attestInfo, nil
 }
 
-func invokeAttest[Account Accounter](account Account, attest *AttestRequired) (
+func InvokeAttest[Account Accounter](account Account, attest *AttestRequired) (
 	*rpc.AddInvokeTransactionResponse, error,
 ) {
 	contractAddrFelt := AttestContract.ToFelt()
