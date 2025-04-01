@@ -60,7 +60,7 @@ func (d *EventDispatcher[Account]) Dispatch(
 			*currentAttest = event
 			*currentAttestStatus = Ongoing
 
-			resp, err := invokeAttest(account, &event)
+			resp, err := InvokeAttest(account, &event)
 			if err != nil {
 				// throw a detailed error of what happened
 				*currentAttestStatus = Failed

@@ -13,6 +13,14 @@ type AccountData struct {
 	pubKey  string
 }
 
+func NewAccountData(address string, privKey string, pubKey string) AccountData {
+	return AccountData{
+		address,
+		privKey,
+		pubKey,
+	}
+}
+
 // struct should be (un)marshallable
 type Config struct {
 	providerUrl string
