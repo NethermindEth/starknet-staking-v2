@@ -146,7 +146,11 @@ func sendHeaders(t *testing.T, headersFeed chan *rpc.BlockHeader, start, end, ta
 
 // Test helper function to register received events to assert on them
 // Note: to exit this function, just close the channel
-func registerReceivedEvents[T main.Accounter](t *testing.T, dispatcher *main.EventDispatcher[T], receivedAttestRequired map[main.AttestRequired]uint) {
+func registerReceivedEvents[T main.Accounter](
+	t *testing.T,
+	dispatcher *main.EventDispatcher[T],
+	receivedAttestRequired map[main.AttestRequired]uint,
+) {
 	t.Helper()
 
 	for {

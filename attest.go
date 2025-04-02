@@ -53,7 +53,7 @@ func ProcessBlockHeaders[Account Accounter](
 		// Re-fetch epoch info on new epoch (validity guaranteed for 1 epoch even if updates are made)
 		if blockHeader.BlockNumber == epochInfo.CurrentEpochStartingBlock.Uint64()+epochInfo.EpochLen {
 			// TODO: log new epoch start
-			previousEpochInfo := epochInfo
+			prevEpochInfo := epochInfo
 
 			epochInfo, attestInfo, err = FetchEpochAndAttestInfo(account)
 			if err != nil {
@@ -61,10 +61,10 @@ func ProcessBlockHeaders[Account Accounter](
 			}
 
 			// Sanity check
-			if epochInfo.EpochId != previousEpochInfo.EpochId+1 ||
-				epochInfo.CurrentEpochStartingBlock.Uint64() != previousEpochInfo.CurrentEpochStartingBlock.Uint64()+previousEpochInfo.EpochLen {
+			if epochInfo.EpochId != prevEpochInfo.EpochId+1 ||
+				epochInfo.CurrentEpochStartingBlock.Uint64() != prevEpochInfo.CurrentEpochStartingBlock.Uint64()+prevEpochInfo.EpochLen {
 				// TODO: give more details concerning the epoch info
-				fmt.Printf("Wrong epoch change: from %d to %d", previousEpochInfo.EpochId, epochInfo.EpochId)
+				fmt.Printf("Wrong epoch change: from %d to %d", prevEpochInfo.EpochId, epochInfo.EpochId)
 				// TODO: what should we do ?
 			}
 		}
@@ -73,7 +73,8 @@ func ProcessBlockHeaders[Account Accounter](
 			attestInfo.TargetBlockHash = BlockHash(*blockHeader.BlockHash)
 		}
 
-		if BlockNumber(blockHeader.BlockNumber) >= attestInfo.WindowStart-1 && BlockNumber(blockHeader.BlockNumber) < attestInfo.WindowEnd {
+		if BlockNumber(blockHeader.BlockNumber) >= attestInfo.WindowStart-1 &&
+			BlockNumber(blockHeader.BlockNumber) < attestInfo.WindowEnd {
 			dispatcher.AttestRequired <- AttestRequired{
 				BlockHash: attestInfo.TargetBlockHash,
 			}

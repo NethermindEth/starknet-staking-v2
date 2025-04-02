@@ -424,14 +424,11 @@ func TestTrackAttest(t *testing.T) {
 				GetTransactionStatus(context.Background(), txHash).
 				Return(nil, errors.New("some internal error"))
 
-			blockHash := main.BlockHash(*txHash)
-			event := main.AttestRequired{BlockHash: blockHash}
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
-			currentAttestStatus := main.Ongoing
 
-			main.TrackAttest(mockAccount, event, txRes, &currentAttestStatus)
+			txStatus := main.TrackAttest(mockAccount, txRes)
 
-			require.Equal(t, main.Failed, currentAttestStatus)
+			require.Equal(t, main.Failed, txStatus)
 		})
 
 		t.Run("attestation fails if REJECTED", func(t *testing.T) {
@@ -443,14 +440,11 @@ func TestTrackAttest(t *testing.T) {
 					FinalityStatus: rpc.TxnStatus_Rejected,
 				}, nil)
 
-			blockHash := main.BlockHash(*txHash)
-			event := main.AttestRequired{BlockHash: blockHash}
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
-			currentAttestStatus := main.Ongoing
 
-			main.TrackAttest(mockAccount, event, txRes, &currentAttestStatus)
+			txStatus := main.TrackAttest(mockAccount, txRes)
 
-			require.Equal(t, main.Failed, currentAttestStatus)
+			require.Equal(t, main.Failed, txStatus)
 		})
 
 		t.Run("attestation fails if accepted but REVERTED", func(t *testing.T) {
@@ -463,14 +457,11 @@ func TestTrackAttest(t *testing.T) {
 					ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
 				}, nil)
 
-			blockHash := main.BlockHash(*txHash)
-			event := main.AttestRequired{BlockHash: blockHash}
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
-			currentAttestStatus := main.Ongoing
 
-			main.TrackAttest(mockAccount, event, txRes, &currentAttestStatus)
+			txStatus := main.TrackAttest(mockAccount, txRes)
 
-			require.Equal(t, main.Failed, currentAttestStatus)
+			require.Equal(t, main.Failed, txStatus)
 		})
 
 		t.Run("attestation succeeds if accepted & SUCCEEDED", func(t *testing.T) {
@@ -483,14 +474,11 @@ func TestTrackAttest(t *testing.T) {
 					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
 				}, nil)
 
-			blockHash := main.BlockHash(*txHash)
-			event := main.AttestRequired{BlockHash: blockHash}
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
-			currentAttestStatus := main.Ongoing
 
-			main.TrackAttest(mockAccount, event, txRes, &currentAttestStatus)
+			txStatus := main.TrackAttest(mockAccount, txRes)
 
-			require.Equal(t, main.Successful, currentAttestStatus)
+			require.Equal(t, main.Successful, txStatus)
 		})
 	})
 }

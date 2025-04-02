@@ -67,7 +67,10 @@ func (d *EventDispatcher[Account]) Dispatch(
 				continue
 			}
 
-			wg.Go(func() { TrackAttest(account, event, resp, currentAttestStatus) })
+			wg.Go(func() {
+				txStatus := TrackAttest(account, resp)
+				*currentAttestStatus = txStatus
+			})
 		}
 	}
 }
@@ -81,28 +84,23 @@ func (d *EventDispatcher[Account]) Dispatch(
 // If the transaction was actually reverted log it and repeat the attestation
 func TrackAttest[Account Accounter](
 	account Account,
-	event AttestRequired,
 	txResp *rpc.AddInvokeTransactionResponse,
-	currentAttestStatus *AttestStatus,
-) {
+) AttestStatus {
 	txStatus, err := TrackTransactionStatus(account, txResp.TransactionHash)
 
 	if err != nil {
 		// log exactly what's the error
-		*currentAttestStatus = Failed
-		return
+		return Failed
 	}
 
 	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
 		// log exactly the rejection and why was it
-		*currentAttestStatus = Failed
-		return
+		return Failed
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
 		// log the failure & the reason, in here `txStatus.FailureReason` probably
-		*currentAttestStatus = Failed
-		return
+		return Failed
 	}
 
 	// If we got here, then the transaction status was accepted & successful
@@ -110,8 +108,9 @@ func TrackAttest[Account Accounter](
 	// It might have been deleted from map if routine took some time and in the meantime
 	// the next block got processed (and window for attestation passed). In that case,
 	// we do not want to re-put it into the map
-	*currentAttestStatus = Successful
+	//
 	// log attestation was successful
+	return Successful
 }
 
 // I guess we could sleep & wait a bit here because I believe canceling & then retrying from the next block
