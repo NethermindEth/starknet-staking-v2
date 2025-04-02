@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -13,10 +14,31 @@ import (
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"lukechampine.com/uint128"
 )
+
+type envVariable struct {
+	httpProviderUrl string
+}
+
+func loadEnv(t *testing.T) envVariable {
+	t.Helper()
+
+	err := godotenv.Load(".env")
+	if err != nil {
+		panic(errors.Join(errors.New("error loading '.env' file"), err))
+	}
+
+	base := os.Getenv("HTTP_PROVIDER_URL")
+	if base == "" {
+		panic("Failed to load HTTP_PROVIDER_URL, empty string")
+	}
+
+	return envVariable{base}
+}
 
 func TestNewValidatorAccount(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -34,7 +56,8 @@ func TestNewValidatorAccount(t *testing.T) {
 
 	t.Run("Successul account creation", func(t *testing.T) {
 		// Setup
-		provider, providerErr := rpc.NewProvider("http://localhost:6060")
+		env := loadEnv(t)
+		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
 		require.NoError(t, providerErr)
 
 		address := "0x123"
