@@ -532,7 +532,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 		main.Sleep = time.Sleep
 	})
 
-	t.Run("Returns an error if tx status does not change for `defaultAttestDelay` seconds", func(t *testing.T) {
+	t.Run("Returns an error if tx status does not change for `DEFAULT_MAX_RETRIES` seconds", func(t *testing.T) {
 		// Mock time.Sleep (absolutely no reason to wait in that test)
 		main.Sleep = func(d time.Duration) {
 			// Do nothing
@@ -545,7 +545,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 			Return(&rpc.TxnStatusResp{
 				FinalityStatus: rpc.TxnStatus_Received,
 			}, nil).
-			// equal to `defaultAttestDelay`
+			// equal to `DEFAULT_MAX_RETRIES`
 			Times(10)
 
 		status, err := main.TrackTransactionStatus(mockAccount, txHash)

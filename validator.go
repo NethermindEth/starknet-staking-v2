@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"log"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
+	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
@@ -32,11 +32,11 @@ type Accounter interface {
 
 type ValidatorAccount account.Account
 
-func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) ValidatorAccount {
+func NewValidatorAccount[Logger junoUtils.Logger](provider *rpc.Provider, logger Logger, accountData *AccountData) ValidatorAccount {
 	publicKey := accountData.pubKey
 	privateKey, ok := new(big.Int).SetString(accountData.privKey, 0)
 	if !ok {
-		log.Fatalf("Cannot turn private key %s into a big int", privateKey)
+		logger.Fatalf("Cannot turn private key %s into a big int", privateKey)
 	}
 	accountAddr := AddressFromString(accountData.address)
 
@@ -45,9 +45,10 @@ func NewValidatorAccount(provider *rpc.Provider, accountData *AccountData) Valid
 	accountAddrFelt := accountAddr.ToFelt()
 	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey, ks, 2)
 	if err != nil {
-		log.Fatalf("Cannot create new account: %s", err)
+		logger.Fatalf("Cannot create validator account: %s", err)
 	}
 
+	logger.Infow("Successfully created validator account", "address", accountAddr)
 	return ValidatorAccount(*account)
 }
 
@@ -149,7 +150,7 @@ func FetchValidatorBalance[Account Accounter](account Account) (Balance, error) 
 
 // I believe this functions returns many things, it should probably be grouped under
 // a unique type
-func FetchEpochAndAttestInfo[Account Accounter](account Account) (EpochInfo, AttestInfo, error) {
+func FetchEpochAndAttestInfo[Account Accounter, Logger junoUtils.Logger](account Account, logger Logger) (EpochInfo, AttestInfo, error) {
 	epochInfo, err := FetchEpochInfo(account)
 	if err != nil {
 		return EpochInfo{}, AttestInfo{}, err
@@ -168,6 +169,7 @@ func FetchEpochAndAttestInfo[Account Accounter](account Account) (EpochInfo, Att
 		WindowEnd:   blockNum + BlockNumber(attestWindow),
 	}
 
+	logger.Infow("Successfully computed target block to attest to", "epoch ID", epochInfo.EpochId, "attestation info", attestInfo)
 	return epochInfo, attestInfo, nil
 }
 
