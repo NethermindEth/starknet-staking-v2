@@ -56,6 +56,21 @@ func (mr *MockAccounterMockRecorder) Address() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Address", reflect.TypeOf((*MockAccounter)(nil).Address))
 }
 
+// BlockWithTxHashes mocks base method.
+func (m *MockAccounter) BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockWithTxHashes", ctx, blockID)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockWithTxHashes indicates an expected call of BlockWithTxHashes.
+func (mr *MockAccounterMockRecorder) BlockWithTxHashes(ctx, blockID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockWithTxHashes", reflect.TypeOf((*MockAccounter)(nil).BlockWithTxHashes), ctx, blockID)
+}
+
 // BuildAndSendInvokeTxn mocks base method.
 func (m *MockAccounter) BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
 	m.ctrl.T.Helper()

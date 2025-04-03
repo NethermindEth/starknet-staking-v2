@@ -22,6 +22,7 @@ import (
 
 type envVariable struct {
 	httpProviderUrl string
+	wsProviderUrl   string
 }
 
 func loadEnv(t *testing.T) envVariable {
@@ -37,24 +38,46 @@ func loadEnv(t *testing.T) envVariable {
 		panic("Failed to load HTTP_PROVIDER_URL, empty string")
 	}
 
-	return envVariable{base}
+	wsProviderUrl := os.Getenv("WS_PROVIDER_URL")
+	if wsProviderUrl == "" {
+		panic("Failed to load WS_PROVIDER_URL, empty string")
+	}
+
+	return envVariable{base, wsProviderUrl}
 }
 
 func TestNewValidatorAccount(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	// Can we really test this as it calls log.Fatal?
-	// t.Run("Error: private key conversion", func(t *testing.T) {
-	// 	provider, err := rpc.NewProvider("http://localhost:6060")
-	// 	require.NoError(t, err)
+	mockLogger := mocks.NewMockLogger(mockCtrl)
 
-	// 	_ = main.NewValidatorAccount(provider, &main.AccountData{})
+	t.Run("Error: private key conversion", func(t *testing.T) {
+		env := loadEnv(t)
+		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
+		require.NoError(t, providerErr)
 
-	// 	// TODO: test logger once implemented
-	// })
+		mockLogger.EXPECT().
+			Fatalf("Cannot turn private key %s into a big int", nil).
+			Do(func(_ string, _ ...interface{}) {
+				panic("Fatalf called") // Simulate os.Exit
+			})
 
-	t.Run("Successul account creation", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				require.FailNow(t, "The code did not panic when it should have")
+			} else {
+				// Just making sure the exec panicked for the right reason
+				require.Equal(t, "Fatalf called", r)
+			}
+		}()
+
+		validatorAccount := main.NewValidatorAccount(provider, mockLogger, &main.AccountData{})
+
+		require.Equal(t, main.ValidatorAccount(account.Account{}), validatorAccount)
+	})
+
+	t.Run("Successful account creation", func(t *testing.T) {
 		// Setup
 		env := loadEnv(t)
 		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
@@ -65,8 +88,10 @@ func TestNewValidatorAccount(t *testing.T) {
 		publicKey := "0x789"
 		accountData := main.NewAccountData(address, privateKey, publicKey)
 
+		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
+
 		// Test
-		validatorAccount := main.NewValidatorAccount(provider, &accountData)
+		validatorAccount := main.NewValidatorAccount(provider, mockLogger, &accountData)
 
 		// Assert
 		accountAddrFelt, stringToFeltErr := new(felt.Felt).SetString(address)
@@ -321,6 +346,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockAccount := mocks.NewMockAccounter(mockCtrl)
+	mockLogger := mocks.NewMockLogger(mockCtrl)
 
 	t.Run("Return error: fetching epoch info error", func(t *testing.T) {
 		validatorOperationalAddress := utils.HexToFelt(t, "0x123")
@@ -338,7 +364,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			Call(context.Background(), expectedFnCall, rpc.BlockID{Tag: "latest"}).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount)
+		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, mockLogger)
 
 		require.Equal(t, main.EpochInfo{}, epochInfo)
 		require.Equal(t, main.AttestInfo{}, attestInfo)
@@ -356,16 +382,28 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			Calldata:           []*felt.Felt{validatorOperationalAddress},
 		}
 
+		epochLength := uint64(3)
+		epochId := uint64(4)
+		epochStartingBlock := uint64(5)
 		mockAccount.
 			EXPECT().
 			Call(context.Background(), expectedEpochInfoFnCall, rpc.BlockID{Tag: "latest"}).
 			Return([]*felt.Felt{
 				new(felt.Felt).SetUint64(1),
 				new(felt.Felt).SetUint64(2),
-				new(felt.Felt).SetUint64(3),
-				new(felt.Felt).SetUint64(4),
-				new(felt.Felt).SetUint64(5),
+				new(felt.Felt).SetUint64(epochLength),
+				new(felt.Felt).SetUint64(epochId),
+				new(felt.Felt).SetUint64(epochStartingBlock),
 			}, nil)
+
+		mockLogger.
+			EXPECT().
+			Infow(
+				"Successfully fetched epoch info",
+				"epoch ID", epochId,
+				"epoch starting block", main.BlockNumber(epochStartingBlock),
+				"epoch ending block", main.BlockNumber(epochStartingBlock+epochLength),
+			)
 
 		expectedWindowFnCall := rpc.FunctionCall{
 			ContractAddress:    utils.HexToFelt(t, main.ATTEST_CONTRACT_ADDRESS),
@@ -378,7 +416,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			Call(context.Background(), expectedWindowFnCall, rpc.BlockID{Tag: "latest"}).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount)
+		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, mockLogger)
 
 		require.Equal(t, main.EpochInfo{}, epochInfo)
 		require.Equal(t, main.AttestInfo{}, attestInfo)
@@ -396,7 +434,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		stake := uint64(1000000000000000000)
 		epochLen := uint64(40)
 		epochId := uint64(1516)
-		currentEpochStartingBlock := uint64(639270)
+		epochStartingBlock := uint64(639270)
 
 		expectedEpochInfoFnCall := rpc.FunctionCall{
 			ContractAddress:    utils.HexToFelt(t, main.STAKING_CONTRACT_ADDRESS),
@@ -413,9 +451,18 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 					new(felt.Felt).SetUint64(stake),
 					new(felt.Felt).SetUint64(epochLen),
 					new(felt.Felt).SetUint64(epochId),
-					new(felt.Felt).SetUint64(currentEpochStartingBlock),
+					new(felt.Felt).SetUint64(epochStartingBlock),
 				},
 				nil,
+			)
+
+		mockLogger.
+			EXPECT().
+			Infow(
+				"Successfully fetched epoch info",
+				"epoch ID", epochId,
+				"epoch starting block", main.BlockNumber(epochStartingBlock),
+				"epoch ending block", main.BlockNumber(epochStartingBlock+epochLen),
 			)
 
 		// Mock fetchAttestWindow call
@@ -434,8 +481,23 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		// Mock ComputeBlockNumberToAttestTo call
 		mockAccount.EXPECT().Address().Return(validatorOperationalAddress)
 
+		expectedTargetBlock := main.BlockNumber(639291)
+		expectedAttestInfo := main.AttestInfo{
+			TargetBlock: expectedTargetBlock,
+			WindowStart: expectedTargetBlock + main.BlockNumber(main.MIN_ATTESTATION_WINDOW),
+			WindowEnd:   expectedTargetBlock + main.BlockNumber(attestWindow),
+		}
+
+		mockLogger.
+			EXPECT().
+			Infow(
+				"Successfully computed target block to attest to",
+				"epoch ID", epochId,
+				"attestation info", expectedAttestInfo,
+			)
+
 		// Test
-		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount)
+		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, mockLogger)
 
 		// Assert
 		expectedEpochInfo := main.EpochInfo{
@@ -443,14 +505,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			Stake:                     uint128.From64(stake),
 			EpochLen:                  epochLen,
 			EpochId:                   epochId,
-			CurrentEpochStartingBlock: main.BlockNumber(currentEpochStartingBlock),
-		}
-
-		expectedTargetBlock := main.BlockNumber(639291)
-		expectedAttestInfo := main.AttestInfo{
-			TargetBlock: expectedTargetBlock,
-			WindowStart: expectedTargetBlock + main.BlockNumber(main.MIN_ATTESTATION_WINDOW),
-			WindowEnd:   expectedTargetBlock + main.BlockNumber(attestWindow),
+			CurrentEpochStartingBlock: main.BlockNumber(epochStartingBlock),
 		}
 
 		require.Equal(t, expectedEpochInfo, epochInfo)

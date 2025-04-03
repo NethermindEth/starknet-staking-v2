@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -17,20 +18,16 @@ func Attest(config *Config) {
 		log.Fatalf("Error creating logger: %s", loggerErr)
 	}
 
-	provider := NewProvider(config.providerUrl, zapLogger)
+	provider := NewProvider(config.httpProviderUrl, zapLogger)
 	validatorAccount := NewValidatorAccount(provider, zapLogger, &config.accountData)
 	dispatcher := NewEventDispatcher[*ValidatorAccount, *utils.ZapLogger]()
 
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
-	wg.Go(func() {
-		currentAttest := AttestRequired{}
-		currentAttestStatus := Failed
-		dispatcher.Dispatch(&validatorAccount, zapLogger, &currentAttest, &currentAttestStatus)
-	})
+	wg.Go(func() { dispatcher.Dispatch(&validatorAccount, zapLogger) })
 
 	// Subscribe to the block headers
-	wsProvider, headersFeed := BlockHeaderSubscription(config.providerUrl, zapLogger)
+	wsProvider, headersFeed := BlockHeaderSubscription(config.wsProviderUrl, zapLogger)
 	defer wsProvider.Close()
 	defer close(headersFeed)
 
@@ -43,20 +40,22 @@ func Attest(config *Config) {
 	// Should also track re-org and check if the re-org means we have to attest again or not
 }
 
-func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
+func ProcessBlockHeaders[Account Accounter, Log Logger](
 	headersFeed chan *rpc.BlockHeader,
 	account Account,
-	logger Logger,
-	dispatcher *EventDispatcher[Account, Logger],
+	logger Log,
+	dispatcher *EventDispatcher[Account, Log],
 ) {
 	epochInfo, attestInfo := FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info at startup")
+
+	SetTargetBlockHashIfExists(account, logger, &attestInfo)
 
 	for blockHeader := range headersFeed {
 		logger.Infow("Block header received", "blockHeader", blockHeader)
 
 		// Re-fetch epoch info on new epoch (validity guaranteed for 1 epoch even if updates are made)
 		if blockHeader.BlockNumber == epochInfo.CurrentEpochStartingBlock.Uint64()+epochInfo.EpochLen {
-			logger.Infof("New epoch start %d", epochInfo.EpochId+1)
+			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
 			prevEpochInfo := epochInfo
 
 			epochInfo, attestInfo = FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info", "epoch id", prevEpochInfo.EpochId+1)
@@ -65,7 +64,9 @@ func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
 		}
 
 		if BlockNumber(blockHeader.BlockNumber) == attestInfo.TargetBlock {
+			logger.Infow("Target block reached", "block number", blockHeader.BlockNumber, "block hash", blockHeader.BlockHash)
 			attestInfo.TargetBlockHash = BlockHash(*blockHeader.BlockHash)
+			logger.Infof("Will attest to target block in window [%d, %d]", attestInfo.WindowStart, attestInfo.WindowEnd)
 		}
 
 		if BlockNumber(blockHeader.BlockNumber) >= attestInfo.WindowStart-1 &&
@@ -74,12 +75,41 @@ func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
 				BlockHash: attestInfo.TargetBlockHash,
 			}
 		}
+
+		if BlockNumber(blockHeader.BlockNumber) == attestInfo.WindowEnd {
+			dispatcher.EndOfWindow <- struct{}{}
+		}
 	}
 }
 
-func FetchEpochAndAttestInfoWithRetry[Account Accounter, Logger utils.Logger](
+func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
 	account Account,
-	logger Logger,
+	logger Log,
+	attestInfo *AttestInfo,
+) {
+	targetBlockNumber := attestInfo.TargetBlock.Uint64()
+	res, err := account.BlockWithTxHashes(context.Background(), rpc.BlockID{Number: &targetBlockNumber})
+
+	// If no error, then target block already exists
+	if err == nil {
+		switch res.(type) {
+		case *rpc.BlockTxHashes:
+			block, ok := res.(*rpc.BlockTxHashes)
+			if ok {
+				attestInfo.TargetBlockHash = BlockHash(*block.BlockHash)
+				logger.Infow(
+					"Target block already exists, registered block hash to attest to it if still within attestation window",
+					"block hash", attestInfo.TargetBlockHash.String(),
+				)
+			}
+			// If case *rpc.PendingBlockTxHashes, then we'll just receive the block in the listening for loop
+		}
+	}
+}
+
+func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
+	account Account,
+	logger Log,
 	logMsg string,
 	keysAndValues ...any,
 ) (EpochInfo, AttestInfo) {
@@ -101,9 +131,9 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Logger utils.Logger](
 
 // Should never fail. If it does, it means the contract logic has a bug
 // TODO: should we even retry... ? not exit program directly ?
-func EpochSwitchSanityCheckWithRetry[Account Accounter, Logger utils.Logger](
+func EpochSwitchSanityCheckWithRetry[Account Accounter, Log Logger](
 	account Account,
-	logger Logger,
+	logger Log,
 	previousEpochInfo EpochInfo,
 	newEpochInfo EpochInfo,
 	newAttestInfo AttestInfo,

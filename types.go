@@ -36,6 +36,25 @@ func (b *BlockHash) ToFelt() felt.Felt {
 	return felt.Felt(*b)
 }
 
+func (b *BlockHash) String() string {
+	hashFelt := b.ToFelt()
+	return hashFelt.String()
+}
+
+//go:generate mockgen -destination=./mocks/mock_logger.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Logger
+type Logger interface {
+	// Coming from junoUtils.Logger.pebbleLogger
+	Debugw(msg string, keysAndValues ...any)
+	Infow(msg string, keysAndValues ...any)
+	Warnw(msg string, keysAndValues ...any)
+	Errorw(msg string, keysAndValues ...any)
+	Tracew(msg string, keysAndValues ...any)
+
+	// Coming from junoUtils.Logger.SimpleLogger
+	Infof(format string, args ...interface{})
+	Fatalf(format string, args ...interface{})
+}
+
 type EpochInfo struct {
 	StakerAddress             Address         `json:"staker_address"`
 	Stake                     uint128.Uint128 `json:"stake"`

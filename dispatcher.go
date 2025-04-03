@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/sourcegraph/conc"
 )
@@ -23,24 +22,28 @@ const (
 	Failed
 )
 
-type EventDispatcher[Account Accounter, Logger utils.Logger] struct {
-	// Could potentially add an event like EndOfEpoch to log in this file whether the attestation was successful.
-	// Could still log that when receiving next attest event without EndOfEpoch event,
-	// but will force us to wait at least 11 blocks.
+type EventDispatcher[Account Accounter, Log Logger] struct {
+	// Current epoch attest related fields
+	CurrentAttest       AttestRequired
+	CurrentAttestStatus AttestStatus
+
+	// Event channels
 	AttestRequired chan AttestRequired
+	EndOfWindow    chan struct{}
 }
 
-func NewEventDispatcher[Account Accounter, Logger utils.Logger]() EventDispatcher[Account, Logger] {
-	return EventDispatcher[Account, Logger]{
-		AttestRequired: make(chan AttestRequired),
+func NewEventDispatcher[Account Accounter, Log Logger]() EventDispatcher[Account, Log] {
+	return EventDispatcher[Account, Log]{
+		CurrentAttest:       AttestRequired{},
+		CurrentAttestStatus: Failed,
+		AttestRequired:      make(chan AttestRequired),
+		EndOfWindow:         make(chan struct{}),
 	}
 }
 
-func (d *EventDispatcher[Account, Logger]) Dispatch(
+func (d *EventDispatcher[Account, Log]) Dispatch(
 	account Account,
-	logger Logger,
-	currentAttest *AttestRequired,
-	currentAttestStatus *AttestStatus,
+	logger Log,
 ) {
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
@@ -52,66 +55,87 @@ func (d *EventDispatcher[Account, Logger]) Dispatch(
 				return
 			}
 
-			if event == *currentAttest && (*currentAttestStatus == Ongoing || *currentAttestStatus == Successful) {
+			if event == d.CurrentAttest && (d.CurrentAttestStatus == Ongoing || d.CurrentAttestStatus == Successful) {
 				continue
 			}
 
-			// When changing to a new block to attest to, check the status of previous target block
-			// and if it was not successful, log the block was not successfully attested
-			initialAttest := AttestRequired{}
-			if event != *currentAttest && *currentAttest != initialAttest && *currentAttestStatus == Failed {
-				logger.Errorw("Failed to attest to previous target block", "previous target block hash", currentAttest.BlockHash)
-			}
+			d.CurrentAttest = event
+			d.CurrentAttestStatus = Ongoing
 
-			*currentAttest = event
-			*currentAttestStatus = Ongoing
-
+			logger.Infow("Attestation sent", "block hash", event.BlockHash.String())
 			resp, err := InvokeAttest(account, &event)
 			if err != nil {
-				logger.Errorw("Failed to attest", "block hash", event.BlockHash, "error", err)
-				*currentAttestStatus = Failed
+				logger.Errorw("Failed to attest", "block hash", event.BlockHash.String(), "error", err)
+				d.CurrentAttestStatus = Failed
 				continue
 			}
 
 			wg.Go(func() {
 				txStatus := TrackAttest(account, logger, &event, resp)
-				*currentAttestStatus = txStatus
+				// Even if tx tracking takes time, we have at least MIN_ATTESTATION_WINDOW blocks before next attest
+				// so, we can assume we're safe to update the status (for the expected target block, and not the next one)
+				d.CurrentAttestStatus = txStatus
 			})
+		case <-d.EndOfWindow:
+			logger.Infow("End of window reached")
+			if d.CurrentAttestStatus == Successful {
+				logger.Infow("Successfully attested to target block", "target block hash", d.CurrentAttest.BlockHash.String())
+			} else {
+				logger.Infow("Failed to attest to target block", "target block hash", d.CurrentAttest.BlockHash.String())
+			}
 		}
 	}
 }
 
-func TrackAttest[Account Accounter, Logger utils.Logger](
+func TrackAttest[Account Accounter, Log Logger](
 	account Account,
-	logger Logger,
+	logger Log,
 	event *AttestRequired,
 	txResp *rpc.AddInvokeTransactionResponse,
 ) AttestStatus {
 	txStatus, err := TrackTransactionStatus(account, logger, txResp.TransactionHash)
 
 	if err != nil {
-		logger.Errorw("Attest transaction failed", "target block hash", event.BlockHash, "transaction hash", txResp.TransactionHash, "error", err)
+		logger.Errorw(
+			"Attest transaction failed",
+			"target block hash", event.BlockHash.String(),
+			"transaction hash", txResp.TransactionHash,
+			"error", err,
+		)
 		return Failed
 	}
 
 	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
 		// TODO: are we guaranteed err is nil if tx got rejected ?
-		logger.Errorw("Attest transaction rejected", "target block hash", event.BlockHash, "transaction hash", txResp.TransactionHash)
+		logger.Errorw(
+			"Attest transaction REJECTED",
+			"target block hash", event.BlockHash.String(),
+			"transaction hash", txResp.TransactionHash,
+		)
 		return Failed
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
-		logger.Errorw("Attest transaction reverted", "target block hash", event.BlockHash, "transaction hash", txResp.TransactionHash, "failure reason", txStatus.FailureReason)
+		logger.Errorw(
+			"Attest transaction REVERTED",
+			"target block hash", event.BlockHash.String(),
+			"transaction hash", txResp.TransactionHash,
+			"failure reason", txStatus.FailureReason,
+		)
 		return Failed
 	}
 
-	logger.Infow("Attest transaction successful", "target block hash", event.BlockHash, "transaction hash", txResp.TransactionHash)
-	// Even if tx tracking takes time, we have at least MIN_ATTESTATION_WINDOW blocks before next attest
-	// so, we can assume we're safe to update the status (for the expected target block, and not the next one)
+	logger.Infow(
+		"Attest transaction successful",
+		"block hash", event.BlockHash.String(),
+		"transaction hash", txResp.TransactionHash,
+		"finality status", txStatus.FinalityStatus,
+		"execution status", txStatus.ExecutionStatus,
+	)
 	return Successful
 }
 
-func TrackTransactionStatus[Account Accounter, Logger utils.Logger](account Account, logger Logger, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
+func TrackTransactionStatus[Account Accounter, Log Logger](account Account, logger Log, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
 	for elapsedSeconds := 0; elapsedSeconds < DEFAULT_MAX_RETRIES; elapsedSeconds++ {
 		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
 		if err != nil && err.Error() != "Transaction hash not found" {
@@ -122,11 +146,12 @@ func TrackTransactionStatus[Account Accounter, Logger utils.Logger](account Acco
 		}
 
 		if err != nil {
-			// TODO: should it be here Errorw or Infow ?
-			// Also, those 2 logs might be only for dev and not user ?
-			logger.Errorw("Attest transaction status was not found: tracking was too fast for sequencer to be aware of tx, retrying...", "tx hash", txHash)
+			logger.Infow(
+				"Attest transaction status was not found: tracking was too fast for sequencer to be aware of transaction, retrying...",
+				"transaction hash", txHash,
+			)
 		} else {
-			logger.Errorw("Attest transaction status was received: retrying tracking it...", "tx hash", txHash)
+			logger.Infow("Attest transaction status was RECEIVED: retrying tracking it...", "transaction hash", txHash)
 		}
 
 		Sleep(time.Second)

@@ -23,8 +23,11 @@ func NewAccountData(address string, privKey string, pubKey string) AccountData {
 
 // struct should be (un)marshallable
 type Config struct {
-	providerUrl string
-	accountData AccountData
+	httpProviderUrl string
+	// TODO: should we have this additional url or do we parse the http one and create a ws out of it ?
+	// I think having a 2nd one is more flexible
+	wsProviderUrl string
+	accountData   AccountData
 }
 
 func LoadConfig(path string) Config {

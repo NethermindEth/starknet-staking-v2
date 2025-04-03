@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
-	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
@@ -18,6 +17,7 @@ type Accounter interface {
 	GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error)
 	BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error)
 	Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
+	BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (interface{}, error)
 
 	// Custom Methods
 	//
@@ -32,7 +32,7 @@ type Accounter interface {
 
 type ValidatorAccount account.Account
 
-func NewValidatorAccount[Logger junoUtils.Logger](provider *rpc.Provider, logger Logger, accountData *AccountData) ValidatorAccount {
+func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, accountData *AccountData) ValidatorAccount {
 	publicKey := accountData.pubKey
 	privateKey, ok := new(big.Int).SetString(accountData.privKey, 0)
 	if !ok {
@@ -48,7 +48,7 @@ func NewValidatorAccount[Logger junoUtils.Logger](provider *rpc.Provider, logger
 		logger.Fatalf("Cannot create validator account: %s", err)
 	}
 
-	logger.Infow("Successfully created validator account", "address", accountAddr)
+	logger.Infow("Successfully created validator account", "address", accountAddrFelt.String())
 	return ValidatorAccount(*account)
 }
 
@@ -62,6 +62,10 @@ func (v *ValidatorAccount) BuildAndSendInvokeTxn(ctx context.Context, functionCa
 
 func (v *ValidatorAccount) Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
 	return ((*account.Account)(v)).Call(ctx, call, blockId)
+}
+
+func (v *ValidatorAccount) BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (interface{}, error) {
+	return ((*account.Account)(v)).BlockWithTxHashes(ctx, blockID)
 }
 
 func (v *ValidatorAccount) Address() *felt.Felt {
@@ -150,11 +154,17 @@ func FetchValidatorBalance[Account Accounter](account Account) (Balance, error) 
 
 // I believe this functions returns many things, it should probably be grouped under
 // a unique type
-func FetchEpochAndAttestInfo[Account Accounter, Logger junoUtils.Logger](account Account, logger Logger) (EpochInfo, AttestInfo, error) {
+func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, logger Log) (EpochInfo, AttestInfo, error) {
 	epochInfo, err := FetchEpochInfo(account)
 	if err != nil {
 		return EpochInfo{}, AttestInfo{}, err
 	}
+	logger.Infow(
+		"Successfully fetched epoch info",
+		"epoch ID", epochInfo.EpochId,
+		"epoch starting block", epochInfo.CurrentEpochStartingBlock,
+		"epoch ending block", epochInfo.CurrentEpochStartingBlock+BlockNumber(epochInfo.EpochLen),
+	)
 
 	attestWindow, windowErr := FetchAttestWindow(account)
 	if windowErr != nil {
