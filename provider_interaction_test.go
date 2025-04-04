@@ -1,7 +1,7 @@
 package main_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	main "github.com/NethermindEth/starknet-staking-v2"
@@ -19,34 +19,35 @@ func TestNewProvider(t *testing.T) {
 	t.Run("Error creating provider", func(t *testing.T) {
 		providerUrl := "wrong url"
 
-		mockLogger.EXPECT().
-			Fatalf("Error connecting to RPC provider at %s: %s", providerUrl, errors.New(`no known transport for URL scheme ""`)).
-			Do(func(_ string, _ ...interface{}) {
-				panic("Fatalf called") // Simulate os.Exit
-			})
+		provider, err := main.NewProvider(providerUrl, mockLogger)
 
-		defer func() {
-			if r := recover(); r == nil {
-				require.FailNow(t, "The code did not panic when it should have")
-			} else {
-				// Just making sure the exec panicked for the right reason
-				require.Equal(t, "Fatalf called", r)
-			}
-		}()
+		require.Nil(t, provider)
+		expectedErrorMsg := fmt.Sprintf(`Error creating RPC provider at %s: no known transport for URL scheme ""`, providerUrl)
+		require.Equal(t, expectedErrorMsg, err.Error())
+	})
 
-		main.NewProvider(providerUrl, mockLogger)
+	t.Run("Error connecting to provider", func(t *testing.T) {
+		providerUrl := "http://localhost:6060"
+
+		provider, err := main.NewProvider(providerUrl, mockLogger)
+
+		require.Nil(t, provider)
+
+		expectedErrorMsg := fmt.Sprintf(`Error connecting to RPC provider at %s`, providerUrl)
+		require.ErrorContains(t, err, expectedErrorMsg)
 	})
 
 	t.Run("Successful provider creation", func(t *testing.T) {
-		providerUrl := "http://localhost:6060"
+		envVars := loadEnv(t)
 
 		mockLogger.EXPECT().
 			Infow("Successfully connected to RPC provider", "providerUrl", "*****")
 
-		provider := main.NewProvider(providerUrl, mockLogger)
+		provider, err := main.NewProvider(envVars.httpProviderUrl, mockLogger)
 
 		// Cannot deeply compare 2 providers (comparing channels does not works)
 		require.NotNil(t, provider)
+		require.Nil(t, err)
 	})
 }
 
@@ -58,23 +59,12 @@ func TestBlockHeaderSubscription(t *testing.T) {
 
 	t.Run("Error creating provider", func(t *testing.T) {
 		wsProviderUrl := "wrong url"
+		wsProvider, headerFeed, err := main.BlockHeaderSubscription(wsProviderUrl, mockLogger)
 
-		mockLogger.EXPECT().
-			Fatalf("Error dialing the WS provider at %s: %s", wsProviderUrl, errors.New(`no known transport for URL scheme ""`)).
-			Do(func(_ string, _ ...interface{}) {
-				panic("Fatalf called") // Simulate os.Exit
-			})
-
-		defer func() {
-			if r := recover(); r == nil {
-				require.FailNow(t, "The code did not panic when it should have")
-			} else {
-				// Just making sure the exec panicked for the right reason
-				require.Equal(t, "Fatalf called", r)
-			}
-		}()
-
-		main.BlockHeaderSubscription(wsProviderUrl, mockLogger)
+		require.Nil(t, wsProvider)
+		require.Nil(t, headerFeed)
+		expectedErrorMsg := fmt.Sprintf(`Error dialing the WS provider at %s: no known transport for URL scheme ""`, wsProviderUrl)
+		require.Equal(t, expectedErrorMsg, err.Error())
 	})
 
 	// Cannot test error when subscribing to new block headers
@@ -84,7 +74,11 @@ func TestBlockHeaderSubscription(t *testing.T) {
 
 		mockLogger.EXPECT().Infow("Successfully subscribed to new block headers", "Subscription ID", gomock.Any())
 
-		wsProvider, headerChannel := main.BlockHeaderSubscription(envVars.wsProviderUrl, mockLogger)
+		wsProvider, headerChannel, err := main.BlockHeaderSubscription(envVars.wsProviderUrl, mockLogger)
+
+		require.NotNil(t, wsProvider)
+		require.NotNil(t, headerChannel)
+		require.Nil(t, err)
 
 		wsProvider.Close()
 		close(headerChannel)
