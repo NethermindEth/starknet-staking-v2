@@ -7,6 +7,7 @@ require (
 	github.com/NethermindEth/starknet.go v0.8.0
 	github.com/joho/godotenv v1.5.1
 	github.com/sourcegraph/conc v0.3.0
+	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.0
 	lukechampine.com/uint128 v1.3.0
@@ -34,6 +35,7 @@ require (
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect

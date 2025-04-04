@@ -1,42 +1,95 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"math/big"
+	"os"
 
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/spf13/cobra"
 )
 
 type AccountData struct {
-	address string
-	privKey string
-	pubKey  string
+	PrivKey string `json:"privateKey"`
+	PubKey  string `json:"publicKey"`
+	Address string `json:"address"`
 }
 
 func NewAccountData(address string, privKey string, pubKey string) AccountData {
 	return AccountData{
-		address,
-		privKey,
-		pubKey,
+		PrivKey: privKey,
+		PubKey:  pubKey,
+		Address: address,
 	}
 }
 
-// struct should be (un)marshallable
 type Config struct {
-	httpProviderUrl string
+	HttpProviderUrl string `json:"httpProviderUrl"`
 	// TODO: should we have this additional url or do we parse the http one and create a ws out of it ?
 	// I think having a 2nd one is more flexible
-	wsProviderUrl string
-	accountData   AccountData
+	WsProviderUrl string `json:"wsProviderUrl"`
+	AccountData
 }
 
-func LoadConfig(path string) Config {
-	return Config{}
+// Function to load and parse the JSON file
+func LoadConfig(filePath string) (Config, error) {
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return Config{}, err
+	}
+
+	var config Config
+	err = json.Unmarshal(file, &config)
+	if err != nil {
+		return Config{}, err
+	}
+
+	return config, nil
+}
+
+func NewCommand() cobra.Command {
+	var configPath string
+	var config Config
+
+	preRunE := func(cmd *cobra.Command, args []string) error {
+		loadedConfig, err := LoadConfig(configPath)
+		if err != nil {
+			return err
+		}
+		config = loadedConfig
+
+		return nil
+	}
+
+	runE := func(cmd *cobra.Command, args []string) error {
+		if err := Attest(config); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	var rootCmd = cobra.Command{
+		Use:     "starknet-staking-v2",
+		Short:   "Program for Starknet validators to attest to epochs with respect to Staking v2",
+		PreRunE: preRunE,
+		RunE:    runE,
+		Args:    cobra.NoArgs,
+	}
+
+	// Add a flag for the config file path
+	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to JSON config file")
+	rootCmd.MarkFlagRequired("config")
+
+	return rootCmd
 }
 
 func main() {
-	config := LoadConfig("some path")
-	Attest(&config)
+	command := NewCommand()
+	if err := command.ExecuteContext(context.Background()); err != nil {
+		os.Exit(1)
+	}
 }
 
 func ComputeBlockNumberToAttestTo[Account Accounter](account Account, attestationInfo EpochInfo, attestationWindow uint64) BlockNumber {
