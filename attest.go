@@ -13,25 +13,25 @@ import (
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
 func Attest(config *Config) {
-	zapLogger, loggerErr := utils.NewZapLogger(utils.INFO, false)
-	if loggerErr != nil {
-		log.Fatalf("Error creating logger: %s", loggerErr)
+	logger, err := utils.NewZapLogger(utils.INFO, false)
+	if err != nil {
+		log.Fatalf("Error creating logger: %s", err)
 	}
 
-	provider := NewProvider(config.httpProviderUrl, zapLogger)
-	validatorAccount := NewValidatorAccount(provider, zapLogger, &config.accountData)
+	provider := NewProvider(config.httpProviderUrl, logger)
+	validatorAccount := NewValidatorAccount(provider, logger, &config.accountData)
 	dispatcher := NewEventDispatcher[*ValidatorAccount, *utils.ZapLogger]()
 
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
-	wg.Go(func() { dispatcher.Dispatch(&validatorAccount, zapLogger) })
+	wg.Go(func() { dispatcher.Dispatch(&validatorAccount, logger) })
 
 	// Subscribe to the block headers
-	wsProvider, headersFeed := BlockHeaderSubscription(config.wsProviderUrl, zapLogger)
+	wsProvider, headersFeed := BlockHeaderSubscription(config.wsProviderUrl, logger)
 	defer wsProvider.Close()
 	defer close(headersFeed)
 
-	ProcessBlockHeaders(headersFeed, &validatorAccount, zapLogger, &dispatcher)
+	ProcessBlockHeaders(headersFeed, &validatorAccount, logger, &dispatcher)
 	// I'd also like to check the balance of the address from time to time to verify
 	// that they have enough money for the next 10 attestations (value modifiable by user)
 	// Once it goes below it, the console should start giving warnings
