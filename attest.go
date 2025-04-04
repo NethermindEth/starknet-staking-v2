@@ -2,24 +2,32 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
+	"github.com/cockroachdb/errors"
 	"github.com/sourcegraph/conc"
 )
 
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
-func Attest(config *Config) {
+func Attest(config Config) error {
 	logger, err := utils.NewZapLogger(utils.INFO, false)
 	if err != nil {
-		log.Fatalf("Error creating logger: %s", err)
+		return errors.Errorf("Error creating logger: %s", err)
 	}
 
-	provider := NewProvider(config.httpProviderUrl, logger)
-	validatorAccount := NewValidatorAccount(provider, logger, &config.accountData)
+	provider, err := NewProvider(config.HttpProviderUrl, logger)
+	if err != nil {
+		return err
+	}
+
+	validatorAccount, err := NewValidatorAccount(provider, logger, &config.AccountData)
+	if err != nil {
+		return err
+	}
+
 	dispatcher := NewEventDispatcher[*ValidatorAccount, *utils.ZapLogger]()
 
 	wg := conc.NewWaitGroup()
@@ -27,7 +35,10 @@ func Attest(config *Config) {
 	wg.Go(func() { dispatcher.Dispatch(&validatorAccount, logger) })
 
 	// Subscribe to the block headers
-	wsProvider, headersFeed := BlockHeaderSubscription(config.wsProviderUrl, logger)
+	wsProvider, headersFeed, err := BlockHeaderSubscription(config.WsProviderUrl, logger)
+	if err != nil {
+		return err
+	}
 	defer wsProvider.Close()
 	defer close(headersFeed)
 
@@ -38,6 +49,7 @@ func Attest(config *Config) {
 	// This the least prio but we should implement nonetheless
 
 	// Should also track re-org and check if the re-org means we have to attest again or not
+	return nil
 }
 
 func ProcessBlockHeaders[Account Accounter, Log Logger](
@@ -45,8 +57,11 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 	account Account,
 	logger Log,
 	dispatcher *EventDispatcher[Account, Log],
-) {
-	epochInfo, attestInfo := FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info at startup")
+) error {
+	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info at startup")
+	if err != nil {
+		return err
+	}
 
 	SetTargetBlockHashIfExists(account, logger, &attestInfo)
 
@@ -58,9 +73,15 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
 			prevEpochInfo := epochInfo
 
-			epochInfo, attestInfo = FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info", "epoch id", prevEpochInfo.EpochId+1)
+			epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info", "epoch id", prevEpochInfo.EpochId+1)
+			if err != nil {
+				return err
+			}
 
-			epochInfo, attestInfo = EpochSwitchSanityCheckWithRetry(account, logger, prevEpochInfo, epochInfo, attestInfo)
+			epochInfo, attestInfo, err = EpochSwitchSanityCheckWithRetry(account, logger, prevEpochInfo, epochInfo, attestInfo)
+			if err != nil {
+				return err
+			}
 		}
 
 		if BlockNumber(blockHeader.BlockNumber) == attestInfo.TargetBlock {
@@ -80,6 +101,8 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 			dispatcher.EndOfWindow <- struct{}{}
 		}
 	}
+
+	return nil
 }
 
 func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
@@ -108,7 +131,7 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 	logger Log,
 	logMsg string,
 	keysAndValues ...any,
-) (EpochInfo, AttestInfo) {
+) (EpochInfo, AttestInfo, error) {
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfo(account, logger)
 
 	for i := 0; err != nil && i < DEFAULT_MAX_RETRIES; i++ {
@@ -119,10 +142,10 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 
 	// If fetched info are still incorrect, exit program
 	if err != nil {
-		logger.Fatalf(logMsg, keysAndValues, "error", err)
+		return EpochInfo{}, AttestInfo{}, errors.Errorf(logMsg, keysAndValues, "error", err)
 	}
 
-	return epochInfo, attestInfo
+	return epochInfo, attestInfo, nil
 }
 
 // Should never fail. If it does, it means the contract logic has a bug
@@ -133,7 +156,7 @@ func EpochSwitchSanityCheckWithRetry[Account Accounter, Log Logger](
 	previousEpochInfo EpochInfo,
 	newEpochInfo EpochInfo,
 	newAttestInfo AttestInfo,
-) (EpochInfo, AttestInfo) {
+) (EpochInfo, AttestInfo, error) {
 	wrongEpochSwitch := newEpochInfo.EpochId != previousEpochInfo.EpochId+1 ||
 		newEpochInfo.CurrentEpochStartingBlock.Uint64() != previousEpochInfo.CurrentEpochStartingBlock.Uint64()+previousEpochInfo.EpochLen
 
@@ -150,8 +173,8 @@ func EpochSwitchSanityCheckWithRetry[Account Accounter, Log Logger](
 
 	// If epoch switch is still incorrect, exit program
 	if wrongEpochSwitch {
-		logger.Fatalf("Wrong epoch switch", "from epoch", previousEpochInfo, "to epoch", newEpochInfo)
+		return EpochInfo{}, AttestInfo{}, errors.Errorf("Wrong epoch switch", "from epoch", previousEpochInfo, "to epoch", newEpochInfo)
 	}
 
-	return newEpochInfo, newAttestInfo
+	return newEpochInfo, newAttestInfo, nil
 }
