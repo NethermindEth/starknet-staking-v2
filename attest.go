@@ -92,18 +92,14 @@ func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
 
 	// If no error, then target block already exists
 	if err == nil {
-		switch res.(type) {
-		case *rpc.BlockTxHashes:
-			block, ok := res.(*rpc.BlockTxHashes)
-			if ok {
-				attestInfo.TargetBlockHash = BlockHash(*block.BlockHash)
-				logger.Infow(
-					"Target block already exists, registered block hash to attest to it if still within attestation window",
-					"block hash", attestInfo.TargetBlockHash.String(),
-				)
-			}
-			// If case *rpc.PendingBlockTxHashes, then we'll just receive the block in the listening for loop
+		if block, ok := res.(*rpc.BlockTxHashes); ok {
+			attestInfo.TargetBlockHash = BlockHash(*block.BlockHash)
+			logger.Infow(
+				"Target block already exists, registered block hash to attest to it if still within attestation window",
+				"block hash", attestInfo.TargetBlockHash.String(),
+			)
 		}
+		// If case *rpc.PendingBlockTxHashes, then we'll just receive the block in the listening for loop
 	}
 }
 
