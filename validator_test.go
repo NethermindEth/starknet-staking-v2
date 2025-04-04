@@ -77,6 +77,34 @@ func TestNewValidatorAccount(t *testing.T) {
 		require.Equal(t, main.ValidatorAccount(account.Account{}), validatorAccount)
 	})
 
+	t.Run("Error: cannot create validator account", func(t *testing.T) {
+		provider, providerErr := rpc.NewProvider("http://localhost:1234")
+		require.NoError(t, providerErr)
+
+		mockLogger.EXPECT().
+			Fatalf("Cannot create validator account: %s", gomock.Any()).
+			Do(func(_ string, _ ...interface{}) {
+				panic("Fatalf called") // Simulate os.Exit
+			})
+
+		defer func() {
+			if r := recover(); r == nil {
+				require.FailNow(t, "The code did not panic when it should have")
+			} else {
+				// Just making sure the exec panicked for the right reason
+				require.Equal(t, "Fatalf called", r)
+			}
+		}()
+
+		address := "0x123"
+		privateKey := "0x456"
+		publicKey := "0x789"
+		accountData := main.NewAccountData(address, privateKey, publicKey)
+		validatorAccount := main.NewValidatorAccount(provider, mockLogger, &accountData)
+
+		require.Equal(t, main.ValidatorAccount(account.Account{}), validatorAccount)
+	})
+
 	t.Run("Successful account creation", func(t *testing.T) {
 		// Setup
 		env := loadEnv(t)
