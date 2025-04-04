@@ -648,7 +648,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 		// Set expectations
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), txHash).
-			Return(nil, errors.New("Transaction hash not found"))
+			Return(nil, errors.New("29 Transaction hash not found"))
 
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), txHash).

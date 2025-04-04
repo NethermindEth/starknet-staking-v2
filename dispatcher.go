@@ -138,7 +138,8 @@ func TrackAttest[Account Accounter, Log Logger](
 func TrackTransactionStatus[Account Accounter, Log Logger](account Account, logger Log, txHash *felt.Felt) (*rpc.TxnStatusResp, error) {
 	for elapsedSeconds := 0; elapsedSeconds < DEFAULT_MAX_RETRIES; elapsedSeconds++ {
 		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
-		if err != nil && err.Error() != "Transaction hash not found" {
+
+		if err != nil && err.Error() != "29 Transaction hash not found" {
 			return nil, err
 		}
 		if err == nil && txStatus.FinalityStatus != rpc.TxnStatus_Received {
