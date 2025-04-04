@@ -8,6 +8,7 @@ import (
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
+	"github.com/cockroachdb/errors"
 	"lukechampine.com/uint128"
 )
 
@@ -32,24 +33,24 @@ type Accounter interface {
 
 type ValidatorAccount account.Account
 
-func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, accountData *AccountData) ValidatorAccount {
-	publicKey := accountData.pubKey
-	privateKey, ok := new(big.Int).SetString(accountData.privKey, 0)
+func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, accountData *AccountData) (ValidatorAccount, error) {
+	publicKey := accountData.PubKey
+	privateKey, ok := new(big.Int).SetString(accountData.PrivKey, 0)
 	if !ok {
-		logger.Fatalf("Cannot turn private key %s into a big int", privateKey)
+		return ValidatorAccount{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
 	}
-	accountAddr := AddressFromString(accountData.address)
+	accountAddr := AddressFromString(accountData.Address)
 
 	ks := account.SetNewMemKeystore(publicKey, privateKey)
 
 	accountAddrFelt := accountAddr.ToFelt()
 	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey, ks, 2)
 	if err != nil {
-		logger.Fatalf("Cannot create validator account: %s", err)
+		return ValidatorAccount{}, errors.Errorf("Cannot create validator account: %s", err)
 	}
 
 	logger.Infow("Successfully created validator account", "address", accountAddrFelt.String())
-	return ValidatorAccount(*account)
+	return ValidatorAccount(*account), nil
 }
 
 func (v *ValidatorAccount) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {

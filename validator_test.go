@@ -3,6 +3,7 @@ package main_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"testing"
@@ -57,52 +58,26 @@ func TestNewValidatorAccount(t *testing.T) {
 		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
 		require.NoError(t, providerErr)
 
-		mockLogger.EXPECT().
-			Fatalf("Cannot turn private key %s into a big int", nil).
-			Do(func(_ string, _ ...interface{}) {
-				panic("Fatalf called") // Simulate os.Exit
-			})
+		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &main.AccountData{})
 
-		defer func() {
-			if r := recover(); r == nil {
-				require.FailNow(t, "The code did not panic when it should have")
-			} else {
-				// Just making sure the exec panicked for the right reason
-				require.Equal(t, "Fatalf called", r)
-			}
-		}()
-
-		validatorAccount := main.NewValidatorAccount(provider, mockLogger, &main.AccountData{})
-
-		require.Equal(t, main.ValidatorAccount(account.Account{}), validatorAccount)
+		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
+		expectedErrorMsg := fmt.Sprintf("Cannot turn private key %s into a big int", (*big.Int)(nil))
+		require.Equal(t, expectedErrorMsg, err.Error())
 	})
 
 	t.Run("Error: cannot create validator account", func(t *testing.T) {
 		provider, providerErr := rpc.NewProvider("http://localhost:1234")
 		require.NoError(t, providerErr)
 
-		mockLogger.EXPECT().
-			Fatalf("Cannot create validator account: %s", gomock.Any()).
-			Do(func(_ string, _ ...interface{}) {
-				panic("Fatalf called") // Simulate os.Exit
-			})
-
-		defer func() {
-			if r := recover(); r == nil {
-				require.FailNow(t, "The code did not panic when it should have")
-			} else {
-				// Just making sure the exec panicked for the right reason
-				require.Equal(t, "Fatalf called", r)
-			}
-		}()
-
 		address := "0x123"
 		privateKey := "0x456"
 		publicKey := "0x789"
 		accountData := main.NewAccountData(address, privateKey, publicKey)
-		validatorAccount := main.NewValidatorAccount(provider, mockLogger, &accountData)
+		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &accountData)
 
-		require.Equal(t, main.ValidatorAccount(account.Account{}), validatorAccount)
+		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
+		expectedErrorMsg := `Cannot create validator account: -32603 The error is not a valid RPC error: Post "http://localhost:1234": dial tcp 127.0.0.1:1234: connect: connection refused`
+		require.Equal(t, err.Error(), expectedErrorMsg)
 	})
 
 	t.Run("Successful account creation", func(t *testing.T) {
@@ -119,7 +94,7 @@ func TestNewValidatorAccount(t *testing.T) {
 		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
 
 		// Test
-		validatorAccount := main.NewValidatorAccount(provider, mockLogger, &accountData)
+		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &accountData)
 
 		// Assert
 		accountAddrFelt, stringToFeltErr := new(felt.Felt).SetString(address)
@@ -131,6 +106,8 @@ func TestNewValidatorAccount(t *testing.T) {
 		expectedValidatorAccount, accountErr := account.NewAccount(provider, accountAddrFelt, publicKey, ks, 2)
 		require.NoError(t, accountErr)
 		require.Equal(t, main.ValidatorAccount(*expectedValidatorAccount), validatorAccount)
+
+		require.Nil(t, err)
 	})
 }
 
