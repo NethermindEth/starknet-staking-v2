@@ -30,7 +30,7 @@ func BlockHeaderSubscription[Log Logger](wsProviderUrl string, logger Log) (
 	}
 
 	headersFeed := make(chan *rpc.BlockHeader)
-	clientSubscription, err := wsProvider.SubscribeNewHeads(context.Background(), headersFeed, nil)
+	clientSubscription, err := wsProvider.SubscribeNewHeads(context.Background(), headersFeed, rpc.BlockID{Tag: "latest"})
 	if err != nil {
 		logger.Fatalf("Error subscribing to new block headers: %s", err)
 	}

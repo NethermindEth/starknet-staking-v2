@@ -77,27 +77,16 @@ func TestBlockHeaderSubscription(t *testing.T) {
 		main.BlockHeaderSubscription(wsProviderUrl, mockLogger)
 	})
 
-	// TODO: Fix the strange error when trying to subscribe to blockHeaders `The error is not a valid RPC error: json: cannot unmarshal string into Go value of type uint64`
-	// t.Run("Error subscribing to new block headers", func(t *testing.T) {
-	// 	envVars := loadEnv(t)
+	// Cannot test error when subscribing to new block headers
 
-	// 	mockLogger.EXPECT().
-	// 		Fatalf("Error subscribing to new block headers: %s", errors.New("The error is not a valid RPC error: json: cannot unmarshal string into Go value of type uint64")).
-	// 		Do(func(_ string, _ ...interface{}) {
-	// 			panic("Fatalf called") // Simulate os.Exit
-	// 		})
+	t.Run("Successfully subscribing to new block headers", func(t *testing.T) {
+		envVars := loadEnv(t)
 
-	// 	defer func() {
-	// 		if r := recover(); r == nil {
-	// 			require.FailNow(t, "The code did not panic when it should have")
-	// 		} else {
-	// 			// Just making sure the exec panicked for the right reason
-	// 			require.Equal(t, "Fatalf called", r)
-	// 		}
-	// 	}()
+		mockLogger.EXPECT().Infow("Successfully subscribed to new block headers", "Subscription ID", gomock.Any())
 
-	// 	main.BlockHeaderSubscription(envVars.wsProviderUrl, mockLogger)
-	// })
+		wsProvider, headerChannel := main.BlockHeaderSubscription(envVars.wsProviderUrl, mockLogger)
 
-	// TODO: make a successful test once the previous error-expecting test passes
+		wsProvider.Close()
+		close(headerChannel)
+	})
 }

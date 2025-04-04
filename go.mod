@@ -4,8 +4,7 @@ go 1.24.1
 
 require (
 	github.com/NethermindEth/juno v0.12.2
-	github.com/NethermindEth/starknet.go v0.8.0-beta.2
-	github.com/go-errors/errors v1.4.2
+	github.com/NethermindEth/starknet.go v0.8.0
 	github.com/joho/godotenv v1.5.1
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.10.0

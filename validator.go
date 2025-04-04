@@ -53,7 +53,7 @@ func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, account
 }
 
 func (v *ValidatorAccount) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
-	return ((*account.Account)(v)).GetTransactionStatus(ctx, transactionHash)
+	return ((*account.Account)(v)).Provider.GetTransactionStatus(ctx, transactionHash)
 }
 
 func (v *ValidatorAccount) BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
@@ -61,11 +61,11 @@ func (v *ValidatorAccount) BuildAndSendInvokeTxn(ctx context.Context, functionCa
 }
 
 func (v *ValidatorAccount) Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
-	return ((*account.Account)(v)).Call(ctx, call, blockId)
+	return ((*account.Account)(v)).Provider.Call(ctx, call, blockId)
 }
 
 func (v *ValidatorAccount) BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (interface{}, error) {
-	return ((*account.Account)(v)).BlockWithTxHashes(ctx, blockID)
+	return ((*account.Account)(v)).Provider.BlockWithTxHashes(ctx, blockID)
 }
 
 func (v *ValidatorAccount) Address() *felt.Felt {
