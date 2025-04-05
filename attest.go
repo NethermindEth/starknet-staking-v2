@@ -73,13 +73,11 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
 			prevEpochInfo := epochInfo
 
-			epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info", "epoch id", prevEpochInfo.EpochId+1)
-			if err != nil {
+			if epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info", "epoch id", prevEpochInfo.EpochId+1); err != nil {
 				return err
 			}
 
-			epochInfo, attestInfo, err = EpochSwitchSanityCheckWithRetry(account, logger, prevEpochInfo, epochInfo, attestInfo)
-			if err != nil {
+			if epochInfo, attestInfo, err = EpochSwitchSanityCheckWithRetry(account, logger, prevEpochInfo, epochInfo, attestInfo); err != nil {
 				return err
 			}
 		}
