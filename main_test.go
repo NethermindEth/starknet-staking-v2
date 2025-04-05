@@ -49,8 +49,8 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Run("Successfully load config", func(t *testing.T) {
 		mockedConfig := main.Config{
-			HttpProviderUrl: "http://localhost:6060",
-			WsProviderUrl:   "ws://localhost:6061",
+			HttpProviderUrl: "http://localhost:1234",
+			WsProviderUrl:   "ws://localhost:1235",
 			AccountData: main.AccountData{
 				PrivKey:            "0x123",
 				OperationalAddress: "0x456",
@@ -127,8 +127,8 @@ func TestNewCommand(t *testing.T) {
 		command := main.NewCommand()
 
 		mockedConfig := main.Config{
-			HttpProviderUrl: "http://localhost:6060",
-			WsProviderUrl:   "ws://localhost:6061",
+			HttpProviderUrl: "http://localhost:1234",
+			WsProviderUrl:   "ws://localhost:1235",
 			AccountData: main.AccountData{
 				PrivKey:            "0x123",
 				OperationalAddress: "0x456",

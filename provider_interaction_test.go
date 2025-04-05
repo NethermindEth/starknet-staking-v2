@@ -27,7 +27,7 @@ func TestNewProvider(t *testing.T) {
 	})
 
 	t.Run("Error connecting to provider", func(t *testing.T) {
-		providerUrl := "http://localhost:6060"
+		providerUrl := "http://localhost:1234"
 
 		provider, err := main.NewProvider(providerUrl, mockLogger)
 
