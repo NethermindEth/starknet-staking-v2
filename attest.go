@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/NethermindEth/juno/utils"
@@ -46,7 +47,8 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 	logger Log,
 	dispatcher *EventDispatcher[Account, Log],
 ) {
-	epochInfo, attestInfo := FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info at startup")
+	noEpochSwitch := func(*EpochInfo, *EpochInfo) bool { return true }
+	epochInfo, attestInfo := FetchEpochAndAttestInfoWithRetry(account, logger, nil, noEpochSwitch, "at app startup")
 
 	SetTargetBlockHashIfExists(account, logger, &attestInfo)
 
@@ -58,9 +60,9 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
 			prevEpochInfo := epochInfo
 
-			epochInfo, attestInfo = FetchEpochAndAttestInfoWithRetry(account, logger, "Failed to fetch epoch info", "epoch id", prevEpochInfo.EpochId+1)
-
-			epochInfo, attestInfo = EpochSwitchSanityCheckWithRetry(account, logger, prevEpochInfo, epochInfo, attestInfo)
+			epochInfo, attestInfo = FetchEpochAndAttestInfoWithRetry(
+				account, logger, &prevEpochInfo, isEpochSwitchCorrect, strconv.FormatUint(prevEpochInfo.EpochId+1, 10),
+			)
 		}
 
 		if BlockNumber(blockHeader.BlockNumber) == attestInfo.TargetBlock {
@@ -106,52 +108,34 @@ func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
 func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 	account Account,
 	logger Log,
-	logMsg string,
-	keysAndValues ...any,
+	prevEpoch *EpochInfo,
+	isEpochSwitchCorrect func(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool,
+	newEpochId string,
 ) (EpochInfo, AttestInfo) {
-	epochInfo, attestInfo, err := FetchEpochAndAttestInfo(account, logger)
+	newEpoch, newAttestInfo, err := FetchEpochAndAttestInfo(account, logger)
 
-	for i := 0; err != nil && i < DEFAULT_MAX_RETRIES; i++ {
-		logger.Errorw(logMsg, keysAndValues, "error", err)
+	for i := 0; (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && i < DEFAULT_MAX_RETRIES; i++ {
+		if err != nil {
+			logger.Errorw("Failed to fetch epoch info", "epoch id", newEpochId, "error", err)
+		} else {
+			logger.Errorw("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", newEpoch)
+		}
+		logger.Infow("Retrying to fetch epoch info...", "attempt", i+1)
 		Sleep(time.Second)
-		epochInfo, attestInfo, err = FetchEpochAndAttestInfo(account, logger)
+		newEpoch, newAttestInfo, err = FetchEpochAndAttestInfo(account, logger)
 	}
 
-	// If fetched info are still incorrect, exit program
+	// If still an issue after all retries, exit program
 	if err != nil {
-		logger.Fatalf(logMsg, keysAndValues, "error", err)
+		logger.Fatalf("Failed to fetch epoch info", "epoch id", newEpochId, "error", err)
+	} else if !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
+		logger.Fatalf("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", newEpoch)
 	}
 
-	return epochInfo, attestInfo
+	return newEpoch, newAttestInfo
 }
 
-// Should never fail. If it does, it means the contract logic has a bug
-// TODO: should we even retry... ? not exit program directly ?
-func EpochSwitchSanityCheckWithRetry[Account Accounter, Log Logger](
-	account Account,
-	logger Log,
-	previousEpochInfo EpochInfo,
-	newEpochInfo EpochInfo,
-	newAttestInfo AttestInfo,
-) (EpochInfo, AttestInfo) {
-	wrongEpochSwitch := newEpochInfo.EpochId != previousEpochInfo.EpochId+1 ||
-		newEpochInfo.CurrentEpochStartingBlock.Uint64() != previousEpochInfo.CurrentEpochStartingBlock.Uint64()+previousEpochInfo.EpochLen
-
-	for i := 0; wrongEpochSwitch && i < DEFAULT_MAX_RETRIES; i++ {
-		logger.Errorw("Wrong epoch change", "from epoch", previousEpochInfo, "to epoch", newEpochInfo)
-		Sleep(time.Second)
-
-		// TODO: what should we do with the 3rd return value (error) ? Call FetchEpochAndAttestInfoWithRetry
-		newEpochInfo, newAttestInfo, _ = FetchEpochAndAttestInfo(account, logger)
-
-		wrongEpochSwitch = newEpochInfo.EpochId != previousEpochInfo.EpochId+1 ||
-			newEpochInfo.CurrentEpochStartingBlock.Uint64() != previousEpochInfo.CurrentEpochStartingBlock.Uint64()+previousEpochInfo.EpochLen
-	}
-
-	// If epoch switch is still incorrect, exit program
-	if wrongEpochSwitch {
-		logger.Fatalf("Wrong epoch switch", "from epoch", previousEpochInfo, "to epoch", newEpochInfo)
-	}
-
-	return newEpochInfo, newAttestInfo
+func isEpochSwitchCorrect(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool {
+	return newEpoch.EpochId == prevEpoch.EpochId+1 &&
+		newEpoch.CurrentEpochStartingBlock.Uint64() == prevEpoch.CurrentEpochStartingBlock.Uint64()+prevEpoch.EpochLen
 }
