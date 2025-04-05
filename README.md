@@ -23,9 +23,7 @@ The config file must contain the following fields:
 ```json
 {
     "privateKey": "<private_key>",
-    // TODO: we are able to deduct the public key from the private key, maybe remove it from the config
-    "publicKey": "<public_key>",
-    "address": "<operational_address>",
+    "operationalAddress": "<operational_address>",
     "httpProviderUrl": "<http_provider_url>",
     "wsProviderUrl": "<ws_provider_url>"
 }

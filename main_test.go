@@ -52,9 +52,8 @@ func TestLoadConfig(t *testing.T) {
 			HttpProviderUrl: "http://localhost:6060",
 			WsProviderUrl:   "ws://localhost:6061",
 			AccountData: main.AccountData{
-				PrivKey: "0x123",
-				PubKey:  "0x4356",
-				Address: "0x789",
+				PrivKey:            "0x123",
+				OperationalAddress: "0x456",
 			},
 		}
 
@@ -131,9 +130,8 @@ func TestNewCommand(t *testing.T) {
 			HttpProviderUrl: "http://localhost:6060",
 			WsProviderUrl:   "ws://localhost:6061",
 			AccountData: main.AccountData{
-				PrivKey: "0x123",
-				PubKey:  "0x4356",
-				Address: "0x789",
+				PrivKey:            "0x123",
+				OperationalAddress: "0x456",
 			},
 		}
 		tmpFilePath := writeMockConfigToTemporaryFile(t, mockedConfig)

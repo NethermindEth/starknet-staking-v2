@@ -6,6 +6,7 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/starknet.go/account"
+	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
 	"github.com/cockroachdb/errors"
@@ -34,17 +35,22 @@ type Accounter interface {
 type ValidatorAccount account.Account
 
 func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, accountData *AccountData) (ValidatorAccount, error) {
-	publicKey := accountData.PubKey
 	privateKey, ok := new(big.Int).SetString(accountData.PrivKey, 0)
 	if !ok {
 		return ValidatorAccount{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
 	}
-	accountAddr := AddressFromString(accountData.Address)
 
-	ks := account.SetNewMemKeystore(publicKey, privateKey)
+	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
+	if err != nil {
+		return ValidatorAccount{}, errors.New("Cannot derive public key from private key")
+	}
 
+	ks := account.SetNewMemKeystore(publicKey.String(), privateKey)
+
+	accountAddr := AddressFromString(accountData.OperationalAddress)
 	accountAddrFelt := accountAddr.ToFelt()
-	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey, ks, 2)
+
+	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey.String(), ks, 2)
 	if err != nil {
 		return ValidatorAccount{}, errors.Errorf("Cannot create validator account: %s", err)
 	}

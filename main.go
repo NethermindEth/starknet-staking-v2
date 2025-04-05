@@ -12,16 +12,14 @@ import (
 )
 
 type AccountData struct {
-	PrivKey string `json:"privateKey"`
-	PubKey  string `json:"publicKey"`
-	Address string `json:"address"`
+	PrivKey            string `json:"privateKey"`
+	OperationalAddress string `json:"operationalAddress"`
 }
 
-func NewAccountData(address string, privKey string, pubKey string) AccountData {
+func NewAccountData(privKey string, address string) AccountData {
 	return AccountData{
-		PrivKey: privKey,
-		PubKey:  pubKey,
-		Address: address,
+		PrivKey:            privKey,
+		OperationalAddress: address,
 	}
 }
 
