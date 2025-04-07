@@ -12,10 +12,6 @@ Validator software written in Go for Starknet staking v2 as specified in [Snip28
 
 Use the following command:
 ```bash
-# TODO: should we change cobra command's "Use" field, which is now "starknet-staking-v2" ?
-# TODO: I guess we should upload the binary somewhere and/or use docker
-# TODO: should we take the Staking & Attest contract addresses as well ?
-# TODO: create different log levels ?
 ./build/validator --config <path_to_config_file>
 ```
 
