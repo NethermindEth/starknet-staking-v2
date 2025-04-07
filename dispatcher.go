@@ -14,6 +14,8 @@ import (
 // Created a function variable for mocking purposes in tests
 var Sleep = time.Sleep
 
+var ErrTxnHashNotFound = rpc.RPCError{Code: 29, Message: "Transaction hash not found"}
+
 type AttestStatus uint8
 
 const (
@@ -139,7 +141,7 @@ func TrackTransactionStatus[Account Accounter, Log Logger](account Account, logg
 	for elapsedSeconds := 0; elapsedSeconds < DEFAULT_MAX_RETRIES; elapsedSeconds++ {
 		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
 
-		if err != nil && err.Error() != "29 Transaction hash not found" {
+		if err != nil && err.Error() != ErrTxnHashNotFound.Error() {
 			return nil, err
 		}
 		if err == nil && txStatus.FinalityStatus != rpc.TxnStatus_Received {
