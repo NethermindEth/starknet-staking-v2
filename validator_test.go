@@ -91,6 +91,8 @@ func TestNewValidatorAccount(t *testing.T) {
 
 		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
 
+		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
+
 		// Test
 		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &accountData)
 
