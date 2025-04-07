@@ -92,20 +92,17 @@ type ExternalSigner struct {
 }
 
 func newExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) (ExternalSigner, error) {
-	chainId, err := provider.ChainID(context.Background())
+	chainID, err := provider.ChainID(context.Background())
 	if err != nil {
 		return ExternalSigner{}, err
 	}
-	chainIdFelt, err := new(felt.Felt).SetString(chainId)
-	if err != nil {
-		return ExternalSigner{}, err
-	}
+	chainId := new(felt.Felt).SetBytes([]byte(chainID))
 
 	return ExternalSigner{
 		Provider:           provider,
 		operationalAddress: operationalAddress,
 		externalSignerUrl:  externalSignerUrl,
-		chainId:            *chainIdFelt,
+		chainId:            *chainId,
 	}, nil
 }
 
@@ -129,7 +126,7 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 
 	// Building and signing the txn, as it needs a signature to estimate the fee
 	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(s.Address(), nonce, call.CallData, makeResourceBoundsMapWithZeroValues())
-	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId); err != nil {
+	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId, s.externalSignerUrl); err != nil {
 		return nil, err
 	}
 
@@ -143,7 +140,7 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
 
 	// Signing the txn again with the estimated fee, as the fee value is used in the txn hash calculation
-	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId); err != nil {
+	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId, s.externalSignerUrl); err != nil {
 		return nil, err
 	}
 
@@ -155,17 +152,20 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	return txRes, nil
 }
 
-func signInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt) error {
+func signInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
 	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
 	if err != nil {
 		return err
 	}
 
-	// TODO: call sign endpoint here
 	fmt.Println("tx hash: ", hash)
-	var signature []*felt.Felt
+	signResp, err := signTxHash(hash, externalSignerUrl)
+	if err != nil {
+		return err
+	}
+	fmt.Println("--- signResp", signResp)
 
-	invokeTxnV3.Signature = signature
+	invokeTxnV3.Signature = signResp.Signature
 	return nil
 }
 

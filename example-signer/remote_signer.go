@@ -86,9 +86,7 @@ func signHandler(w http.ResponseWriter, r *http.Request, signer *Signer) {
 		return
 	}
 
-	resp := SignResponse{
-		Signature: signature,
-	}
+	resp := SignResponse{Signature: signature}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
