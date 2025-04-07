@@ -8,6 +8,7 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
+	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
 	"github.com/cockroachdb/errors"
@@ -87,14 +88,25 @@ type ExternalSigner struct {
 	*rpc.Provider
 	operationalAddress Address
 	externalSignerUrl  string
+	chainId            felt.Felt
 }
 
-func newExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) ExternalSigner {
+func newExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) (ExternalSigner, error) {
+	chainId, err := provider.ChainID(context.Background())
+	if err != nil {
+		return ExternalSigner{}, err
+	}
+	chainIdFelt, err := new(felt.Felt).SetString(chainId)
+	if err != nil {
+		return ExternalSigner{}, err
+	}
+
 	return ExternalSigner{
 		Provider:           provider,
 		operationalAddress: operationalAddress,
 		externalSignerUrl:  externalSignerUrl,
-	}
+		chainId:            *chainIdFelt,
+	}, nil
 }
 
 func (s *ExternalSigner) Address() *felt.Felt {
@@ -108,9 +120,89 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	multiplier float64,
 ) (*rpc.AddInvokeTransactionResponse, error) {
 	fmt.Println("--- In external signer build and send invoke txn ---")
-	// TODO: not yet implemented
-	// Follow starknet go BuildAndSendInvokeTxn's underlying implementation
-	return nil, nil
+	nonce, err := s.Nonce(ctx, rpc.WithBlockTag("pending"), s.Address())
+	if err != nil {
+		return nil, err
+	}
+
+	call := functionCalls[0]
+
+	// Building and signing the txn, as it needs a signature to estimate the fee
+	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(s.Address(), nonce, call.CallData, makeResourceBoundsMapWithZeroValues())
+	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId); err != nil {
+		return nil, err
+	}
+
+	// Estimate txn fee
+	estimateFee, err := s.EstimateFee(ctx, []rpc.BroadcastTxn{broadcastInvokeTxnV3}, []rpc.SimulationFlag{}, rpc.WithBlockTag("pending"))
+	if err != nil {
+		return nil, err
+	}
+	txnFee := estimateFee[0]
+	fillEmptyFeeEstimation(ctx, &txnFee, s.Provider) // temporary
+	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
+
+	// Signing the txn again with the estimated fee, as the fee value is used in the txn hash calculation
+	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId); err != nil {
+		return nil, err
+	}
+
+	txRes, err := s.AddInvokeTransaction(ctx, broadcastInvokeTxnV3)
+	if err != nil {
+		return nil, err
+	}
+
+	return txRes, nil
+}
+
+func signInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt) error {
+	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
+	if err != nil {
+		return err
+	}
+
+	// TODO: call sign endpoint here
+	fmt.Println("tx hash: ", hash)
+	var signature []*felt.Felt
+
+	invokeTxnV3.Signature = signature
+	return nil
+}
+
+// When there's no transaction in the pending block, the L1DataGasConsumed and L1DataGasPrice fields are comming empty.
+// This is causing the transaction to fail with the error:
+// "55 Account validation failed: Max L1DataGas amount (0) is lower than the minimal gas amount: 128"
+// This function fills the empty fields.
+//
+// TODO: remove this function once the issue is fixed in the RPC
+func fillEmptyFeeEstimation(ctx context.Context, feeEstimation *rpc.FeeEstimation, provider rpc.RpcProvider) {
+	if feeEstimation.L1DataGasConsumed.IsZero() {
+		// default value for L1DataGasConsumed in most cases
+		feeEstimation.L1DataGasConsumed = new(felt.Felt).SetUint64(224)
+	}
+	if feeEstimation.L1DataGasPrice.IsZero() {
+		// getting the L1DataGasPrice from the latest block as reference
+		result, _ := provider.BlockWithTxHashes(ctx, rpc.WithBlockTag("latest"))
+		block := result.(*rpc.BlockTxHashes)
+		feeEstimation.L1DataGasPrice = block.L1DataGasPrice.PriceInFRI
+	}
+}
+
+func makeResourceBoundsMapWithZeroValues() rpc.ResourceBoundsMapping {
+	return rpc.ResourceBoundsMapping{
+		L1Gas: rpc.ResourceBounds{
+			MaxAmount:       "0x0",
+			MaxPricePerUnit: "0x0",
+		},
+		L1DataGas: rpc.ResourceBounds{
+			MaxAmount:       "0x0",
+			MaxPricePerUnit: "0x0",
+		},
+		L2Gas: rpc.ResourceBounds{
+			MaxAmount:       "0x0",
+			MaxPricePerUnit: "0x0",
+		},
+	}
 }
 
 // I believe all these functions down here should be methods
