@@ -122,10 +122,11 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 		return nil, err
 	}
 
-	call := functionCalls[0]
+	fnCallData := utils.InvokeFuncCallsToFunctionCalls(functionCalls)
+	formattedCallData := account.FmtCallDataCairo2(fnCallData)
 
 	// Building and signing the txn, as it needs a signature to estimate the fee
-	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(s.Address(), nonce, call.CallData, makeResourceBoundsMapWithZeroValues())
+	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(s.Address(), nonce, formattedCallData, makeResourceBoundsMapWithZeroValues())
 	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId, s.externalSignerUrl); err != nil {
 		return nil, err
 	}
