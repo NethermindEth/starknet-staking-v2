@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"os"
 
@@ -12,16 +13,18 @@ import (
 )
 
 type AccountData struct {
-	PrivKey            string `json:"privateKey"`
-	OperationalAddress string `json:"operationalAddress"`
+	PrivKey            string  `json:"privateKey"`
+	OperationalAddress Address `json:"operationalAddress"`
 }
 
 type Config struct {
 	HttpProviderUrl string `json:"httpProviderUrl"`
 	// TODO: should we have this additional url or do we parse the http one and create a ws out of it ?
 	// I think having a 2nd one is more flexible
-	WsProviderUrl string `json:"wsProviderUrl"`
+	WsProviderUrl     string `json:"wsProviderUrl"`
+	ExternalSignerUrl string `json:"externalSignerUrl"`
 	AccountData
+	useLocalSigner bool // not exported, set in preRunE
 }
 
 // Function to load and parse the JSON file
@@ -40,16 +43,54 @@ func LoadConfig(filePath string) (Config, error) {
 	return config, nil
 }
 
+func verifyLoadedConfig(config Config, useLocalSigner bool, useExternalSigner bool) error {
+	if config.HttpProviderUrl == "" {
+		return missingConfigGeneralField("httpProviderUrl")
+	}
+
+	if config.WsProviderUrl == "" {
+		return missingConfigGeneralField("wsProviderUrl")
+	}
+
+	if config.OperationalAddress == (Address)(felt.Zero) {
+		return missingConfigGeneralField("operationalAddress")
+	}
+
+	// Enforce mutually exclusive flags
+	if useLocalSigner == useExternalSigner {
+		return errors.New("you must specify exactly one of --local-signer or --external-signer")
+	}
+
+	if useLocalSigner && config.PrivKey == "" {
+		return missingConfigSignerField("privateKey", "--local-signer")
+	}
+
+	if useExternalSigner && config.ExternalSignerUrl == "" {
+		return missingConfigSignerField("externalSignerUrl", "--external-signer")
+	}
+
+	return nil
+}
+
 func NewCommand() cobra.Command {
 	var configPath string
 	var config Config
+
+	var useLocalSigner bool
+	var useExternalSigner bool
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
 		loadedConfig, err := LoadConfig(configPath)
 		if err != nil {
 			return err
 		}
+
+		if err := verifyLoadedConfig(loadedConfig, useLocalSigner, useExternalSigner); err != nil {
+			return err
+		}
+
 		config = loadedConfig
+		config.useLocalSigner = useLocalSigner
 
 		return nil
 	}
@@ -72,6 +113,10 @@ func NewCommand() cobra.Command {
 	// Add a flag for the config file path
 	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to JSON config file")
 	rootCmd.MarkFlagRequired("config")
+
+	// Mutually exclusive signer flags
+	rootCmd.Flags().BoolVar(&useLocalSigner, "local-signer", false, "Use a local signer")
+	rootCmd.Flags().BoolVar(&useExternalSigner, "external-signer", false, "Use an external signer (HTTP)")
 
 	return rootCmd
 }
