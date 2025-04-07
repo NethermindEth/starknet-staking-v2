@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -116,7 +115,6 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	functionCalls []rpc.InvokeFunctionCall,
 	multiplier float64,
 ) (*rpc.AddInvokeTransactionResponse, error) {
-	fmt.Println("--- In external signer build and send invoke txn ---")
 	nonce, err := s.Nonce(ctx, rpc.WithBlockTag("pending"), s.Address())
 	if err != nil {
 		return nil, err
@@ -159,12 +157,10 @@ func signInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSign
 		return err
 	}
 
-	fmt.Println("tx hash: ", hash)
 	signResp, err := signTxHash(hash, externalSignerUrl)
 	if err != nil {
 		return err
 	}
-	fmt.Println("--- signResp", signResp)
 
 	invokeTxnV3.Signature = signResp.Signature
 	return nil

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"math/big"
 	"net/http"
@@ -35,7 +34,6 @@ func loadEnv() string {
 	// }
 
 	signerKey := os.Getenv("PRIVATE_KEY")
-	fmt.Println("signerKey", signerKey)
 	if signerKey == "" {
 		panic("Failed to load PRIVATE_KEY, empty string")
 	}

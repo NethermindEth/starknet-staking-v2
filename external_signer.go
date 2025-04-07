@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 
@@ -38,14 +37,12 @@ func signTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("--- body", string(body))
 
 	var signResp SignResponse
 	err = json.Unmarshal(body, &signResp)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("--- signResp", signResp)
 
 	return &signResp, nil
 }
