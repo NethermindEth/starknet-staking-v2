@@ -16,13 +16,6 @@ type AccountData struct {
 	OperationalAddress string `json:"operationalAddress"`
 }
 
-func NewAccountData(privKey string, address string) AccountData {
-	return AccountData{
-		PrivKey:            privKey,
-		OperationalAddress: address,
-	}
-}
-
 type Config struct {
 	HttpProviderUrl string `json:"httpProviderUrl"`
 	// TODO: should we have this additional url or do we parse the http one and create a ws out of it ?

@@ -26,6 +26,13 @@ type envVariable struct {
 	wsProviderUrl   string
 }
 
+func NewAccountData(privKey string, address string) main.AccountData {
+	return main.AccountData{
+		PrivKey:            privKey,
+		OperationalAddress: address,
+	}
+}
+
 func loadEnv(t *testing.T) envVariable {
 	t.Helper()
 
@@ -71,7 +78,7 @@ func TestNewValidatorAccount(t *testing.T) {
 
 		privateKey := "0x123"
 		address := "0x456"
-		accountData := main.NewAccountData(privateKey, address)
+		accountData := NewAccountData(privateKey, address)
 		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &accountData)
 
 		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
@@ -87,7 +94,7 @@ func TestNewValidatorAccount(t *testing.T) {
 
 		privateKey := "0x123"
 		address := "0x456"
-		accountData := main.NewAccountData(privateKey, address)
+		accountData := NewAccountData(privateKey, address)
 
 		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
 
