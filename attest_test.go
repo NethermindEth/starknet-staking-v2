@@ -229,7 +229,7 @@ func mockFetchedEpochAndAttestInfo(
 
 	// Mock logger following epoch info fetching
 	mockLogger.EXPECT().Infow(
-		"Successfully fetched epoch info",
+		"Fetched epoch info",
 		"epoch ID", epochId,
 		"epoch starting block", epochStartingBlock,
 		"epoch ending block", epochStartingBlock+main.BlockNumber(epochLength),
@@ -252,7 +252,7 @@ func mockFetchedEpochAndAttestInfo(
 
 	// Mock logger following target block computation
 	mockLogger.EXPECT().Infow(
-		"Successfully computed target block to attest to",
+		"Computed target block to attest to",
 		"epoch ID", epochId,
 		"attestation info", main.AttestInfo{
 			TargetBlock: targetBlockNumber,

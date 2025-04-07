@@ -13,18 +13,13 @@ import (
 
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
-func Attest(config Config) error {
-	logger, err := utils.NewZapLogger(utils.INFO, false)
-	if err != nil {
-		return errors.Errorf("Error creating logger: %s", err)
-	}
-
-	provider, err := NewProvider(config.HttpProviderUrl, logger)
+func Attest(config *Config, logger utils.ZapLogger) error {
+	provider, err := NewProvider(config.HttpProviderUrl, &logger)
 	if err != nil {
 		return err
 	}
 
-	validatorAccount, err := NewValidatorAccount(provider, logger, &config.AccountData)
+	validatorAccount, err := NewValidatorAccount(provider, &logger, &config.AccountData)
 	if err != nil {
 		return err
 	}
@@ -33,17 +28,17 @@ func Attest(config Config) error {
 
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
-	wg.Go(func() { dispatcher.Dispatch(&validatorAccount, logger) })
+	wg.Go(func() { dispatcher.Dispatch(&validatorAccount, &logger) })
 
 	// Subscribe to the block headers
-	wsProvider, headersFeed, err := BlockHeaderSubscription(config.WsProviderUrl, logger)
+	wsProvider, headersFeed, err := BlockHeaderSubscription(config.WsProviderUrl, &logger)
 	if err != nil {
 		return err
 	}
 	defer wsProvider.Close()
 	defer close(headersFeed)
 
-	if err := ProcessBlockHeaders(headersFeed, &validatorAccount, logger, &dispatcher); err != nil {
+	if err := ProcessBlockHeaders(headersFeed, &validatorAccount, &logger, &dispatcher); err != nil {
 		return err
 	}
 	// I'd also like to check the balance of the address from time to time to verify
@@ -141,16 +136,22 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 		} else {
 			logger.Errorw("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", newEpoch)
 		}
-		logger.Infow("Retrying to fetch epoch info...", "attempt", i+1)
+		logger.Debugw("Retrying to fetch epoch info...", "attempt", i+1)
 		Sleep(time.Second)
 		newEpoch, newAttestInfo, err = FetchEpochAndAttestInfo(account, logger)
 	}
 
-	// If still an issue after all retries, exit program
+	// If there is still an issue after all retries, exit program
 	if err != nil {
-		return EpochInfo{}, AttestInfo{}, errors.Errorf("Failed to fetch epoch info for epoch id %s: %s", newEpochId, err.Error())
+		return EpochInfo{},
+			AttestInfo{},
+			errors.Errorf(
+				"Failed to fetch epoch info for epoch id %s: %s", newEpochId, err.Error(),
+			)
 	} else if !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
-		return EpochInfo{}, AttestInfo{}, errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", prevEpoch, newEpoch)
+		return EpochInfo{},
+			AttestInfo{},
+			errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", prevEpoch, newEpoch)
 	}
 
 	return newEpoch, newAttestInfo, nil

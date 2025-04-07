@@ -6,6 +6,9 @@ validator: ## compile
 clean-testcache: ## Clean Go test cache
 	go clean -testcache
 
+test:
+	 go test ./...
+
 test-cover: clean-testcache ## Run tests with coverage
 	mkdir -p coverage
 	go test -coverprofile=coverage/coverage.out -covermode=atomic .

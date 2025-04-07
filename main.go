@@ -3,14 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"os"
 
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/spf13/cobra"
 )
 
+// TODO(rdr): make fields required so that if they are not set then the tool signals it and fails
 type AccountData struct {
 	PrivKey            string `json:"privateKey"`
 	OperationalAddress string `json:"operationalAddress"`
@@ -41,37 +44,51 @@ func LoadConfig(filePath string) (Config, error) {
 }
 
 func NewCommand() cobra.Command {
-	var configPath string
-	var config Config
+	var configPathF string
+	var logLevelF string
 
+	var config Config
+	var logger utils.ZapLogger
 	preRunE := func(cmd *cobra.Command, args []string) error {
-		loadedConfig, err := LoadConfig(configPath)
+		loadedConfig, err := LoadConfig(configPathF)
 		if err != nil {
 			return err
 		}
 		config = loadedConfig
 
+		var logLevel utils.LogLevel
+		if err := logLevel.Set(logLevelF); err != nil {
+			return err
+		}
+		loadedLogger, err := utils.NewZapLogger(logLevel, true)
+		if err != nil {
+			return err
+		}
+		logger = *loadedLogger
+
 		return nil
 	}
 
-	runE := func(cmd *cobra.Command, args []string) error {
-		if err := Attest(config); err != nil {
-			return err
+	run := func(cmd *cobra.Command, args []string) {
+		if err := Attest(&config, logger); err != nil {
+			logger.Error(err)
 		}
-		return nil
 	}
 
 	var rootCmd = cobra.Command{
-		Use:     "starknet-staking-v2",
+		Use:     "validator",
 		Short:   "Program for Starknet validators to attest to epochs with respect to Staking v2",
 		PreRunE: preRunE,
-		RunE:    runE,
+		Run:     run,
 		Args:    cobra.NoArgs,
 	}
 
-	// Add a flag for the config file path
-	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to JSON config file")
+	rootCmd.Flags().StringVarP(&configPathF, "config", "c", "", "Path to JSON config file")
 	rootCmd.MarkFlagRequired("config")
+
+	rootCmd.Flags().StringVar(
+		&logLevelF, "log-level", utils.INFO.String(), "Options: trace, debug, info, warn, error.",
+	)
 
 	return rootCmd
 }
@@ -79,15 +96,18 @@ func NewCommand() cobra.Command {
 func main() {
 	command := NewCommand()
 	if err := command.ExecuteContext(context.Background()); err != nil {
+		fmt.Println("Unexpected error:\n", err)
 		os.Exit(1)
 	}
 }
 
-func ComputeBlockNumberToAttestTo[Account Accounter](account Account, attestationInfo EpochInfo, attestationWindow uint64) BlockNumber {
+func ComputeBlockNumberToAttestTo[Account Accounter](
+	account Account, epochInfo *EpochInfo, attestWindow uint64,
+) BlockNumber {
 	accountAddress := account.Address()
 	hash := crypto.PoseidonArray(
-		new(felt.Felt).SetBigInt(attestationInfo.Stake.Big()),
-		new(felt.Felt).SetUint64(attestationInfo.EpochId),
+		new(felt.Felt).SetBigInt(epochInfo.Stake.Big()),
+		new(felt.Felt).SetUint64(epochInfo.EpochId),
 		accountAddress,
 	)
 
@@ -95,7 +115,7 @@ func ComputeBlockNumberToAttestTo[Account Accounter](account Account, attestatio
 	hashBigInt = hash.BigInt(hashBigInt)
 
 	var blockOffsetBigInt *big.Int = new(big.Int)
-	blockOffsetBigInt = blockOffsetBigInt.Mod(hashBigInt, big.NewInt(int64(attestationInfo.EpochLen-attestationWindow)))
+	blockOffsetBigInt = blockOffsetBigInt.Mod(hashBigInt, big.NewInt(int64(epochInfo.EpochLen-attestWindow)))
 
-	return BlockNumber(attestationInfo.CurrentEpochStartingBlock.Uint64() + blockOffsetBigInt.Uint64())
+	return BlockNumber(epochInfo.CurrentEpochStartingBlock.Uint64() + blockOffsetBigInt.Uint64())
 }

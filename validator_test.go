@@ -33,44 +33,81 @@ func NewAccountData(privKey string, address string) main.AccountData {
 	}
 }
 
-func loadEnv(t *testing.T) envVariable {
+func loadEnv(t *testing.T) (envVariable, error) {
 	t.Helper()
 
-	err := godotenv.Load(".env")
-	if err != nil {
-		panic(errors.Join(errors.New("error loading '.env' file"), err))
+	_, err := os.Stat(".env")
+	if err == nil {
+		if err = godotenv.Load(".env"); err != nil {
+			return envVariable{}, errors.Join(errors.New("error loading '.env' file"), err)
+		}
 	}
 
 	base := os.Getenv("HTTP_PROVIDER_URL")
 	if base == "" {
-		panic("Failed to load HTTP_PROVIDER_URL, empty string")
+		return envVariable{}, errors.New("Failed to load HTTP_PROVIDER_URL, empty string")
 	}
 
 	wsProviderUrl := os.Getenv("WS_PROVIDER_URL")
 	if wsProviderUrl == "" {
-		panic("Failed to load WS_PROVIDER_URL, empty string")
+		return envVariable{}, errors.New("Failed to load WS_PROVIDER_URL, empty string")
 	}
 
-	return envVariable{base, wsProviderUrl}
+	return envVariable{base, wsProviderUrl}, nil
 }
 
 func TestNewValidatorAccount(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockLogger := mocks.NewMockLogger(mockCtrl)
+	logger, err := utils.NewZapLogger(utils.DEBUG, true)
+	envVars, err := loadEnv(t)
+	loadedEnvVars := err == nil
 
-	t.Run("Error: private key conversion", func(t *testing.T) {
-		env := loadEnv(t)
-		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
-		require.NoError(t, providerErr)
+	if loadedEnvVars {
+		t.Run("Error: private key conversion", func(t *testing.T) {
+			provider, providerErr := rpc.NewProvider(envVars.httpProviderUrl)
+			require.NoError(t, providerErr)
 
-		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &main.AccountData{})
+			validatorAccount, err := main.NewValidatorAccount(
+				provider, logger, &main.AccountData{},
+			)
 
-		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
-		expectedErrorMsg := fmt.Sprintf("Cannot turn private key %s into a big int", (*big.Int)(nil))
-		require.Equal(t, expectedErrorMsg, err.Error())
-	})
+			require.Equal(t, main.ValidatorAccount{}, validatorAccount)
+			expectedErrorMsg := fmt.Sprintf(
+				"Cannot turn private key %s into a big int", (*big.Int)(nil),
+			)
+			require.Equal(t, expectedErrorMsg, err.Error())
+		})
+		t.Run("Successful account creation", func(t *testing.T) {
+			provider, providerErr := rpc.NewProvider(envVars.httpProviderUrl)
+			require.NoError(t, providerErr)
+
+			privateKey := "0x123"
+			address := "0x456"
+			accountData := NewAccountData(privateKey, address)
+
+			// Test
+			validatorAccount, err := main.NewValidatorAccount(provider, logger, &accountData)
+
+			// Assert
+			accountAddrFelt, stringToFeltErr := new(felt.Felt).SetString(address)
+			require.NoError(t, stringToFeltErr)
+
+			privateKeyBigInt := big.NewInt(291) // 291 is "0x123" as int
+			// This is the public key for private key "0x123"
+			publicKey := "2443263864760624031255983690848140455871762770061978316256189704907682682390"
+			ks := account.SetNewMemKeystore(publicKey, privateKeyBigInt)
+
+			expectedValidatorAccount, accountErr := account.NewAccount(provider, accountAddrFelt, publicKey, ks, 2)
+			require.NoError(t, accountErr)
+			require.Equal(t, main.ValidatorAccount(*expectedValidatorAccount), validatorAccount)
+
+			require.Nil(t, err)
+		})
+	} else {
+		t.Logf("Ignoring tests that require env variables: %s", err)
+	}
 
 	t.Run("Error: cannot create validator account", func(t *testing.T) {
 		provider, providerErr := rpc.NewProvider("http://localhost:1234")
@@ -79,45 +116,13 @@ func TestNewValidatorAccount(t *testing.T) {
 		privateKey := "0x123"
 		address := "0x456"
 		accountData := NewAccountData(privateKey, address)
-		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &accountData)
+		validatorAccount, err := main.NewValidatorAccount(provider, logger, &accountData)
 
 		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
 		expectedErrorMsg := `Cannot create validator account: -32603 The error is not a valid RPC error: Post "http://localhost:1234": dial tcp 127.0.0.1:1234: connect: connection refused`
 		require.Equal(t, expectedErrorMsg, err.Error())
 	})
 
-	t.Run("Successful account creation", func(t *testing.T) {
-		// Setup
-		env := loadEnv(t)
-		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
-		require.NoError(t, providerErr)
-
-		privateKey := "0x123"
-		address := "0x456"
-		accountData := NewAccountData(privateKey, address)
-
-		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
-
-		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
-
-		// Test
-		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &accountData)
-
-		// Assert
-		accountAddrFelt, stringToFeltErr := new(felt.Felt).SetString(address)
-		require.NoError(t, stringToFeltErr)
-
-		privateKeyBigInt := big.NewInt(291) // 291 is "0x123" as int
-		// This is the public key for private key "0x123"
-		publicKey := "2443263864760624031255983690848140455871762770061978316256189704907682682390"
-		ks := account.SetNewMemKeystore(publicKey, privateKeyBigInt)
-
-		expectedValidatorAccount, accountErr := account.NewAccount(provider, accountAddrFelt, publicKey, ks, 2)
-		require.NoError(t, accountErr)
-		require.Equal(t, main.ValidatorAccount(*expectedValidatorAccount), validatorAccount)
-
-		require.Nil(t, err)
-	})
 }
 
 func TestFetchEpochInfo(t *testing.T) {
@@ -360,7 +365,8 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockAccount := mocks.NewMockAccounter(mockCtrl)
-	mockLogger := mocks.NewMockLogger(mockCtrl)
+	logger, err := utils.NewZapLogger(utils.DEBUG, true)
+	require.NoError(t, err)
 
 	t.Run("Return error: fetching epoch info error", func(t *testing.T) {
 		validatorOperationalAddress := utils.HexToFelt(t, "0x123")
@@ -378,7 +384,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			Call(context.Background(), expectedFnCall, rpc.BlockID{Tag: "latest"}).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, mockLogger)
+		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, logger)
 
 		require.Equal(t, main.EpochInfo{}, epochInfo)
 		require.Equal(t, main.AttestInfo{}, attestInfo)
@@ -410,15 +416,6 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 				new(felt.Felt).SetUint64(epochStartingBlock),
 			}, nil)
 
-		mockLogger.
-			EXPECT().
-			Infow(
-				"Successfully fetched epoch info",
-				"epoch ID", epochId,
-				"epoch starting block", main.BlockNumber(epochStartingBlock),
-				"epoch ending block", main.BlockNumber(epochStartingBlock+epochLength),
-			)
-
 		expectedWindowFnCall := rpc.FunctionCall{
 			ContractAddress:    utils.HexToFelt(t, main.ATTEST_CONTRACT_ADDRESS),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt("attestation_window"),
@@ -430,7 +427,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			Call(context.Background(), expectedWindowFnCall, rpc.BlockID{Tag: "latest"}).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, mockLogger)
+		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, logger)
 
 		require.Equal(t, main.EpochInfo{}, epochInfo)
 		require.Equal(t, main.AttestInfo{}, attestInfo)
@@ -470,15 +467,6 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 				nil,
 			)
 
-		mockLogger.
-			EXPECT().
-			Infow(
-				"Successfully fetched epoch info",
-				"epoch ID", epochId,
-				"epoch starting block", main.BlockNumber(epochStartingBlock),
-				"epoch ending block", main.BlockNumber(epochStartingBlock+epochLen),
-			)
-
 		// Mock fetchAttestWindow call
 		expectedWindowFnCall := rpc.FunctionCall{
 			ContractAddress:    utils.HexToFelt(t, main.ATTEST_CONTRACT_ADDRESS),
@@ -502,16 +490,8 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			WindowEnd:   expectedTargetBlock + main.BlockNumber(attestWindow),
 		}
 
-		mockLogger.
-			EXPECT().
-			Infow(
-				"Successfully computed target block to attest to",
-				"epoch ID", epochId,
-				"attestation info", expectedAttestInfo,
-			)
-
 		// Test
-		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, mockLogger)
+		epochInfo, attestInfo, err := main.FetchEpochAndAttestInfo(mockAccount, logger)
 
 		// Assert
 		expectedEpochInfo := main.EpochInfo{
