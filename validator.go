@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -47,8 +48,7 @@ func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, account
 
 	ks := account.SetNewMemKeystore(publicKey.String(), privateKey)
 
-	accountAddr := AddressFromString(accountData.OperationalAddress)
-	accountAddrFelt := accountAddr.ToFelt()
+	accountAddrFelt := accountData.OperationalAddress.ToFelt()
 
 	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey.String(), ks, 2)
 	if err != nil {
@@ -63,7 +63,11 @@ func (v *ValidatorAccount) GetTransactionStatus(ctx context.Context, transaction
 	return ((*account.Account)(v)).Provider.GetTransactionStatus(ctx, transactionHash)
 }
 
-func (v *ValidatorAccount) BuildAndSendInvokeTxn(ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
+func (v *ValidatorAccount) BuildAndSendInvokeTxn(
+	ctx context.Context,
+	functionCalls []rpc.InvokeFunctionCall,
+	multiplier float64,
+) (*rpc.AddInvokeTransactionResponse, error) {
 	return ((*account.Account)(v)).BuildAndSendInvokeTxn(ctx, functionCalls, multiplier)
 }
 
@@ -77,6 +81,36 @@ func (v *ValidatorAccount) BlockWithTxHashes(ctx context.Context, blockID rpc.Bl
 
 func (v *ValidatorAccount) Address() *felt.Felt {
 	return v.AccountAddress
+}
+
+type ExternalSigner struct {
+	*rpc.Provider
+	operationalAddress Address
+	externalSignerUrl  string
+}
+
+func newExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) ExternalSigner {
+	return ExternalSigner{
+		Provider:           provider,
+		operationalAddress: operationalAddress,
+		externalSignerUrl:  externalSignerUrl,
+	}
+}
+
+func (s *ExternalSigner) Address() *felt.Felt {
+	addrFelt := s.operationalAddress.ToFelt()
+	return &addrFelt
+}
+
+func (s *ExternalSigner) BuildAndSendInvokeTxn(
+	ctx context.Context,
+	functionCalls []rpc.InvokeFunctionCall,
+	multiplier float64,
+) (*rpc.AddInvokeTransactionResponse, error) {
+	fmt.Println("--- In external signer build and send invoke txn ---")
+	// TODO: not yet implemented
+	// Follow starknet go BuildAndSendInvokeTxn's underlying implementation
+	return nil, nil
 }
 
 // I believe all these functions down here should be methods
