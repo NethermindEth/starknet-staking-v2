@@ -43,7 +43,9 @@ func Attest(config Config) error {
 	defer wsProvider.Close()
 	defer close(headersFeed)
 
-	ProcessBlockHeaders(headersFeed, &validatorAccount, logger, &dispatcher)
+	if err := ProcessBlockHeaders(headersFeed, &validatorAccount, logger, &dispatcher); err != nil {
+		return err
+	}
 	// I'd also like to check the balance of the address from time to time to verify
 	// that they have enough money for the next 10 attestations (value modifiable by user)
 	// Once it goes below it, the console should start giving warnings
@@ -58,9 +60,12 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 	account Account,
 	logger Log,
 	dispatcher *EventDispatcher[Account, Log],
-) {
+) error {
 	noEpochSwitch := func(*EpochInfo, *EpochInfo) bool { return true }
-	epochInfo, attestInfo := FetchEpochAndAttestInfoWithRetry(account, logger, nil, noEpochSwitch, "at app startup")
+	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(account, logger, nil, noEpochSwitch, "at app startup")
+	if err != nil {
+		return err
+	}
 
 	SetTargetBlockHashIfExists(account, logger, &attestInfo)
 
@@ -72,9 +77,11 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
 			prevEpochInfo := epochInfo
 
-			epochInfo, attestInfo = FetchEpochAndAttestInfoWithRetry(
+			if epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
 				account, logger, &prevEpochInfo, isEpochSwitchCorrect, strconv.FormatUint(prevEpochInfo.EpochId+1, 10),
-			)
+			); err != nil {
+				return err
+			}
 		}
 
 		if BlockNumber(blockHeader.BlockNumber) == attestInfo.TargetBlock {
@@ -125,7 +132,7 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 	prevEpoch *EpochInfo,
 	isEpochSwitchCorrect func(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool,
 	newEpochId string,
-) (EpochInfo, AttestInfo) {
+) (EpochInfo, AttestInfo, error) {
 	newEpoch, newAttestInfo, err := FetchEpochAndAttestInfo(account, logger)
 
 	for i := 0; (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && i < DEFAULT_MAX_RETRIES; i++ {
@@ -141,12 +148,12 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 
 	// If still an issue after all retries, exit program
 	if err != nil {
-		logger.Fatalf("Failed to fetch epoch info", "epoch id", newEpochId, "error", err)
+		return EpochInfo{}, AttestInfo{}, errors.Errorf("Failed to fetch epoch info for epoch id %s: %s", newEpochId, err.Error())
 	} else if !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
-		logger.Fatalf("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", newEpoch)
+		return EpochInfo{}, AttestInfo{}, errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", prevEpoch, newEpoch)
 	}
 
-	return newEpoch, newAttestInfo
+	return newEpoch, newAttestInfo, nil
 }
 
 func isEpochSwitchCorrect(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool {
