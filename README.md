@@ -27,7 +27,7 @@ The config file must contain the following fields:
 
 ## ⚠️ License
 
-Copyright (c) 2022-present, with the following [contributors](https://github.com/NethermindEth/starknet-staking-v2/graphs/contributors).
+Copyright (c) 2025-present, with the following [contributors](https://github.com/NethermindEth/starknet-staking-v2/graphs/contributors).
 
 Starknet Staking v2 is open-source software licensed under the [Apache-2.0 License](https://github.com/NethermindEth/starknet-staking-v2/blob/main/LICENSE).
 
