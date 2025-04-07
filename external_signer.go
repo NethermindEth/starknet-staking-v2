@@ -11,7 +11,7 @@ import (
 )
 
 type SignRequest struct {
-	Hash felt.Felt `json:"hash"`
+	Hash string `json:"hash"`
 }
 
 type SignResponse struct {
@@ -20,7 +20,7 @@ type SignResponse struct {
 
 func signTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error) {
 	// Create request body
-	reqBody := SignRequest{Hash: *hash}
+	reqBody := SignRequest{Hash: hash.String()}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err
