@@ -27,7 +27,7 @@ func signTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error
 	}
 
 	// Make POST request
-	resp, err := http.Post(externalSignerUrl, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post(externalSignerUrl+"/sign_hash", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}
