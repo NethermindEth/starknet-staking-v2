@@ -19,7 +19,7 @@ type SignResponse struct {
 	Signature []*felt.Felt `json:"signature"`
 }
 
-func signTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error) {
+func SignTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error) {
 	// Create request body
 	reqBody := SignRequest{Hash: hash.String()}
 	jsonData, err := json.Marshal(reqBody)

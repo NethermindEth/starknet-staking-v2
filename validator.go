@@ -157,7 +157,7 @@ func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSign
 		return err
 	}
 
-	signResp, err := signTxHash(hash, externalSignerUrl)
+	signResp, err := SignTxHash(hash, externalSignerUrl)
 	if err != nil {
 		return err
 	}
