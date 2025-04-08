@@ -46,14 +46,10 @@ The config file must be a `.json` with the following fields:
 
 Once you have your own node set either built from source or through docker. [See how](https://github.com/NethermindEth/juno?tab=readme-ov-file#run-with-docker). 
 
-Run your node with both the `http` and `ws` flags set. One example using Juno through Docker:
+Run your node with both the `http` and `ws` flags set. One example using Juno built from source:
 
 ```bash
-docker run -d \
-  --name juno \
-  -p 6060:6060 \
-  -v $HOME/juno:/var/lib/juno \
-  nethermind/juno \
+./build/juno
   --db-path /var/lib/juno \
   --eth-node <YOUR-ETH-NODE>
   --http \
@@ -65,8 +61,8 @@ docker run -d \
 The configuration file properties will look like:
 ```json
 {
-    "httpProviderUrl": "http://localhost/6060/v0_8",
-    "wsProviderUrl": "ws://localhost/6061/v0_8"
+    "httpProviderUrl": "http://localhost:6060/v0_8",
+    "wsProviderUrl": "ws://localhost:6061/v0_8"
 }
 ```
 
