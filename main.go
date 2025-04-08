@@ -43,7 +43,7 @@ func LoadConfig(filePath string) (Config, error) {
 	return config, nil
 }
 
-func verifyLoadedConfig(config Config, useLocalSigner bool, useExternalSigner bool) error {
+func VerifyLoadedConfig(config Config, useLocalSigner bool, useExternalSigner bool) error {
 	if config.HttpProviderUrl == "" {
 		return missingConfigGeneralField("httpProviderUrl")
 	}
@@ -52,7 +52,7 @@ func verifyLoadedConfig(config Config, useLocalSigner bool, useExternalSigner bo
 		return missingConfigGeneralField("wsProviderUrl")
 	}
 
-	if config.OperationalAddress == (Address)(felt.Zero) {
+	if config.OperationalAddress == Address(felt.Zero) {
 		return missingConfigGeneralField("operationalAddress")
 	}
 
@@ -85,7 +85,7 @@ func NewCommand() cobra.Command {
 			return err
 		}
 
-		if err := verifyLoadedConfig(loadedConfig, useLocalSigner, useExternalSigner); err != nil {
+		if err := VerifyLoadedConfig(loadedConfig, useLocalSigner, useExternalSigner); err != nil {
 			return err
 		}
 

@@ -3,6 +3,7 @@ package main_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -88,6 +89,99 @@ func writeMockConfigToTemporaryFile(t *testing.T, config main.Config) string {
 	return tmpFile.Name()
 }
 
+func TestVerifyLoadedConfig(t *testing.T) {
+	t.Run("Missing httpProviderUrl", func(t *testing.T) {
+		config := main.Config{
+			WsProviderUrl:     "ws://localhost:1235",
+			ExternalSignerUrl: "http://localhost:5678",
+			AccountData: main.AccountData{
+				PrivKey:            "0x123",
+				OperationalAddress: main.AddressFromString("0x456"),
+			},
+		}
+
+		err := main.VerifyLoadedConfig(config, true, false)
+
+		require.Equal(t, errors.New("you must specify the httpProviderUrl field in the config.json"), err)
+	})
+
+	t.Run("Missing wsProviderUrl", func(t *testing.T) {
+		config := main.Config{
+			HttpProviderUrl:   "http://localhost:1234",
+			ExternalSignerUrl: "http://localhost:5678",
+			AccountData: main.AccountData{
+				PrivKey:            "0x123",
+				OperationalAddress: main.AddressFromString("0x456"),
+			},
+		}
+
+		err := main.VerifyLoadedConfig(config, true, false)
+
+		require.Equal(t, errors.New("you must specify the wsProviderUrl field in the config.json"), err)
+	})
+
+	t.Run("Missing operationalAddress", func(t *testing.T) {
+		config := main.Config{
+			HttpProviderUrl:   "http://localhost:1234",
+			WsProviderUrl:     "ws://localhost:1235",
+			ExternalSignerUrl: "http://localhost:5678",
+			AccountData: main.AccountData{
+				PrivKey: "0x123",
+			},
+		}
+
+		err := main.VerifyLoadedConfig(config, true, false)
+
+		require.Equal(t, errors.New("you must specify the operationalAddress field in the config.json"), err)
+	})
+
+	t.Run("Both local and external signer flags are used", func(t *testing.T) {
+		config := main.Config{
+			HttpProviderUrl:   "http://localhost:1234",
+			WsProviderUrl:     "ws://localhost:1235",
+			ExternalSignerUrl: "http://localhost:5678",
+			AccountData: main.AccountData{
+				PrivKey:            "0x123",
+				OperationalAddress: main.AddressFromString("0x456"),
+			},
+		}
+
+		err := main.VerifyLoadedConfig(config, true, true)
+
+		require.Equal(t, errors.New("you must specify exactly one of --local-signer or --external-signer"), err)
+	})
+
+	t.Run("Local signer flag is used but no private key is specified", func(t *testing.T) {
+		config := main.Config{
+			HttpProviderUrl:   "http://localhost:1234",
+			WsProviderUrl:     "ws://localhost:1235",
+			ExternalSignerUrl: "http://localhost:5678",
+			AccountData: main.AccountData{
+				OperationalAddress: main.AddressFromString("0x456"),
+			},
+		}
+
+		err := main.VerifyLoadedConfig(config, true, false)
+
+		require.Equal(t, errors.New("you must specify the privateKey field in the config.json when using --local-signer flag"), err)
+	})
+
+	t.Run("External signer flag is used but no external signer URL is specified", func(t *testing.T) {
+		config := main.Config{
+			HttpProviderUrl: "http://localhost:1234",
+			WsProviderUrl:   "ws://localhost:1235",
+			AccountData: main.AccountData{
+				PrivKey:            "0x123",
+				OperationalAddress: main.AddressFromString("0x456"),
+			},
+		}
+
+		err := main.VerifyLoadedConfig(config, false, true)
+
+		require.Equal(t, errors.New("you must specify the externalSignerUrl field in the config.json when using --external-signer flag"), err)
+	})
+}
+
 func TestNewCommand(t *testing.T) {
 	t.Run("Command contains expected fields", func(t *testing.T) {
 		command := main.NewCommand()
@@ -103,7 +197,7 @@ func TestNewCommand(t *testing.T) {
 		require.Equal(t, `unknown command "config" for "starknet-staking-v2"`, err.Error())
 	})
 
-	t.Run("PreRunE returns an error", func(t *testing.T) {
+	t.Run("PreRunE returns an error: cannot load config", func(t *testing.T) {
 		command := main.NewCommand()
 
 		command.SetArgs([]string{"--config", "some inexisting file name"})
@@ -122,6 +216,39 @@ func TestNewCommand(t *testing.T) {
 
 		err = command.ExecuteContext(context.Background())
 		require.ErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("PreRunE returns an error: config verification fails", func(t *testing.T) {
+		command := main.NewCommand()
+
+		mockedConfig := main.Config{
+			HttpProviderUrl: "http://localhost:1234",
+			WsProviderUrl:   "ws://localhost:1235",
+			AccountData: main.AccountData{
+				OperationalAddress: main.AddressFromString("0x456"),
+			},
+		}
+		tmpFilePath := writeMockConfigToTemporaryFile(t, mockedConfig)
+
+		// Remove temporary file at the end of test
+		defer os.Remove(tmpFilePath)
+
+		command.SetArgs([]string{"--config", tmpFilePath, "--external-signer"})
+
+		// Not ideal but a temporary file where to redirect stderr to avoid polluting the console with unwanted cli prints
+		tmpFile, err := os.CreateTemp("", "test_output_")
+		require.NoError(t, err)
+
+		originalStderr := os.Stderr
+		// Redirect stderr to the temporary file
+		os.Stderr = tmpFile
+
+		defer tmpFile.Close()
+		defer os.Remove(tmpFile.Name())
+		defer func() { os.Stderr = originalStderr }()
+
+		err = command.ExecuteContext(context.Background())
+		require.Equal(t, errors.New("you must specify the externalSignerUrl field in the config.json when using --external-signer flag"), err)
 	})
 
 	t.Run("Full command setup works", func(t *testing.T) {
