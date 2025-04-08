@@ -156,6 +156,22 @@ func TestNewExternalSigner(t *testing.T) {
 		require.Nil(t, err)
 	})
 }
+
+func TestExternalSignerAddress(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	t.Cleanup(mockCtrl.Finish)
+
+	t.Run("Return signer address", func(t *testing.T) {
+		address := "0x123"
+		externalSigner := main.ExternalSigner{
+			OperationalAddress: main.AddressFromString(address),
+		}
+
+		addrFelt := externalSigner.Address()
+
+		require.Equal(t, address, addrFelt.String())
+	})
+}
 func TestFetchEpochInfo(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
