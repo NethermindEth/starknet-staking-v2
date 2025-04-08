@@ -49,11 +49,12 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Run("Successfully load config", func(t *testing.T) {
 		mockedConfig := main.Config{
-			HttpProviderUrl: "http://localhost:1234",
-			WsProviderUrl:   "ws://localhost:1235",
+			HttpProviderUrl:   "http://localhost:1234",
+			WsProviderUrl:     "ws://localhost:1235",
+			ExternalSignerUrl: "http://localhost:5678",
 			AccountData: main.AccountData{
 				PrivKey:            "0x123",
-				OperationalAddress: "0x456",
+				OperationalAddress: main.AddressFromString("0x456"),
 			},
 		}
 
@@ -131,7 +132,7 @@ func TestNewCommand(t *testing.T) {
 			WsProviderUrl:   "ws://localhost:1235",
 			AccountData: main.AccountData{
 				PrivKey:            "0x123",
-				OperationalAddress: "0x456",
+				OperationalAddress: main.AddressFromString("0x456"),
 			},
 		}
 		tmpFilePath := writeMockConfigToTemporaryFile(t, mockedConfig)
@@ -139,7 +140,7 @@ func TestNewCommand(t *testing.T) {
 		// Remove temporary file at the end of test
 		defer os.Remove(tmpFilePath)
 
-		command.SetArgs([]string{"--config", tmpFilePath})
+		command.SetArgs([]string{"--config", tmpFilePath, "--local-signer"})
 
 		// Not ideal but a temporary file where to redirect stderr to avoid polluting the console with unwanted cli prints
 		tmpFile, err := os.CreateTemp("", "test_output_")
