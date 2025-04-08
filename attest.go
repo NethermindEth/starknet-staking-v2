@@ -32,7 +32,7 @@ func Attest(config Config) error {
 		}
 		account = &validatorAccount
 	} else {
-		externalSigner, err := newExternalSigner(provider, config.AccountData.OperationalAddress, config.ExternalSignerUrl)
+		externalSigner, err := NewExternalSigner(provider, config.AccountData.OperationalAddress, config.ExternalSignerUrl)
 		if err != nil {
 			return err
 		}

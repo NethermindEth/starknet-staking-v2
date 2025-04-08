@@ -117,6 +117,45 @@ func TestNewValidatorAccount(t *testing.T) {
 	})
 }
 
+func TestNewExternalSigner(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	t.Cleanup(mockCtrl.Finish)
+
+	t.Run("Error getting chain ID", func(t *testing.T) {
+		// Setup
+		provider, providerErr := rpc.NewProvider("http://localhost:1234")
+		require.NoError(t, providerErr)
+
+		operationalAddress := main.AddressFromString("0x123")
+		externalSignerUrl := "http://localhost:1234"
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, externalSignerUrl)
+
+		require.Zero(t, externalSigner)
+		require.Error(t, err)
+	})
+
+	t.Run("Successful provider creation", func(t *testing.T) {
+		// Setup
+		env := loadEnv(t)
+		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
+		require.NoError(t, providerErr)
+
+		operationalAddress := main.AddressFromString("0x123")
+		externalSignerUrl := "http://localhost:1234"
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, externalSignerUrl)
+
+		// Expected chain ID from rpc provider at env.HTTP_PROVIDER_URL is "SN_SEPOLIA"
+		expectedChainId := new(felt.Felt).SetBytes([]byte("SN_SEPOLIA"))
+		expectedExternalSigner := main.ExternalSigner{
+			Provider:           provider,
+			OperationalAddress: operationalAddress,
+			ExternalSignerUrl:  externalSignerUrl,
+			ChainId:            *expectedChainId,
+		}
+		require.Equal(t, expectedExternalSigner, externalSigner)
+		require.Nil(t, err)
+	})
+}
 func TestFetchEpochInfo(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)

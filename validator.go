@@ -85,12 +85,12 @@ func (v *ValidatorAccount) Address() *felt.Felt {
 
 type ExternalSigner struct {
 	*rpc.Provider
-	operationalAddress Address
-	externalSignerUrl  string
-	chainId            felt.Felt
+	OperationalAddress Address
+	ExternalSignerUrl  string
+	ChainId            felt.Felt
 }
 
-func newExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) (ExternalSigner, error) {
+func NewExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) (ExternalSigner, error) {
 	chainID, err := provider.ChainID(context.Background())
 	if err != nil {
 		return ExternalSigner{}, err
@@ -99,14 +99,14 @@ func newExternalSigner(provider *rpc.Provider, operationalAddress Address, exter
 
 	return ExternalSigner{
 		Provider:           provider,
-		operationalAddress: operationalAddress,
-		externalSignerUrl:  externalSignerUrl,
-		chainId:            *chainId,
+		OperationalAddress: operationalAddress,
+		ExternalSignerUrl:  externalSignerUrl,
+		ChainId:            *chainId,
 	}, nil
 }
 
 func (s *ExternalSigner) Address() *felt.Felt {
-	addrFelt := s.operationalAddress.ToFelt()
+	addrFelt := s.OperationalAddress.ToFelt()
 	return &addrFelt
 }
 
