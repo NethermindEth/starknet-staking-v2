@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/NethermindEth/juno/core/felt"
 )
@@ -36,6 +38,11 @@ func signTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if status code indicates an error (non-2xx)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("Server error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var signResp SignResponse

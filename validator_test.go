@@ -172,6 +172,107 @@ func TestExternalSignerAddress(t *testing.T) {
 		require.Equal(t, address, addrFelt.String())
 	})
 }
+func TestSignInvokeTx(t *testing.T) {
+
+	t.Run("Error hashing tx", func(t *testing.T) {
+		invokeTx := rpc.InvokeTxnV3{}
+		err := main.SignInvokeTx(&invokeTx, &felt.Felt{}, "url not getting called anyway")
+
+		require.Equal(t, ([]*felt.Felt)(nil), invokeTx.Signature)
+		require.EqualError(t, err, "not all neccessary parameters have been set")
+	})
+
+	t.Run("Error signing tx", func(t *testing.T) {
+		invokeTx := rpc.InvokeTxnV3{
+			Type:          rpc.TransactionType_Invoke,
+			SenderAddress: utils.HexToFelt(t, "0x123"),
+			Calldata:      []*felt.Felt{utils.HexToFelt(t, "0x456")},
+			Version:       rpc.TransactionV3,
+			Signature:     []*felt.Felt{},
+			Nonce:         utils.HexToFelt(t, "0x1"),
+			ResourceBounds: rpc.ResourceBoundsMapping{
+				L1Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
+				L2Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
+				L1DataGas: rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
+			},
+			Tip:                   "0x0",
+			PayMasterData:         []*felt.Felt{},
+			AccountDeploymentData: []*felt.Felt{},
+			NonceDataMode:         rpc.DAModeL1,
+			FeeMode:               rpc.DAModeL1,
+		}
+
+		serverError := "some internal error"
+		// Create a mock server
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate API response
+			http.Error(w, serverError, http.StatusInternalServerError)
+		}))
+		defer mockServer.Close()
+
+		err := main.SignInvokeTx(&invokeTx, &felt.Felt{}, mockServer.URL)
+
+		require.Equal(t, []*felt.Felt{}, invokeTx.Signature)
+		expectedErrorMsg := fmt.Sprintf("Server error %d: %s", http.StatusInternalServerError, serverError)
+		require.EqualError(t, err, expectedErrorMsg)
+	})
+
+	t.Run("Successful signing", func(t *testing.T) {
+		invokeTx := rpc.InvokeTxnV3{
+			Type:          rpc.TransactionType_Invoke,
+			SenderAddress: utils.HexToFelt(t, "0x123"),
+			Calldata:      []*felt.Felt{utils.HexToFelt(t, "0x456")},
+			Version:       rpc.TransactionV3,
+			Signature:     []*felt.Felt{},
+			Nonce:         utils.HexToFelt(t, "0x1"),
+			ResourceBounds: rpc.ResourceBoundsMapping{
+				L1Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
+				L2Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
+				L1DataGas: rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
+			},
+			Tip:                   "0x0",
+			PayMasterData:         []*felt.Felt{},
+			AccountDeploymentData: []*felt.Felt{},
+			NonceDataMode:         rpc.DAModeL1,
+			FeeMode:               rpc.DAModeL1,
+		}
+
+		expectedTxHash, err := hash.TransactionHashInvokeV3(&invokeTx, &felt.Felt{})
+		require.NoError(t, err)
+
+		sigPart1 := "0x123"
+		sigPart2 := "0x456"
+
+		// Create a mock server
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate API response
+			w.WriteHeader(http.StatusOK)
+
+			// Read and decode JSON body
+			bodyBytes, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			defer r.Body.Close()
+
+			var req main.SignRequest
+			err = json.Unmarshal(bodyBytes, &req)
+			require.NoError(t, err)
+
+			// Making sure received hash is the expected one
+			require.Equal(t, expectedTxHash.String(), req.Hash)
+
+			w.Write([]byte(fmt.Sprintf(`{"signature": ["%s", "%s"]}`, sigPart1, sigPart2)))
+		}))
+		defer mockServer.Close()
+
+		err = main.SignInvokeTx(&invokeTx, &felt.Felt{}, mockServer.URL)
+
+		expectedSignature := []*felt.Felt{utils.HexToFelt(t, sigPart1), utils.HexToFelt(t, sigPart2)}
+		require.Equal(t, expectedSignature, invokeTx.Signature)
+		require.NoError(t, err)
+	})
+
+}
+
 func TestFetchEpochInfo(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)

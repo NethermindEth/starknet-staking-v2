@@ -125,7 +125,7 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 
 	// Building and signing the txn, as it needs a signature to estimate the fee
 	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(s.Address(), nonce, formattedCallData, makeResourceBoundsMapWithZeroValues())
-	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId, s.externalSignerUrl); err != nil {
+	if err := SignInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.ChainId, s.ExternalSignerUrl); err != nil {
 		return nil, err
 	}
 
@@ -139,7 +139,7 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
 
 	// Signing the txn again with the estimated fee, as the fee value is used in the txn hash calculation
-	if err := signInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId, s.externalSignerUrl); err != nil {
+	if err := SignInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.ChainId, s.ExternalSignerUrl); err != nil {
 		return nil, err
 	}
 
@@ -151,7 +151,7 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	return txRes, nil
 }
 
-func signInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
+func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
 	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
 	if err != nil {
 		return err
