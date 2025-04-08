@@ -31,6 +31,10 @@ type envVariable struct {
 	wsProviderUrl   string
 }
 
+type Method struct {
+	Name string `json:"method"`
+}
+
 func NewAccountData(privKey string, address string) main.AccountData {
 	return main.AccountData{
 		PrivKey:            privKey,
@@ -247,6 +251,150 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.Nil(t, addInvokeTxRes)
 		require.Contains(t, err.Error(), "Account: invalid signature")
 	})
+	t.Run("Error signing transaction the second time (for the actual invoke tx)", func(t *testing.T) {
+		mockRpc := createMockRpcServer(t, nil)
+		defer mockRpc.Close()
+
+		signerCalledCount := 0
+		signerInternalError := "error when signing the 2nd time"
+		mockSigner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			signerCalledCount++
+			if signerCalledCount == 1 {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
+			} else {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(signerInternalError))
+			}
+		}))
+		defer mockSigner.Close()
+
+		provider, providerErr := rpc.NewProvider(mockRpc.URL)
+		require.NoError(t, providerErr)
+
+		operationalAddress := main.AddressFromString("0xabc")
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockSigner.URL)
+		require.NoError(t, err)
+
+		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
+
+		require.Nil(t, addInvokeTxRes)
+
+		expectedErrorMsg := fmt.Sprintf("Server error %d: %s", http.StatusInternalServerError, signerInternalError)
+		require.EqualError(t, err, expectedErrorMsg)
+
+		require.Equal(t, 2, signerCalledCount)
+	})
+
+	t.Run("Error invoking transaction", func(t *testing.T) {
+		serverInternalError := "Error processing invoke transaction"
+
+		addInvoke := func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(serverInternalError))
+		}
+		mockRpc := createMockRpcServer(t, addInvoke)
+		defer mockRpc.Close()
+
+		mockSigner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
+		}))
+		defer mockSigner.Close()
+
+		provider, providerErr := rpc.NewProvider(mockRpc.URL)
+		require.NoError(t, providerErr)
+
+		operationalAddress := main.AddressFromString("0xabc")
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockSigner.URL)
+		require.NoError(t, err)
+
+		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
+
+		require.Nil(t, addInvokeTxRes)
+		expectedServerErr := fmt.Sprintf("%d Internal Server Error: %s", http.StatusInternalServerError, serverInternalError)
+		expectedError := rpc.RPCError{
+			Code:    rpc.InternalError,
+			Message: "The error is not a valid RPC error",
+			Data:    rpc.StringErrData(expectedServerErr),
+		}
+		require.EqualError(t, err, expectedError.Error())
+	})
+
+	t.Run("Successfully sent and received transaction hash", func(t *testing.T) {
+		expectedInvokeTxHash := "0x789"
+
+		addInvoke := func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(fmt.Sprintf(`{"jsonrpc": "2.0", "result": {"transaction_hash": "%s"}, "id": 1}`, expectedInvokeTxHash)))
+		}
+		mockRpc := createMockRpcServer(t, addInvoke)
+		defer mockRpc.Close()
+
+		mockSigner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
+		}))
+		defer mockSigner.Close()
+
+		provider, providerErr := rpc.NewProvider(mockRpc.URL)
+		require.NoError(t, providerErr)
+
+		operationalAddress := main.AddressFromString("0xabc")
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockSigner.URL)
+		require.NoError(t, err)
+
+		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
+
+		require.Equal(t, &rpc.AddInvokeTransactionResponse{TransactionHash: utils.HexToFelt(t, expectedInvokeTxHash)}, addInvokeTxRes)
+		require.Nil(t, err)
+	})
+}
+
+func createMockRpcServer(t *testing.T, addInvoke func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
+	t.Helper()
+
+	mockRpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Read and decode JSON body
+		bodyBytes, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		defer r.Body.Close()
+
+		var req Method
+		err = json.Unmarshal(bodyBytes, &req)
+		require.NoError(t, err)
+
+		switch req.Name {
+		case "starknet_chainId":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x1", "id": 1}`))
+		case "starknet_getNonce":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x2", "id": 1}`))
+		case "starknet_estimateFee":
+			mockFeeEstimate := []rpc.FeeEstimation{{
+				L1GasConsumed:     utils.HexToFelt(t, "0x123"),
+				L1GasPrice:        utils.HexToFelt(t, "0x456"),
+				L2GasConsumed:     utils.HexToFelt(t, "0x123"),
+				L2GasPrice:        utils.HexToFelt(t, "0x456"),
+				L1DataGasConsumed: utils.HexToFelt(t, "0x123"),
+				L1DataGasPrice:    utils.HexToFelt(t, "0x456"),
+				OverallFee:        utils.HexToFelt(t, "0x123"),
+				FeeUnit:           rpc.UnitStrk,
+			}}
+			feeEstBytes, err := json.Marshal(mockFeeEstimate)
+			require.NoError(t, err)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(fmt.Sprintf(`{"jsonrpc": "2.0", "result": %s, "id": 1}`, string(feeEstBytes))))
+		case "starknet_addInvokeTransaction":
+			addInvoke(w, r)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte(`Should not get here`))
+		}
+	}))
+
+	return mockRpc
 }
 
 func TestSignInvokeTx(t *testing.T) {
