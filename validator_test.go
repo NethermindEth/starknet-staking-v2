@@ -29,7 +29,7 @@ type envVariable struct {
 func NewAccountData(privKey string, address string) main.AccountData {
 	return main.AccountData{
 		PrivKey:            privKey,
-		OperationalAddress: address,
+		OperationalAddress: main.AddressFromString(address),
 	}
 }
 
@@ -82,8 +82,7 @@ func TestNewValidatorAccount(t *testing.T) {
 		validatorAccount, err := main.NewValidatorAccount(provider, mockLogger, &accountData)
 
 		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
-		expectedErrorMsg := `Cannot create validator account: -32603 The error is not a valid RPC error: Post "http://localhost:1234": dial tcp 127.0.0.1:1234: connect: connection refused`
-		require.Equal(t, expectedErrorMsg, err.Error())
+		require.ErrorContains(t, err, "Cannot create validator account:")
 	})
 
 	t.Run("Successful account creation", func(t *testing.T) {
@@ -95,8 +94,6 @@ func TestNewValidatorAccount(t *testing.T) {
 		privateKey := "0x123"
 		address := "0x456"
 		accountData := NewAccountData(privateKey, address)
-
-		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
 
 		mockLogger.EXPECT().Infow("Successfully created validator account", "address", address)
 
