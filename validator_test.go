@@ -2,9 +2,13 @@ package main_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -13,6 +17,7 @@ import (
 	main "github.com/NethermindEth/starknet-staking-v2"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet.go/account"
+	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/joho/godotenv"
@@ -172,6 +177,78 @@ func TestExternalSignerAddress(t *testing.T) {
 		require.Equal(t, address, addrFelt.String())
 	})
 }
+
+func TestBuildAndSendInvokeTxn(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	t.Cleanup(mockCtrl.Finish)
+
+	t.Run("Error getting nonce", func(t *testing.T) {
+		env := loadEnv(t)
+
+		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
+		require.NoError(t, providerErr)
+
+		operationalAddress := main.AddressFromString("0x123")
+		externalSignerUrl := "http://localhost:1234"
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, externalSignerUrl)
+		require.NoError(t, err)
+
+		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
+
+		require.Nil(t, addInvokeTxRes)
+		expectedError := rpc.RPCError{Code: 20, Message: "Contract not found"}
+		require.Equal(t, expectedError.Error(), err.Error())
+	})
+
+	t.Run("Error signing transaction the first time (for estimating fee)", func(t *testing.T) {
+		env := loadEnv(t)
+
+		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
+		require.NoError(t, providerErr)
+
+		serverError := "some internal error"
+		// Create a mock server
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate API response
+			http.Error(w, serverError, http.StatusInternalServerError)
+		}))
+		defer mockServer.Close()
+
+		operationalAddress := main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockServer.URL)
+		require.NoError(t, err)
+
+		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
+
+		require.Nil(t, addInvokeTxRes)
+		expectedErrorMsg := fmt.Sprintf("Server error %d: %s", http.StatusInternalServerError, serverError)
+		require.EqualError(t, err, expectedErrorMsg)
+	})
+
+	t.Run("Error estimating fee", func(t *testing.T) {
+		env := loadEnv(t)
+
+		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
+		require.NoError(t, providerErr)
+
+		// Create a mock server
+		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate API response
+			w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
+		}))
+		defer mockServer.Close()
+
+		operationalAddress := main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockServer.URL)
+		require.NoError(t, err)
+
+		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
+
+		require.Nil(t, addInvokeTxRes)
+		require.Contains(t, err.Error(), "Account: invalid signature")
+	})
+}
+
 func TestSignInvokeTx(t *testing.T) {
 
 	t.Run("Error hashing tx", func(t *testing.T) {
