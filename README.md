@@ -21,40 +21,35 @@ This will compile the project and place the binary in *./build/validator*.
 
 For executing the validator, just run:
 ```bash
-./build/validator --config <path_to_config_file> --[local/external]-signer
+./build/validator --config <path_to_config_file> 
 ```
 
-The config file must be a `.json` with the following fields:
+The config file is `.json` which specify two types `provider` and `signer`. For the `provider`, it requires for both an http and ws endpoints are made available with a node that supports rpc version 0.8.1. For the `signer`, you can use the internal provided by this software or one implemented by you.
 
-1. `privateKey`: For signing transactions from the operational address
-2. `operationalAddress`: Account address from where to do the attestation
-3. `httpProviderUrl`: Used to send the invoke transactions to the sequencer
-4. `wsProviderUrl`:  Used to subscribe to the block headers
-5. `externalSignerUrl`: External signer URL for signing attestation transactions
+Depending of the fields `signer` has set, it is stablished as either an internal (provided by us) or external (provided by you) signer. An internal signer has the `operationalAddress` and `privateKey` values set while an external one has the `operationalAddress` and `url` values set. The `url` must point to an address through which validating software and signer will communicate.
 
+A full config file would look like this:
 
 ```json
 {
-    "privateKey": "<private_key>",
-    "operationalAddress": "<operational_address>",
-    "httpProviderUrl": "<http_provider_url>",
-    "wsProviderUrl": "<ws_provider_url>",
-    "externalSignerUrl": "<external_signer_url>"
+  "provider": {
+      "http": "http://localhost:6060/v0_8",
+      "ws": "ws://localhost:1235/v0_8"
+  },
+  "signer": {
+      "url": "http://localhost:6061/v0_8",
+      "operationalAddress": "0x456"
+      "privateKey": "0x123", 
+  }
 }
 ```
 
-### Signatures
+If a signer is defined fully as in the example above, the external signer will take priority.
 
-There are two options for signing attestation transactions sent by the tool.
+## External Signer 
 
-- You can use `--local-signer` flag. In this case, you must set the `privateKey` of the operational account in the json config file.
-Using this first option, the app will sign the attestation transactions locally using your private key.
-- You can use `--external-signer` flag. In this case, you must set the `externalSignerUrl` field in the json config file.
-Using this second option, the app will send the attestation transaction hash to an external signer for signing.
+The external signer must implement a simple HTTP API, exposing a single `/sign` endpoint:
 
-#### External Signer (blind signing)
-
-The external signer must implement a simple HTTP API, exposing the single `/sign` endpoint:
 - POST `/sign`: should return the signature for the transaction hash received as its input:
 ```json
 {
@@ -70,16 +65,16 @@ Response should contain the ECDSA signature values r and s in an array:
   ]
 }
 ```
-A simple example implementation of the API is available [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
+An example implementation is provided [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
 
-### Additional features
+## Additional features
 
 1. Logging
 
 You have the possibility to give an additional flag `--log-level [info/debug/trace/warn/error]` to control the level of logging.
 If not set, the log level will default to `info`.
 
-### Example with Juno
+## Example with Juno
 
 Once you have your own node set either built from source or through docker. [See how](https://github.com/NethermindEth/juno?tab=readme-ov-file#run-with-docker).
 
@@ -98,12 +93,16 @@ Run your node with both the `http` and `ws` flags set. One example using Juno bu
 The configuration file properties will look like:
 ```json
 {
-    "httpProviderUrl": "http://localhost:6060/v0_8",
-    "wsProviderUrl": "ws://localhost:6061/v0_8"
+  "provider": {
+      "http": "http://localhost:6060/v0_8",
+      "ws": "ws://localhost:1235/v0_8"
+  },
+  "signer": {
+      "operationalAddress": "your operational address"
+      "privateKey": "your api key", 
+  }
 }
 ```
-
-It's important we specify the `v0_8` part so that we are routed through the right rpc version and not the node's default one.
 
 ##  License
 
