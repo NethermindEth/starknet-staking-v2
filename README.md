@@ -21,29 +21,67 @@ This will compile the project and place the binary in *./build/validator*.
 
 For executing the validator, just run:
 ```bash
-./build/validator --config <path_to_config_file>
+./build/validator --config <path_to_config_file> --[local/external]-signer
 ```
 
 The config file must be a `.json` with the following fields:
 
 1. `privateKey`: For signing transactions from the operational address
 2. `operationalAddress`: Account address from where to do the attestation
-3. `httpProviderUrl`: Used to send the invoke transactions to the sequencer 
+3. `httpProviderUrl`: Used to send the invoke transactions to the sequencer
 4. `wsProviderUrl`:  Used to subscribe to the block headers
+5. `externalSignerUrl`: External signer URL for signing attestation transactions
 
 
 ```json
 {
-    "privateKey": "<private_key>", 
+    "privateKey": "<private_key>", // In case --local-signer flag is used
     "operationalAddress": "<operational_address>",
-    "httpProviderUrl": "<http_provider_url>", 
-    "wsProviderUrl": "<ws_provider_url>" 
+    "httpProviderUrl": "<http_provider_url>",
+    "wsProviderUrl": "<ws_provider_url>",
+    "externalSignerUrl": "<external_signer_url>" // In case --external-signer flag is used
 }
 ```
 
+### Signatures
+
+There are two options for signing attestation transactions sent by the tool.
+
+- You can use `--local-signer` flag. In this case, you must set the `privateKey` of the operational account in the json config file.
+Using this first option, the app will sign the attestation transactions locally using your private key.
+- You can use `--external-signer` flag. In this case, you must set the `externalSignerUrl` field in the json config file.
+Using this second option, the app will send the attestation transaction hash to an external signer for signing.
+
+#### External Signer (blind signing)
+
+The external signer must implement a simple HTTP API, exposing the single `/sign` endpoint:
+- POST `/sign`: should return the signature for the transaction hash received as its input:
+```json
+{
+    "transactionHash": "0x123"
+}
+```
+Response should contain the ECDSA signature values r and s in an array:
+```json
+{
+  "signature": [
+    "0xabc",
+    "0xdef"
+  ]
+}
+```
+A simple example implementation of the API is available [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
+
+### Additional features
+
+1. Logging
+
+You have the possibility to give an additional flag `--log-level [info/debug/trace/warn/error]` to control the level of logging.
+If not set, the log level will default to `info`.
+
 ### Example with Juno
 
-Once you have your own node set either built from source or through docker. [See how](https://github.com/NethermindEth/juno?tab=readme-ov-file#run-with-docker). 
+Once you have your own node set either built from source or through docker. [See how](https://github.com/NethermindEth/juno?tab=readme-ov-file#run-with-docker).
 
 Run your node with both the `http` and `ws` flags set. One example using Juno built from source:
 

@@ -12,6 +12,7 @@ import (
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/cockroachdb/errors"
+	"github.com/joho/godotenv"
 )
 
 type SignRequest struct {
@@ -28,10 +29,10 @@ type Signer struct {
 }
 
 func loadEnv() string {
-	// err := godotenv.Load(".env")
-	// if err != nil {
-	// 	panic(errors.Join(errors.New("error loading '.env' file"), err))
-	// }
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Printf("No '.env' file found %s, will try looking for PRIVATE_KEY as a cli environment variable", err)
+	}
 
 	signerKey := os.Getenv("PRIVATE_KEY")
 	if signerKey == "" {
