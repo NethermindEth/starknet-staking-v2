@@ -56,7 +56,7 @@ The same basics applies as described in the previous section. The following comm
 ```bash
 ./build/validator \
     --provider-http "http://localhost:6060/v0_8" \
-    --provider-ws "ws://localhost:60601/v0_8" \
+    --provider-ws "ws://localhost:6061/v0_8" \
     --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
     --private-key "0x456"
@@ -70,7 +70,7 @@ Using a combination of both approaches is also valid. In this case, the values p
 ./build/validator \
     --config <path_to_config_file> \
     --provider-http "http://localhost:6060/v0_8" \
-    --provider-ws "ws://localhost:60601/v0_8" \
+    --provider-ws "ws://localhost:6061/v0_8" \
     --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
     --private-key "0x456"
