@@ -55,7 +55,7 @@ func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, account
 		return ValidatorAccount{}, errors.Errorf("Cannot create validator account: %s", err)
 	}
 
-	logger.Infow("Successfully created validator account", "address", accountAddrFelt.String())
+	logger.Debugw("Validator account has been set up", "address", accountAddrFelt.String())
 	return ValidatorAccount(*account), nil
 }
 
@@ -290,7 +290,7 @@ func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, log
 		return EpochInfo{}, AttestInfo{}, err
 	}
 	logger.Infow(
-		"Successfully fetched epoch info",
+		"Fetched epoch info",
 		"epoch ID", epochInfo.EpochId,
 		"epoch starting block", epochInfo.CurrentEpochStartingBlock,
 		"epoch ending block", epochInfo.CurrentEpochStartingBlock+BlockNumber(epochInfo.EpochLen),
@@ -301,7 +301,7 @@ func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, log
 		return EpochInfo{}, AttestInfo{}, windowErr
 	}
 
-	blockNum := ComputeBlockNumberToAttestTo(account, epochInfo, attestWindow)
+	blockNum := ComputeBlockNumberToAttestTo(account, &epochInfo, attestWindow)
 
 	attestInfo := AttestInfo{
 		TargetBlock: blockNum,
@@ -309,7 +309,7 @@ func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, log
 		WindowEnd:   blockNum + BlockNumber(attestWindow),
 	}
 
-	logger.Infow("Successfully computed target block to attest to", "epoch ID", epochInfo.EpochId, "attestation info", attestInfo)
+	logger.Infow("Computed target block to attest to", "epoch ID", epochInfo.EpochId, "attestation info", attestInfo)
 	return epochInfo, attestInfo, nil
 }
 

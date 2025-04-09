@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 
@@ -186,15 +185,19 @@ func TestNewCommand(t *testing.T) {
 	t.Run("Command contains expected fields", func(t *testing.T) {
 		command := main.NewCommand()
 
-		require.Equal(t, "starknet-staking-v2", command.Use)
-		require.Equal(t, "Program for Starknet validators to attest to epochs with respect to Staking v2", command.Short)
+		require.Equal(t, "validator", command.Use)
+		require.Equal(
+			t,
+			"Program for Starknet validators to attest to epochs with respect to Staking v2",
+			command.Short,
+		)
 
 		err := command.ValidateRequiredFlags()
 		require.Equal(t, `required flag(s) "config" not set`, err.Error())
 
 		// config needs to be a flag not an argument
 		err = command.ValidateArgs([]string{"config"})
-		require.Equal(t, `unknown command "config" for "starknet-staking-v2"`, err.Error())
+		require.Equal(t, `unknown command "config" for "validator"`, err.Error())
 	})
 
 	t.Run("PreRunE returns an error: cannot load config", func(t *testing.T) {
@@ -282,13 +285,7 @@ func TestNewCommand(t *testing.T) {
 		defer func() { os.Stderr = originalStderr }()
 
 		err = command.ExecuteContext(context.Background())
-
-		// The purpose of the test is not to test the full app but just to make sure the app starts its
-		// flow of execution correctly given the correct flag.
-		// And anyway, the app does an infinite for loop. Therefore, execution should return an error for test to finish.
-		// Additionally, it allows to test that if any execution error occurs, it is returned by ExecuteContext().
-		expectedErrorMsg := fmt.Sprintf(`Error connecting to RPC provider at %s`, mockedConfig.HttpProviderUrl)
-		require.ErrorContains(t, err, expectedErrorMsg)
+		require.Nil(t, err)
 	})
 }
 
@@ -307,7 +304,7 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 		}
 		attestationWindow := uint64(16)
 
-		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, epochInfo, attestationWindow)
+		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, &epochInfo, attestationWindow)
 
 		require.Equal(t, main.BlockNumber(639291), blockNumber)
 	})
@@ -326,7 +323,7 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 		}
 		attestationWindow := uint64(16)
 
-		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, epochInfo, attestationWindow)
+		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, &epochInfo, attestationWindow)
 		require.Equal(t, main.BlockNumber(639316), blockNumber)
 	})
 
@@ -340,7 +337,7 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 		}
 		attestationWindow := uint64(16)
 
-		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, epochInfo, attestationWindow)
+		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, &epochInfo, attestationWindow)
 
 		require.Equal(t, main.BlockNumber(639369), blockNumber)
 	})

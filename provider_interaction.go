@@ -20,7 +20,7 @@ func NewProvider[Log Logger](providerUrl string, logger Log) (*rpc.Provider, err
 		return nil, errors.Errorf("Error connecting to RPC provider at %s: %s", providerUrl, err)
 	}
 
-	logger.Infow("Successfully connected to RPC provider", "providerUrl", "*****")
+	logger.Infof("Connected to RPC at %s", providerUrl)
 	return provider, nil
 }
 
@@ -28,18 +28,21 @@ func NewProvider[Log Logger](providerUrl string, logger Log) (*rpc.Provider, err
 func BlockHeaderSubscription[Log Logger](wsProviderUrl string, logger Log) (
 	*rpc.WsProvider, chan *rpc.BlockHeader, error,
 ) {
-	// Initialize connection to WS provider
+	logger.Debugw("Initializing websocket connection", "wsProviderUrl", wsProviderUrl)
 	wsProvider, err := rpc.NewWebsocketProvider(wsProviderUrl)
 	if err != nil {
 		return nil, nil, errors.Errorf("Error dialing the WS provider at %s: %s", wsProviderUrl, err)
 	}
 
+	logger.Debugw("Subscribing to new block headers")
 	headersFeed := make(chan *rpc.BlockHeader)
-	clientSubscription, err := wsProvider.SubscribeNewHeads(context.Background(), headersFeed, rpc.BlockID{Tag: "latest"})
+	clientSubscription, err := wsProvider.SubscribeNewHeads(
+		context.Background(), headersFeed, rpc.BlockID{Tag: "latest"},
+	)
 	if err != nil {
 		return nil, nil, errors.Errorf("Error subscribing to new block headers: %s", err)
 	}
 
-	logger.Infow("Successfully subscribed to new block headers", "Subscription ID", clientSubscription.ID())
+	logger.Infof("Subscribed to new block headers", "Subscription ID", clientSubscription.ID())
 	return wsProvider, headersFeed, nil
 }
