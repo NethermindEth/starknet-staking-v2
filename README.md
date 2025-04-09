@@ -35,11 +35,11 @@ The config file must be a `.json` with the following fields:
 
 ```json
 {
-    "privateKey": "<private_key>", // In case --local-signer flag is used
+    "privateKey": "<private_key>",
     "operationalAddress": "<operational_address>",
     "httpProviderUrl": "<http_provider_url>",
     "wsProviderUrl": "<ws_provider_url>",
-    "externalSignerUrl": "<external_signer_url>" // In case --external-signer flag is used
+    "externalSignerUrl": "<external_signer_url>"
 }
 ```
 
