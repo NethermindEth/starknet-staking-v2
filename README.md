@@ -21,7 +21,7 @@ This will compile the project and place the binary in *./build/validator*.
 
 To run the validator it needs certain data specified such as the node to connect to and the operational address of the staker. This data can be provided in two ways, either through a configuration file or through flags directly in the app.
 
-### With a config file
+### With a configuration file
 
 After compiling the validator, run:
 ```bash
@@ -41,7 +41,7 @@ A full config file would look like this:
       "ws": "ws://localhost:6061/v0_8"
   },
   "signer": {
-      "url": "http://localhost:8080/v0_8",
+      "url": "http://localhost:8080",
       "operationalAddress": "0x123"
       "privateKey": "0x456", 
   }
@@ -52,12 +52,26 @@ If a signer is defined with both private key and external url, the program will 
 
 ### With flags
 
-The same basics applies as the previous section. Run the validator with the following command:
+The same basics applies as described in the previous section. The following command runs the validator and provides all the necessary information about provider and signer:
 ```bash
 ./build/validator \
     --provider-http "http://localhost:6060/v0_8" \
     --provider-ws "ws://localhost:60601/v0_8" \
     --signer-url "http//localhost:8080/v0_8" \
+    --signer-op-address "0x123" \
+    --private-key "0x456"
+```
+
+### With configuration file and flags
+
+Using a combination of both approaches is also valid. In this case, the values provided by the flags override the values provided by the configuration file.
+
+```bash
+./build/validator \
+    --config <path_to_config_file> \
+    --provider-http "http://localhost:6060/v0_8" \
+    --provider-ws "ws://localhost:60601/v0_8" \
+    --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
     --private-key "0x456"
 ```
