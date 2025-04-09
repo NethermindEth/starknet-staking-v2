@@ -35,13 +35,6 @@ type Method struct {
 	Name string `json:"method"`
 }
 
-func NewAccountData(privKey string, address string) main.AccountData {
-	return main.AccountData{
-		PrivKey:            privKey,
-		OperationalAddress: main.AddressFromString(address),
-	}
-}
-
 func loadEnv(t *testing.T) (envVariable, error) {
 	t.Helper()
 
@@ -69,7 +62,7 @@ func TestNewValidatorAccount(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger, err := utils.NewZapLogger(utils.DEBUG, true)
+	logger := utils.NewNopZapLogger()
 	envVars, err := loadEnv(t)
 	loadedEnvVars := err == nil
 
@@ -79,7 +72,7 @@ func TestNewValidatorAccount(t *testing.T) {
 			require.NoError(t, providerErr)
 
 			validatorAccount, err := main.NewValidatorAccount(
-				provider, logger, &main.AccountData{},
+				provider, logger, &main.Signer{},
 			)
 
 			require.Equal(t, main.ValidatorAccount{}, validatorAccount)
@@ -92,23 +85,25 @@ func TestNewValidatorAccount(t *testing.T) {
 			provider, providerErr := rpc.NewProvider(envVars.httpProviderUrl)
 			require.NoError(t, providerErr)
 
-			privateKey := "0x123"
-			address := "0x456"
-			accountData := NewAccountData(privateKey, address)
+			signer := main.Signer{
+				PrivKey:            "0x123",
+				OperationalAddress: main.AddressFromString("0x456"),
+			}
 
 			// Test
-			validatorAccount, err := main.NewValidatorAccount(provider, logger, &accountData)
+			validatorAccount, err := main.NewValidatorAccount(provider, logger, &signer)
 
 			// Assert
-			accountAddrFelt, stringToFeltErr := new(felt.Felt).SetString(address)
-			require.NoError(t, stringToFeltErr)
+			accountAddr := signer.OperationalAddress.ToFelt()
 
-			privateKeyBigInt := big.NewInt(291) // 291 is "0x123" as int
+			privateKeyBigInt := big.NewInt(0x123)
 			// This is the public key for private key "0x123"
 			publicKey := "2443263864760624031255983690848140455871762770061978316256189704907682682390"
 			ks := account.SetNewMemKeystore(publicKey, privateKeyBigInt)
 
-			expectedValidatorAccount, accountErr := account.NewAccount(provider, accountAddrFelt, publicKey, ks, 2)
+			expectedValidatorAccount, accountErr := account.NewAccount(
+				provider, &accountAddr, publicKey, ks, 2,
+			)
 			require.NoError(t, accountErr)
 			require.Equal(t, main.ValidatorAccount(*expectedValidatorAccount), validatorAccount)
 
@@ -122,9 +117,10 @@ func TestNewValidatorAccount(t *testing.T) {
 		provider, providerErr := rpc.NewProvider("http://localhost:1234")
 		require.NoError(t, providerErr)
 
-		privateKey := "0x123"
-		address := "0x456"
-		accountData := NewAccountData(privateKey, address)
+		accountData := main.Signer{
+			PrivKey:            "0x123",
+			OperationalAddress: main.AddressFromString("0x456"),
+		}
 		validatorAccount, err := main.NewValidatorAccount(provider, logger, &accountData)
 
 		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
@@ -141,9 +137,11 @@ func TestNewExternalSigner(t *testing.T) {
 		provider, providerErr := rpc.NewProvider("http://localhost:1234")
 		require.NoError(t, providerErr)
 
-		operationalAddress := main.AddressFromString("0x123")
-		externalSignerUrl := "http://localhost:1234"
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, externalSignerUrl)
+		signer := main.Signer{
+			ExternalUrl:        "http://localhost:1234",
+			OperationalAddress: main.AddressFromString("0x123"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 
 		require.Zero(t, externalSigner)
 		require.Error(t, err)
@@ -159,16 +157,18 @@ func TestNewExternalSigner(t *testing.T) {
 		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
 		require.NoError(t, providerErr)
 
-		operationalAddress := main.AddressFromString("0x123")
-		externalSignerUrl := "http://localhost:1234"
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, externalSignerUrl)
+		signer := main.Signer{
+			ExternalUrl:        "http://localhost:1234",
+			OperationalAddress: main.AddressFromString("0x123"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 
 		// Expected chain ID from rpc provider at env.HTTP_PROVIDER_URL is "SN_SEPOLIA"
 		expectedChainId := new(felt.Felt).SetBytes([]byte("SN_SEPOLIA"))
 		expectedExternalSigner := main.ExternalSigner{
 			Provider:           provider,
-			OperationalAddress: operationalAddress,
-			ExternalSignerUrl:  externalSignerUrl,
+			OperationalAddress: signer.OperationalAddress,
+			ExternalSignerUrl:  signer.ExternalUrl,
 			ChainId:            *expectedChainId,
 		}
 		require.Equal(t, expectedExternalSigner, externalSigner)
@@ -205,9 +205,11 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		provider, providerErr := rpc.NewProvider(env.httpProviderUrl)
 		require.NoError(t, providerErr)
 
-		operationalAddress := main.AddressFromString("0x123")
-		externalSignerUrl := "http://localhost:1234"
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, externalSignerUrl)
+		signer := main.Signer{
+			ExternalUrl:        "http://localhost:1234",
+			OperationalAddress: main.AddressFromString("0x123"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
@@ -234,8 +236,11 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		}))
 		defer mockServer.Close()
 
-		operationalAddress := main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockServer.URL)
+		signer := main.Signer{
+			ExternalUrl:        mockServer.URL,
+			OperationalAddress: main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
@@ -261,8 +266,11 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		}))
 		defer mockServer.Close()
 
-		operationalAddress := main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockServer.URL)
+		signer := main.Signer{
+			ExternalUrl:        mockServer.URL,
+			OperationalAddress: main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
@@ -291,8 +299,11 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		provider, providerErr := rpc.NewProvider(mockRpc.URL)
 		require.NoError(t, providerErr)
 
-		operationalAddress := main.AddressFromString("0xabc")
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockSigner.URL)
+		signer := main.Signer{
+			ExternalUrl:        mockSigner.URL,
+			OperationalAddress: main.AddressFromString("0xabc"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
@@ -324,8 +335,11 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		provider, providerErr := rpc.NewProvider(mockRpc.URL)
 		require.NoError(t, providerErr)
 
-		operationalAddress := main.AddressFromString("0xabc")
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockSigner.URL)
+		signer := main.Signer{
+			ExternalUrl:        mockSigner.URL,
+			OperationalAddress: main.AddressFromString("0xabc"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
@@ -359,8 +373,11 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		provider, providerErr := rpc.NewProvider(mockRpc.URL)
 		require.NoError(t, providerErr)
 
-		operationalAddress := main.AddressFromString("0xabc")
-		externalSigner, err := main.NewExternalSigner(provider, operationalAddress, mockSigner.URL)
+		signer := main.Signer{
+			ExternalUrl:        mockSigner.URL,
+			OperationalAddress: main.AddressFromString("0xabc"),
+		}
+		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(context.Background(), []rpc.InvokeFunctionCall{}, main.FEE_ESTIMATION_MULTIPLIER)
