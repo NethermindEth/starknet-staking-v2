@@ -19,14 +19,18 @@ This will compile the project and place the binary in *./build/validator*.
 
 ## Running
 
-For executing the validator, just run:
+To run the validator it needs certain data specified such as the node to connect to and the operational address of the staker. This data can be provided in two ways, either through a configuration file or through flags directly in the app.
+
+### With a config file
+
+After compiling the validator, run:
 ```bash
 ./build/validator --config <path_to_config_file> 
 ```
 
-The config file is `.json` which specify two types `provider` and `signer`. For the `provider`, it requires for both an http and ws endpoints are made available with a node that supports rpc version 0.8.1. For the `signer`, you can use the internal provided by this software or one implemented by you.
+The config file is `.json` which specify two types `provider` and `signer`. For the `provider`, it requires an http and ws endpoints to a starknet node that supports rpc version `>=0.8.0`. For the `signer`, you can use our implementation provided in this program or one implemented by you.
 
-Depending of the fields `signer` has set, it is stablished as either an internal (provided by us) or external (provided by you) signer. An internal signer has the `operationalAddress` and `privateKey` values set while an external one has the `operationalAddress` and `url` values set. The `url` must point to an address through which validating software and signer will communicate.
+Depending of the fields `signer` has set, it is stablished as either an internal (provided by us) or external (provided by you). An internal signer has the `operationalAddress` and `privateKey` values set while an external one has the `operationalAddress` and `url` values set. The `url` must point to an address through which validating software and signer will communicate.
 
 A full config file would look like this:
 
@@ -34,17 +38,29 @@ A full config file would look like this:
 {
   "provider": {
       "http": "http://localhost:6060/v0_8",
-      "ws": "ws://localhost:1235/v0_8"
+      "ws": "ws://localhost:6061/v0_8"
   },
   "signer": {
-      "url": "http://localhost:6061/v0_8",
-      "operationalAddress": "0x456"
-      "privateKey": "0x123", 
+      "url": "http://localhost:8080/v0_8",
+      "operationalAddress": "0x123"
+      "privateKey": "0x456", 
   }
 }
 ```
 
-If a signer is defined fully as in the example above, the external signer will take priority.
+If a signer is defined with both private key and external url, the program will assume that an external signer is intended.
+
+### With flags
+
+The same basics applies as the previous section. Run the validator with the following command:
+```bash
+./build/validator \
+    --provider-http "http://localhost:6060/v0_8" \
+    --provider-ws "ws://localhost:60601/v0_8" \
+    --signer-url "http//localhost:8080/v0_8" \
+    --signer-op-address "0x123" \
+    --private-key "0x456"
+```
 
 ## External Signer 
 
