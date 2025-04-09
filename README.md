@@ -67,9 +67,7 @@ Response should contain the ECDSA signature values r and s in an array:
 ```
 An example implementation is provided [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
 
-## Additional features
-
-1. Logging
+## Logging
 
 You have the possibility to give an additional flag `--log-level [info/debug/trace/warn/error]` to control the level of logging.
 If not set, the log level will default to `info`.
@@ -99,7 +97,7 @@ The configuration file properties will look like:
   },
   "signer": {
       "operationalAddress": "your operational address"
-      "privateKey": "your api key", 
+      "privateKey": "your private key", 
   }
 }
 ```
