@@ -12,7 +12,7 @@ import (
 )
 
 type SignRequest struct {
-	Hash string `json:"hash"`
+	Hash string `json:"transaction_hash"`
 }
 
 type SignResponse struct {

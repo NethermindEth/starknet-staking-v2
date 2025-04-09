@@ -16,7 +16,7 @@ import (
 )
 
 type SignRequest struct {
-	Hash felt.Felt `json:"hash"`
+	Hash felt.Felt `json:"transaction_hash"`
 }
 
 type SignResponse struct {

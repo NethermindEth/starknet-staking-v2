@@ -58,7 +58,7 @@ The external signer must implement a simple HTTP API, exposing the single `/sign
 - POST `/sign`: should return the signature for the transaction hash received as its input:
 ```json
 {
-    "hash": "0x123"
+    "transaction_hash": "0x123"
 }
 ```
 Response should contain the ECDSA signature values r and s in an array:
