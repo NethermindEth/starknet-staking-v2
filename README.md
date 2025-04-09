@@ -43,6 +43,16 @@ The config file must be a `.json` with the following fields:
 }
 ```
 
+### Running with Docker
+
+To run the validator using Docker, prepare a valid config file locally and mount it into the container:
+
+```bash
+docker run \
+  -v <path_to_config_file>:/app/config/config.json \
+  nethermind/starknet-staking-v2:latest --config /app/config/config.json --[local/external]-signer
+```
+
 ### Signatures
 
 There are two options for signing attestation transactions sent by the tool.

@@ -33,5 +33,3 @@ RUN mkdir -p /app/config && chown appuser:appgroup /app/config
 USER appuser
 
 ENTRYPOINT ["/app/validator"]
-
-CMD ["--config", "/app/config/config.json"]
