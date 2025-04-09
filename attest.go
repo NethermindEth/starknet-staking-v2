@@ -14,34 +14,34 @@ import (
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
 func Attest(config *Config, logger utils.ZapLogger) error {
-	provider, err := NewProvider(config.HttpProviderUrl, &logger)
+	provider, err := NewProvider(config.Provider.Http, &logger)
 	if err != nil {
 		return err
 	}
 
 	var account Accounter
-	if config.useLocalSigner {
-		validatorAccount, err := NewValidatorAccount(provider, &logger, &config.AccountData)
-		if err != nil {
-			return err
-		}
-		account = &validatorAccount
-	} else {
-		externalSigner, err := NewExternalSigner(provider, config.AccountData.OperationalAddress, config.ExternalSignerUrl)
+	if config.Signer.External() {
+		externalSigner, err := NewExternalSigner(provider, &config.Signer)
 		if err != nil {
 			return err
 		}
 		account = &externalSigner
+
+	} else {
+		validatorAccount, err := NewValidatorAccount(provider, &logger, &config.Signer)
+		if err != nil {
+			return err
+		}
+		account = &validatorAccount
 	}
 
 	dispatcher := NewEventDispatcher[Accounter, *utils.ZapLogger]()
-
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
 	wg.Go(func() { dispatcher.Dispatch(account, &logger) })
 
 	// Subscribe to the block headers
-	wsProvider, headersFeed, err := BlockHeaderSubscription(config.WsProviderUrl, &logger)
+	wsProvider, headersFeed, err := BlockHeaderSubscription(config.Provider.Ws, &logger)
 	if err != nil {
 		return err
 	}

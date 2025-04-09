@@ -35,10 +35,13 @@ type Accounter interface {
 
 type ValidatorAccount account.Account
 
-func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, accountData *AccountData) (ValidatorAccount, error) {
-	privateKey, ok := new(big.Int).SetString(accountData.PrivKey, 0)
+func NewValidatorAccount[Log Logger](
+	provider *rpc.Provider, logger Log, signer *Signer,
+) (ValidatorAccount, error) {
+	// todo(rdr): do we need to check the private key has maximum size
+	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
-		return ValidatorAccount{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
+		return ValidatorAccount{}, errors.Errorf("private key %s into a big int", privateKey)
 	}
 
 	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
@@ -48,14 +51,13 @@ func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, account
 
 	ks := account.SetNewMemKeystore(publicKey.String(), privateKey)
 
-	accountAddrFelt := accountData.OperationalAddress.ToFelt()
-
-	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey.String(), ks, 2)
+	accountAddr := signer.OperationalAddress.ToFelt()
+	account, err := account.NewAccount(provider, &accountAddr, publicKey.String(), ks, 2)
 	if err != nil {
 		return ValidatorAccount{}, errors.Errorf("Cannot create validator account: %s", err)
 	}
 
-	logger.Debugw("Validator account has been set up", "address", accountAddrFelt.String())
+	logger.Debugw("Validator account has been set up", "address", accountAddr.String())
 	return ValidatorAccount(*account), nil
 }
 
@@ -90,7 +92,7 @@ type ExternalSigner struct {
 	ChainId            felt.Felt
 }
 
-func NewExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) (ExternalSigner, error) {
+func NewExternalSigner(provider *rpc.Provider, signer *Signer) (ExternalSigner, error) {
 	chainID, err := provider.ChainID(context.Background())
 	if err != nil {
 		return ExternalSigner{}, err
@@ -99,8 +101,8 @@ func NewExternalSigner(provider *rpc.Provider, operationalAddress Address, exter
 
 	return ExternalSigner{
 		Provider:           provider,
-		OperationalAddress: operationalAddress,
-		ExternalSignerUrl:  externalSignerUrl,
+		OperationalAddress: signer.OperationalAddress,
+		ExternalSignerUrl:  signer.ExternalUrl,
 		ChainId:            *chainId,
 	}, nil
 }

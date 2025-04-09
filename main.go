@@ -14,20 +14,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO(rdr): make fields required so that if they are not set then the tool signals it and fails
-type AccountData struct {
-	PrivKey            string  `json:"privateKey"`
-	OperationalAddress Address `json:"operationalAddress"`
-}
-
 type Provider struct {
 	Http string `json:"http"`
 	Ws   string `json:"ws"`
 }
 
 type Signer struct {
-	ExternalUrl string `json:"url"`
-	AccountData
+	ExternalUrl        string  `json:"url"`
+	PrivKey            string  `json:"privateKey"`
+	OperationalAddress Address `json:"operationalAddress"`
+}
+
+func (s *Signer) External() bool {
+	return s.ExternalUrl != ""
 }
 
 type Config struct {
@@ -36,40 +35,55 @@ type Config struct {
 }
 
 // Function to load and parse the JSON file
-func LoadConfig(filePath string) (Config, error) {
-	file, err := os.ReadFile(filePath)
+func ConfigFromFile(filePath string) (Config, error) {
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return Config{}, err
 	}
+	return ConfigFromData(data)
+}
 
+func ConfigFromData(data []byte) (Config, error) {
 	var config Config
-	err = json.Unmarshal(file, &config)
-	if err != nil {
+	if err := json.Unmarshal(data, &config); err != nil {
+		return Config{}, err
+	}
+	if err := checkConfig(&config); err != nil {
 		return Config{}, err
 	}
 
 	return config, nil
 }
 
+func checkConfig(config *Config) error {
+	if err := checkProvider(&config.Provider); err != nil {
+		return err
+	}
+	if err := checkSigner(&config.Signer); err != nil {
+		return err
+	}
+	return nil
+}
+
 func checkProvider(provider *Provider) error {
-	if provider.Http != "" {
+	if provider.Http == "" {
 		return errors.New("http provider url not set in config")
 	}
-	if provider.Ws != "" {
+	if provider.Ws == "" {
 		return errors.New("ws provider url not set in config")
 	}
 	return nil
 }
 
 func checkSigner(signer *Signer) error {
-	if signer.ExternalUrl != "" {
+	if signer.OperationalAddress == Address(felt.Zero) {
+		return errors.New("operational address is not set in config")
+	}
+	if signer.External() {
 		return nil
 	}
 	if signer.PrivKey == "" {
-		return errors.New("signer private key is not set")
-	}
-	if signer.OperationalAddress == Address(felt.Zero) {
-		return errors.New("operational address is not set")
+		return errors.New("signer private key is not set in config")
 	}
 	return nil
 }
@@ -81,15 +95,12 @@ func NewCommand() cobra.Command {
 	var config Config
 	var logger utils.ZapLogger
 
-	var useExternalSigner bool
-
 	preRunE := func(cmd *cobra.Command, args []string) error {
-		loadedConfig, err := LoadConfig(configPathF)
+		loadedConfig, err := ConfigFromFile(configPathF)
 		if err != nil {
 			return err
 		}
 		config = loadedConfig
-		useExternalSigner = loadedConfig.Signer.ExternalUrl != ""
 
 		var logLevel utils.LogLevel
 		if err := logLevel.Set(logLevelF); err != nil {
@@ -124,10 +135,6 @@ func NewCommand() cobra.Command {
 	rootCmd.Flags().StringVar(
 		&logLevelF, "log-level", utils.INFO.String(), "Options: trace, debug, info, warn, error.",
 	)
-
-	// Mutually exclusive signer flags
-	rootCmd.Flags().BoolVar(&useLocalSigner, "local-signer", false, "Use a local signer")
-	rootCmd.Flags().BoolVar(&useExternalSigner, "external-signer", false, "Use an external signer (HTTP)")
 
 	return rootCmd
 }

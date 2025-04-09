@@ -3,7 +3,6 @@ package main_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"testing"
 
@@ -18,7 +17,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	t.Run("Error when reading from file", func(t *testing.T) {
-		config, err := main.LoadConfig("some non existing file name hopefully")
+		config, err := main.ConfigFromFile("some non existing file name hopefully")
 
 		require.Equal(t, main.Config{}, config)
 		require.ErrorIs(t, err, os.ErrNotExist)
@@ -41,143 +40,136 @@ func TestLoadConfig(t *testing.T) {
 		}
 		tmpFile.Close()
 
-		config, err := main.LoadConfig(tmpFile.Name())
+		config, err := main.ConfigFromFile(tmpFile.Name())
 
 		require.Equal(t, main.Config{}, config)
 		require.NotNil(t, err)
 	})
 
 	t.Run("Successfully load config", func(t *testing.T) {
-		mockedConfig := main.Config{
-			HttpProviderUrl:   "http://localhost:1234",
-			WsProviderUrl:     "ws://localhost:1235",
-			ExternalSignerUrl: "http://localhost:5678",
-			AccountData: main.AccountData{
-				PrivKey:            "0x123",
-				OperationalAddress: main.AddressFromString("0x456"),
-			},
-		}
-
-		tmpFilePath := writeMockConfigToTemporaryFile(t, mockedConfig)
-
-		// Remove temporary file at the end of test
-		defer os.Remove(tmpFilePath)
-
-		config, err := main.LoadConfig(tmpFilePath)
-
-		require.Equal(t, mockedConfig, config)
-		require.Nil(t, err)
-	})
-}
-
-func writeMockConfigToTemporaryFile(t *testing.T, config main.Config) string {
-	t.Helper()
-
-	// Create a temporary file
-	tmpFile, err := os.CreateTemp("", "config-*.json")
-	require.NoError(t, err)
-
-	// Encode the mocked config to JSON and write to the file
-	jsonData, err := json.Marshal(config)
-	require.NoError(t, err)
-	if _, err := tmpFile.Write(jsonData); err != nil {
+		data := []byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "privateKey": "0x123", 
+                "operationalAddress": "0x456"
+            }
+        }`)
+		config, err := main.ConfigFromData(data)
 		require.NoError(t, err)
-	}
-	tmpFile.Close()
 
-	return tmpFile.Name()
+		expectedConfig := main.Config{
+			Provider: main.Provider{
+				Http: "http://localhost:1234",
+				Ws:   "ws://localhost:1235",
+			},
+			Signer: main.Signer{
+				ExternalUrl:        "http://localhost:5678",
+				PrivKey:            "0x123",
+				OperationalAddress: main.AddressFromString("0x456"),
+			},
+		}
+		require.Equal(t, expectedConfig, config)
+	})
 }
 
-func TestVerifyLoadedConfig(t *testing.T) {
-	t.Run("Missing httpProviderUrl", func(t *testing.T) {
-		config := main.Config{
-			WsProviderUrl:     "ws://localhost:1235",
-			ExternalSignerUrl: "http://localhost:5678",
-			AccountData: main.AccountData{
-				PrivKey:            "0x123",
-				OperationalAddress: main.AddressFromString("0x456"),
-			},
-		}
-
-		err := main.VerifyLoadedConfig(config, true, false)
-
-		require.Equal(t, errors.New("you must specify the httpProviderUrl field in the config.json"), err)
+func TestCorrectConfig(t *testing.T) {
+	t.Run("Missing provider http url", func(t *testing.T) {
+		data := []byte(`{
+            "provider": {
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "privateKey": "0x123", 
+                "operationalAddress": "0x456"
+            }
+        }`)
+		config, err := main.ConfigFromData(data)
+		require.Zero(t, config)
+		require.ErrorContains(t, err, "http provider url")
 	})
 
-	t.Run("Missing wsProviderUrl", func(t *testing.T) {
-		config := main.Config{
-			HttpProviderUrl:   "http://localhost:1234",
-			ExternalSignerUrl: "http://localhost:5678",
-			AccountData: main.AccountData{
-				PrivKey:            "0x123",
-				OperationalAddress: main.AddressFromString("0x456"),
-			},
-		}
-
-		err := main.VerifyLoadedConfig(config, true, false)
-
-		require.Equal(t, errors.New("you must specify the wsProviderUrl field in the config.json"), err)
+	t.Run("Missing provider ws url", func(t *testing.T) {
+		data := []byte(`{
+            "provider": {
+                "http": "http://localhost:1234"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "privateKey": "0x123", 
+                "operationalAddress": "0x456"
+            }
+        }`)
+		config, err := main.ConfigFromData(data)
+		require.Zero(t, config)
+		require.ErrorContains(t, err, "ws provider url")
 	})
 
-	t.Run("Missing operationalAddress", func(t *testing.T) {
-		config := main.Config{
-			HttpProviderUrl:   "http://localhost:1234",
-			WsProviderUrl:     "ws://localhost:1235",
-			ExternalSignerUrl: "http://localhost:5678",
-			AccountData: main.AccountData{
-				PrivKey: "0x123",
-			},
-		}
-
-		err := main.VerifyLoadedConfig(config, true, false)
-
-		require.Equal(t, errors.New("you must specify the operationalAddress field in the config.json"), err)
+	t.Run("Missing operational address", func(t *testing.T) {
+		data := []byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "privateKey": "0x123"
+            }
+        }`)
+		config, err := main.ConfigFromData(data)
+		require.Zero(t, config)
+		require.ErrorContains(t, err, "operational address")
 	})
 
-	t.Run("Both local and external signer flags are used", func(t *testing.T) {
-		config := main.Config{
-			HttpProviderUrl:   "http://localhost:1234",
-			WsProviderUrl:     "ws://localhost:1235",
-			ExternalSignerUrl: "http://localhost:5678",
-			AccountData: main.AccountData{
-				PrivKey:            "0x123",
-				OperationalAddress: main.AddressFromString("0x456"),
-			},
-		}
-
-		err := main.VerifyLoadedConfig(config, true, true)
-
-		require.Equal(t, errors.New("you must specify exactly one of --local-signer or --external-signer"), err)
+	t.Run("Missing external signer url", func(t *testing.T) {
+		data := []byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "privateKey": "0x123", 
+                "operationalAddress": "0x456"
+            }
+        }`)
+		config, err := main.ConfigFromData(data)
+		require.False(t, config.Signer.External())
+		require.NoError(t, err)
 	})
 
-	t.Run("Local signer flag is used but no private key is specified", func(t *testing.T) {
-		config := main.Config{
-			HttpProviderUrl:   "http://localhost:1234",
-			WsProviderUrl:     "ws://localhost:1235",
-			ExternalSignerUrl: "http://localhost:5678",
-			AccountData: main.AccountData{
-				OperationalAddress: main.AddressFromString("0x456"),
-			},
-		}
-
-		err := main.VerifyLoadedConfig(config, true, false)
-
-		require.Equal(t, errors.New("you must specify the privateKey field in the config.json when using --local-signer flag"), err)
+	t.Run("Missing private key", func(t *testing.T) {
+		data := []byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "operationalAddress": "0x456"
+            }
+        }`)
+		config, err := main.ConfigFromData(data)
+		require.True(t, config.Signer.External())
+		require.NoError(t, err)
 	})
 
-	t.Run("External signer flag is used but no external signer URL is specified", func(t *testing.T) {
-		config := main.Config{
-			HttpProviderUrl: "http://localhost:1234",
-			WsProviderUrl:   "ws://localhost:1235",
-			AccountData: main.AccountData{
-				PrivKey:            "0x123",
-				OperationalAddress: main.AddressFromString("0x456"),
-			},
-		}
-
-		err := main.VerifyLoadedConfig(config, false, true)
-
-		require.Equal(t, errors.New("you must specify the externalSignerUrl field in the config.json when using --external-signer flag"), err)
+	t.Run("Missing private key and external signer", func(t *testing.T) {
+		data := []byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "operationalAddress": "0x456"
+            }
+        }`)
+		config, err := main.ConfigFromData(data)
+		require.Zero(t, config)
+		require.ErrorContains(t, err, "private key")
 	})
 }
 
@@ -224,67 +216,43 @@ func TestNewCommand(t *testing.T) {
 	t.Run("PreRunE returns an error: config verification fails", func(t *testing.T) {
 		command := main.NewCommand()
 
-		mockedConfig := main.Config{
-			HttpProviderUrl: "http://localhost:1234",
-			WsProviderUrl:   "ws://localhost:1235",
-			AccountData: main.AccountData{
+		config := main.Config{
+			Provider: main.Provider{
+				Http: "http://localhost:1234",
+				Ws:   "ws://localhost:1235",
+			},
+			Signer: main.Signer{
 				OperationalAddress: main.AddressFromString("0x456"),
 			},
 		}
-		tmpFilePath := writeMockConfigToTemporaryFile(t, mockedConfig)
+		filePath := createTemporaryConfigFile(t, &config)
+		defer os.Remove(filePath)
 
-		// Remove temporary file at the end of test
-		defer os.Remove(tmpFilePath)
+		command.SetArgs([]string{"--config", filePath})
 
-		command.SetArgs([]string{"--config", tmpFilePath, "--external-signer"})
-
-		// Not ideal but a temporary file where to redirect stderr to avoid polluting the console with unwanted cli prints
-		tmpFile, err := os.CreateTemp("", "test_output_")
-		require.NoError(t, err)
-
-		originalStderr := os.Stderr
-		// Redirect stderr to the temporary file
-		os.Stderr = tmpFile
-
-		defer tmpFile.Close()
-		defer os.Remove(tmpFile.Name())
-		defer func() { os.Stderr = originalStderr }()
-
-		err = command.ExecuteContext(context.Background())
-		require.Equal(t, errors.New("you must specify the externalSignerUrl field in the config.json when using --external-signer flag"), err)
+		err := command.ExecuteContext(context.Background())
+		require.ErrorContains(t, err, "private key")
 	})
 
 	t.Run("Full command setup works", func(t *testing.T) {
 		command := main.NewCommand()
 
-		mockedConfig := main.Config{
-			HttpProviderUrl: "http://localhost:1234",
-			WsProviderUrl:   "ws://localhost:1235",
-			AccountData: main.AccountData{
-				PrivKey:            "0x123",
+		config := main.Config{
+			Provider: main.Provider{
+				Http: "http://localhost:1234",
+				Ws:   "ws://localhost:1235",
+			},
+			Signer: main.Signer{
 				OperationalAddress: main.AddressFromString("0x456"),
+				PrivKey:            "0x123",
 			},
 		}
-		tmpFilePath := writeMockConfigToTemporaryFile(t, mockedConfig)
+		filePath := createTemporaryConfigFile(t, &config)
+		defer os.Remove(filePath)
 
-		// Remove temporary file at the end of test
-		defer os.Remove(tmpFilePath)
+		command.SetArgs([]string{"--config", filePath})
 
-		command.SetArgs([]string{"--config", tmpFilePath, "--local-signer"})
-
-		// Not ideal but a temporary file where to redirect stderr to avoid polluting the console with unwanted cli prints
-		tmpFile, err := os.CreateTemp("", "test_output_")
-		require.NoError(t, err)
-
-		originalStderr := os.Stderr
-		// Redirect stderr to the temporary file
-		os.Stderr = tmpFile
-
-		defer tmpFile.Close()
-		defer os.Remove(tmpFile.Name())
-		defer func() { os.Stderr = originalStderr }()
-
-		err = command.ExecuteContext(context.Background())
+		err := command.ExecuteContext(context.Background())
 		require.Nil(t, err)
 	})
 }
@@ -341,4 +309,21 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 
 		require.Equal(t, main.BlockNumber(639369), blockNumber)
 	})
+}
+
+func createTemporaryConfigFile(t *testing.T, config *main.Config) string {
+	t.Helper()
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "config-*.json")
+	require.NoError(t, err)
+
+	// Encode the mocked config to JSON and write to the file
+	jsonData, err := json.Marshal(config)
+	require.NoError(t, err)
+	_, err = tmpFile.Write(jsonData)
+	require.NoError(t, err)
+	tmpFile.Close()
+
+	return tmpFile.Name()
 }
