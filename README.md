@@ -23,16 +23,16 @@ To run the validator it needs certain data specified such as the node to connect
 
 ### With a configuration file
 
-After compiling the validator, run:
+The validator can be run with:
 ```bash
 ./build/validator --config <path_to_config_file> 
 ```
 
-The config file is `.json` which specify two types `provider` and `signer`. For the `provider`, it requires an http and ws endpoints to a starknet node that supports rpc version `>=0.8.0`. For the `signer`, you can use our implementation provided in this program or one implemented by you.
+The config file is `.json` which specify two types `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.8.0` or higher. For the `signer`, you can use our implementation provided in this program or one implemented by you.
 
-Depending of the fields `signer` has set, it is stablished as either an internal (provided by us) or external (provided by you). An internal signer has the `operationalAddress` and `privateKey` values set while an external one has the `operationalAddress` and `url` values set. The `url` must point to an address through which validating software and signer will communicate.
+Depending of the fields `signer` has set, it is stablished as either internal (provided by us) or external (provided by you). An internal signer requires the `operationalAddress` and `privateKey` values set while an external one requires the `operationalAddress` and `url` values set. The `url` should point to an *http* address through which this program and the external signer will communicate.
 
-A full config file would look like this:
+A full config file looks like this:
 
 ```json
 {
@@ -57,7 +57,7 @@ The same basics applies as described in the previous section. The following comm
 ./build/validator \
     --provider-http "http://localhost:6060/v0_8" \
     --provider-ws "ws://localhost:60601/v0_8" \
-    --signer-url "http//localhost:8080/v0_8" \
+    --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
     --private-key "0x456"
 ```
