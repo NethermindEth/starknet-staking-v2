@@ -77,13 +77,8 @@ func TestBlockHeaderSubscription(t *testing.T) {
 	// Cannot test error when subscribing to new block headers
 
 	envVars, err := loadEnv(t)
-	loadedEnvVars := err == nil
-	if loadedEnvVars {
+	if loadedEnvVars := err == nil; loadedEnvVars {
 		t.Run("Successfully subscribing to new block headers", func(t *testing.T) {
-			// This test is failing because starknet.go does not support SW rpc v0.8.1 specs!
-			// Remove skip once it does
-			t.Skip()
-
 			wsProvider, headerChannel, err := main.BlockHeaderSubscription(envVars.wsProviderUrl, logger)
 
 			require.NotNil(t, wsProvider)

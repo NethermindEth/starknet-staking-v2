@@ -4,6 +4,8 @@ github.com/NethermindEth/juno v0.12.2 h1:GnQUgqMCA93EO7KROlXI5AdXQ9IBvcDP2PEYFr3
 github.com/NethermindEth/juno v0.12.2/go.mod h1:PlxXUUGgzFVRIiSDrLo/jrEtAPUIHpFAylChtoH3wK4=
 github.com/NethermindEth/starknet.go v0.8.0 h1:mGh7qDWrvuXJPcgGJP31DpifzP6+Ef2gt/BQhaqsV40=
 github.com/NethermindEth/starknet.go v0.8.0/go.mod h1:slNA8PxtxA/0LQv0FwHnL3lHFDNhVZfTK6U2gjVb7l8=
+github.com/NethermindEth/starknet.go v0.8.1 h1:kJbjakN/8AlheWxpRw5vYGd971ghCa5tPqwMb54W2Ws=
+github.com/NethermindEth/starknet.go v0.8.1/go.mod h1:feelkxsialS7l6NuDAEM7sk4rsI07rmk9xyOHYVuLJQ=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bits-and-blooms/bitset v1.21.0 h1:9RlxRbMI5dRNNburKqfDSiz5POfImKgtablyV01WUw0=
