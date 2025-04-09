@@ -21,10 +21,10 @@ func TestProcessBlockHeaders(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockAccount := mocks.NewMockAccounter(mockCtrl)
-	mockLogger := mocks.NewMockLogger(mockCtrl)
+	logger := utils.NewNopZapLogger()
 
 	t.Run("Simple scenario: 1 epoch", func(t *testing.T) {
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
 		epochId := uint64(1516)
@@ -32,10 +32,17 @@ func TestProcessBlockHeaders(t *testing.T) {
 		attestWindow := uint64(16)
 		epochStartingBlock := main.BlockNumber(639270)
 		expectedTargetBlock := main.BlockNumber(639291)
-		mockFetchedEpochAndAttestInfo(t, mockAccount, mockLogger, epochId, epochLength, attestWindow, epochStartingBlock, expectedTargetBlock)
+		mockFetchedEpochAndAttestInfo(
+			t,
+			mockAccount,
+			epochId,
+			epochLength,
+			attestWindow,
+			epochStartingBlock,
+		)
 
 		targetBlockHash := main.BlockHash(*utils.HexToFelt(t, "0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045"))
-		blockHeaders := mockHeaderFeedWithLogger(t, mockLogger, epochStartingBlock, expectedTargetBlock, &targetBlockHash, epochLength, attestWindow)
+		blockHeaders := mockHeaderFeedWithLogger(t, epochStartingBlock, expectedTargetBlock, &targetBlockHash, epochLength)
 
 		// Mock SetTargetBlockHashIfExists call
 		targetBlockUint64 := expectedTargetBlock.Uint64()
@@ -57,7 +64,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		wgDispatcher := conc.NewWaitGroup()
 		wgDispatcher.Go(func() { registerReceivedEvents(t, &dispatcher, receivedAttestEvents, &receivedEndOfWindowEvents) })
 
-		main.ProcessBlockHeaders(headersFeed, mockAccount, mockLogger, &dispatcher)
+		main.ProcessBlockHeaders(headersFeed, mockAccount, logger, &dispatcher)
 
 		// No need to wait for wgFeed routine as it'll be the 1st closed, causing ProcessBlockHeaders to have returned
 		// Still calling it just in case.
@@ -78,7 +85,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 	})
 
 	t.Run("Scenario: transition between 2 epochs", func(t *testing.T) {
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
+		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
 		epochLength := uint64(40)
@@ -87,18 +94,30 @@ func TestProcessBlockHeaders(t *testing.T) {
 		epochId1 := uint64(1516)
 		epochStartingBlock1 := main.BlockNumber(639270)
 		expectedTargetBlock1 := main.BlockNumber(639291)
-		mockFetchedEpochAndAttestInfo(t, mockAccount, mockLogger, epochId1, epochLength, attestWindow, epochStartingBlock1, expectedTargetBlock1)
+		mockFetchedEpochAndAttestInfo(t, mockAccount, epochId1, epochLength, attestWindow, epochStartingBlock1)
 
 		epochId2 := uint64(1517)
 		epochStartingBlock2 := main.BlockNumber(639310)
 		expectedTargetBlock2 := main.BlockNumber(639316)
-		mockFetchedEpochAndAttestInfo(t, mockAccount, mockLogger, epochId2, epochLength, attestWindow, epochStartingBlock2, expectedTargetBlock2)
+		mockFetchedEpochAndAttestInfo(t, mockAccount, epochId2, epochLength, attestWindow, epochStartingBlock2)
 
-		targetBlockHashEpoch1 := main.BlockHash(*utils.HexToFelt(t, "0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045"))
-		blockHeaders1 := mockHeaderFeedWithLogger(t, mockLogger, epochStartingBlock1, expectedTargetBlock1, &targetBlockHashEpoch1, epochLength, attestWindow)
+		targetBlockHashEpoch1 := main.BlockHash(
+			*utils.HexToFelt(t, "0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045"),
+		)
+		blockHeaders1 := mockHeaderFeedWithLogger(
+			t, epochStartingBlock1, expectedTargetBlock1, &targetBlockHashEpoch1, epochLength,
+		)
 
-		targetBlockHashEpoch2 := main.BlockHash(*utils.HexToFelt(t, "0x2124ae375432a16ef644f539c3b148f63c706067bf576088f32033fe59c345e"))
-		blockHeaders2 := mockHeaderFeedWithLogger(t, mockLogger, epochStartingBlock2, expectedTargetBlock2, &targetBlockHashEpoch2, epochLength, attestWindow)
+		targetBlockHashEpoch2 := main.BlockHash(
+			*utils.HexToFelt(t, "0x2124ae375432a16ef644f539c3b148f63c706067bf576088f32033fe59c345e"),
+		)
+		blockHeaders2 := mockHeaderFeedWithLogger(
+			t,
+			epochStartingBlock2,
+			expectedTargetBlock2,
+			&targetBlockHashEpoch2,
+			epochLength,
+		)
 
 		// Mock SetTargetBlockHashIfExists call
 		targetBlockUint64 := expectedTargetBlock1.Uint64()
@@ -106,9 +125,6 @@ func TestProcessBlockHeaders(t *testing.T) {
 			EXPECT().
 			BlockWithTxHashes(context.Background(), rpc.BlockID{Number: &targetBlockUint64}).
 			Return(nil, errors.New("Block not found")) // Let's say block does not exist yet
-
-		// Mock epoch switch log
-		mockLogger.EXPECT().Infow("New epoch start", "epoch id", epochId2)
 
 		// Headers feeder routine
 		wgFeed := conc.NewWaitGroup()
@@ -124,7 +140,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		wgDispatcher := conc.NewWaitGroup()
 		wgDispatcher.Go(func() { registerReceivedEvents(t, &dispatcher, receivedAttestEvents, &receivedEndOfWindowEvents) })
 
-		main.ProcessBlockHeaders(headersFeed, mockAccount, mockLogger, &dispatcher)
+		main.ProcessBlockHeaders(headersFeed, mockAccount, logger, &dispatcher)
 
 		// No need to wait for wgFeed routine as it'll be the 1st closed, causing ProcessBlockHeaders to have returned
 		// Still calling it just in case.
@@ -191,12 +207,10 @@ func registerReceivedEvents[T main.Accounter, Log main.Logger](
 func mockFetchedEpochAndAttestInfo(
 	t *testing.T,
 	mockAccount *mocks.MockAccounter,
-	mockLogger *mocks.MockLogger,
 	epochId,
 	epochLength,
 	attestWindow uint64,
-	epochStartingBlock,
-	targetBlockNumber main.BlockNumber,
+	epochStartingBlock main.BlockNumber,
 ) {
 	t.Helper()
 
@@ -208,9 +222,11 @@ func mockFetchedEpochAndAttestInfo(
 	stake := uint64(1000000000000000000)
 
 	expectedEpochInfoFnCall := rpc.FunctionCall{
-		ContractAddress:    utils.HexToFelt(t, main.STAKING_CONTRACT_ADDRESS),
-		EntryPointSelector: snGoUtils.GetSelectorFromNameFelt("get_attestation_info_by_operational_address"),
-		Calldata:           []*felt.Felt{validatorOperationalAddress},
+		ContractAddress: utils.HexToFelt(t, main.STAKING_CONTRACT_ADDRESS),
+		EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
+			"get_attestation_info_by_operational_address",
+		),
+		Calldata: []*felt.Felt{validatorOperationalAddress},
 	}
 
 	mockAccount.
@@ -227,14 +243,6 @@ func mockFetchedEpochAndAttestInfo(
 			nil,
 		)
 
-	// Mock logger following epoch info fetching
-	mockLogger.EXPECT().Infow(
-		"Fetched epoch info",
-		"epoch ID", epochId,
-		"epoch starting block", epochStartingBlock,
-		"epoch ending block", epochStartingBlock+main.BlockNumber(epochLength),
-	)
-
 	// Mock fetchAttestWindow call
 	expectedWindowFnCall := rpc.FunctionCall{
 		ContractAddress:    utils.HexToFelt(t, main.ATTEST_CONTRACT_ADDRESS),
@@ -249,31 +257,18 @@ func mockFetchedEpochAndAttestInfo(
 
 	// Mock ComputeBlockNumberToAttestTo call
 	mockAccount.EXPECT().Address().Return(validatorOperationalAddress)
-
-	// Mock logger following target block computation
-	mockLogger.EXPECT().Infow(
-		"Computed target block to attest to",
-		"epoch ID", epochId,
-		"attestation info", main.AttestInfo{
-			TargetBlock: targetBlockNumber,
-			WindowStart: targetBlockNumber + main.BlockNumber(main.MIN_ATTESTATION_WINDOW),
-			WindowEnd:   targetBlockNumber + main.BlockNumber(attestWindow),
-		},
-	)
 }
 
 func mockHeaderFeedWithLogger(
 	t *testing.T,
-	mockLogger *mocks.MockLogger,
 	startingBlock,
 	targetBlock main.BlockNumber,
 	targetBlockHash *main.BlockHash,
-	epochLength,
-	attestWindow uint64,
+	epochLength uint64,
 ) []rpc.BlockHeader {
 	t.Helper()
 
-	blockHash := *new(felt.Felt).SetUint64(1)
+	blockHash := new(felt.Felt).SetUint64(1)
 
 	blockHeaders := make([]rpc.BlockHeader, epochLength)
 	for i := uint64(0); i < epochLength; i++ {
@@ -281,26 +276,14 @@ func mockHeaderFeedWithLogger(
 
 		// All block hashes are set to 0x1 except for the target block
 		if blockNumber == targetBlock {
-			blockHash = targetBlockHash.ToFelt()
-			mockLogger.
-				EXPECT().
-				Infow("Target block reached", "block number", blockNumber.Uint64(), "block hash", &blockHash)
-			mockLogger.
-				EXPECT().
-				Infof(
-					"Will attest to target block in window [%d, %d]",
-					targetBlock+main.BlockNumber(main.MIN_ATTESTATION_WINDOW),
-					targetBlock+main.BlockNumber(attestWindow),
-				)
+			blockHash = targetBlockHash.Felt()
 		}
 
 		blockHeaders[i] = rpc.BlockHeader{
 			BlockNumber: blockNumber.Uint64(),
-			BlockHash:   &blockHash,
+			BlockHash:   blockHash,
 		}
-		mockLogger.EXPECT().Infow("Block header received", "blockHeader", &blockHeaders[i])
 	}
-
 	return blockHeaders
 }
 

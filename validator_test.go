@@ -75,7 +75,7 @@ func TestNewValidatorAccount(t *testing.T) {
 				provider, logger, &main.Signer{},
 			)
 
-			require.Equal(t, main.ValidatorAccount{}, validatorAccount)
+			require.Equal(t, main.InternalSigner{}, validatorAccount)
 			expectedErrorMsg := fmt.Sprintf(
 				"Cannot turn private key %s into a big int", (*big.Int)(nil),
 			)
@@ -87,14 +87,15 @@ func TestNewValidatorAccount(t *testing.T) {
 
 			signer := main.Signer{
 				PrivKey:            "0x123",
-				OperationalAddress: main.AddressFromString("0x456"),
+				OperationalAddress: "0x456",
 			}
 
 			// Test
 			validatorAccount, err := main.NewValidatorAccount(provider, logger, &signer)
 
 			// Assert
-			accountAddr := signer.OperationalAddress.ToFelt()
+			accountAddr, err := new(felt.Felt).SetString(signer.OperationalAddress)
+			require.NoError(t, err)
 
 			privateKeyBigInt := big.NewInt(0x123)
 			// This is the public key for private key "0x123"
@@ -102,10 +103,10 @@ func TestNewValidatorAccount(t *testing.T) {
 			ks := account.SetNewMemKeystore(publicKey, privateKeyBigInt)
 
 			expectedValidatorAccount, accountErr := account.NewAccount(
-				provider, &accountAddr, publicKey, ks, 2,
+				provider, accountAddr, publicKey, ks, 2,
 			)
 			require.NoError(t, accountErr)
-			require.Equal(t, main.ValidatorAccount(*expectedValidatorAccount), validatorAccount)
+			require.Equal(t, main.InternalSigner(*expectedValidatorAccount), validatorAccount)
 
 			require.Nil(t, err)
 		})
@@ -119,11 +120,11 @@ func TestNewValidatorAccount(t *testing.T) {
 
 		accountData := main.Signer{
 			PrivKey:            "0x123",
-			OperationalAddress: main.AddressFromString("0x456"),
+			OperationalAddress: "0x456",
 		}
 		validatorAccount, err := main.NewValidatorAccount(provider, logger, &accountData)
 
-		require.Equal(t, main.ValidatorAccount{}, validatorAccount)
+		require.Equal(t, main.InternalSigner{}, validatorAccount)
 		require.ErrorContains(t, err, "Cannot create validator account:")
 	})
 }
@@ -139,7 +140,7 @@ func TestNewExternalSigner(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        "http://localhost:1234",
-			OperationalAddress: main.AddressFromString("0x123"),
+			OperationalAddress: "0x123",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 
@@ -159,15 +160,16 @@ func TestNewExternalSigner(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        "http://localhost:1234",
-			OperationalAddress: main.AddressFromString("0x123"),
+			OperationalAddress: "0x123",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 
 		// Expected chain ID from rpc provider at env.HTTP_PROVIDER_URL is "SN_SEPOLIA"
+		expectedOpAddr := main.AddressFromString(signer.OperationalAddress)
 		expectedChainId := new(felt.Felt).SetBytes([]byte("SN_SEPOLIA"))
 		expectedExternalSigner := main.ExternalSigner{
 			Provider:           provider,
-			OperationalAddress: signer.OperationalAddress,
+			OperationalAddress: expectedOpAddr,
 			ExternalSignerUrl:  signer.ExternalUrl,
 			ChainId:            *expectedChainId,
 		}
@@ -207,7 +209,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        "http://localhost:1234",
-			OperationalAddress: main.AddressFromString("0x123"),
+			OperationalAddress: "0x123",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
@@ -238,7 +240,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        mockServer.URL,
-			OperationalAddress: main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
+			OperationalAddress: "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
@@ -268,7 +270,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        mockServer.URL,
-			OperationalAddress: main.AddressFromString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
+			OperationalAddress: "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
@@ -301,7 +303,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        mockSigner.URL,
-			OperationalAddress: main.AddressFromString("0xabc"),
+			OperationalAddress: "0xabc",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
@@ -337,7 +339,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        mockSigner.URL,
-			OperationalAddress: main.AddressFromString("0xabc"),
+			OperationalAddress: "0xabc",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)
@@ -375,7 +377,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		signer := main.Signer{
 			ExternalUrl:        mockSigner.URL,
-			OperationalAddress: main.AddressFromString("0xabc"),
+			OperationalAddress: "0xabc",
 		}
 		externalSigner, err := main.NewExternalSigner(provider, &signer)
 		require.NoError(t, err)

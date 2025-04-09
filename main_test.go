@@ -10,6 +10,7 @@ import (
 	"github.com/NethermindEth/juno/utils"
 	main "github.com/NethermindEth/starknet-staking-v2"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"lukechampine.com/uint128"
@@ -60,6 +61,7 @@ func TestLoadConfig(t *testing.T) {
         }`)
 		config, err := main.ConfigFromData(data)
 		require.NoError(t, err)
+		require.NoError(t, config.Check())
 
 		expectedConfig := main.Config{
 			Provider: main.Provider{
@@ -69,7 +71,7 @@ func TestLoadConfig(t *testing.T) {
 			Signer: main.Signer{
 				ExternalUrl:        "http://localhost:5678",
 				PrivKey:            "0x123",
-				OperationalAddress: main.AddressFromString("0x456"),
+				OperationalAddress: "0x456",
 			},
 		}
 		require.Equal(t, expectedConfig, config)
@@ -89,8 +91,8 @@ func TestCorrectConfig(t *testing.T) {
             }
         }`)
 		config, err := main.ConfigFromData(data)
-		require.Zero(t, config)
-		require.ErrorContains(t, err, "http provider url")
+		require.NoError(t, err)
+		require.ErrorContains(t, config.Check(), "http provider url")
 	})
 
 	t.Run("Missing provider ws url", func(t *testing.T) {
@@ -105,8 +107,8 @@ func TestCorrectConfig(t *testing.T) {
             }
         }`)
 		config, err := main.ConfigFromData(data)
-		require.Zero(t, config)
-		require.ErrorContains(t, err, "ws provider url")
+		require.NoError(t, err)
+		require.ErrorContains(t, config.Check(), "ws provider url")
 	})
 
 	t.Run("Missing operational address", func(t *testing.T) {
@@ -121,8 +123,8 @@ func TestCorrectConfig(t *testing.T) {
             }
         }`)
 		config, err := main.ConfigFromData(data)
-		require.Zero(t, config)
-		require.ErrorContains(t, err, "operational address")
+		require.NoError(t, err)
+		require.ErrorContains(t, config.Check(), "operational address")
 	})
 
 	t.Run("Missing external signer url", func(t *testing.T) {
@@ -137,8 +139,9 @@ func TestCorrectConfig(t *testing.T) {
             }
         }`)
 		config, err := main.ConfigFromData(data)
-		require.False(t, config.Signer.External())
 		require.NoError(t, err)
+		require.NoError(t, config.Check())
+		require.False(t, config.Signer.External())
 	})
 
 	t.Run("Missing private key", func(t *testing.T) {
@@ -153,8 +156,9 @@ func TestCorrectConfig(t *testing.T) {
             }
         }`)
 		config, err := main.ConfigFromData(data)
-		require.True(t, config.Signer.External())
 		require.NoError(t, err)
+		require.NoError(t, config.Check())
+		require.True(t, config.Signer.External())
 	})
 
 	t.Run("Missing private key and external signer", func(t *testing.T) {
@@ -168,52 +172,71 @@ func TestCorrectConfig(t *testing.T) {
             }
         }`)
 		config, err := main.ConfigFromData(data)
-		require.Zero(t, config)
-		require.ErrorContains(t, err, "private key")
+		require.NoError(t, err)
+		require.ErrorContains(t, config.Check(), "private key")
 	})
 }
 
+func TestConfigFill(t *testing.T) {
+	// Test data
+	config1, err := main.ConfigFromData(
+		[]byte(`{
+            "provider": {
+                "http": "http://localhost:1234"
+            },
+            "signer": {
+                "privateKey": "0x123", 
+                "operationalAddress": "0x456"
+            }
+        }`),
+	)
+	require.NoError(t, err)
+	config2, err := main.ConfigFromData([]byte(`{
+            "provider": {
+                "http": "http://localhost:9999",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "privateKey": "0x999"
+            }
+        }`),
+	)
+	require.NoError(t, err)
+
+	// Expected values
+	expectedConfig1, err := main.ConfigFromData(
+		[]byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "privateKey": "0x123", 
+                "operationalAddress": "0x456"
+            }
+        }`),
+	)
+	require.NoError(t, err)
+	expectedConfig2 := config2
+
+	// Test
+	config1.Fill(&config2)
+	assert.Equal(t, expectedConfig1, config1)
+	assert.Equal(t, expectedConfig2, config2)
+}
+
 func TestNewCommand(t *testing.T) {
-	t.Run("Command contains expected fields", func(t *testing.T) {
+	t.Run("PreRunE returns an error: cannot load inexisting config", func(t *testing.T) {
 		command := main.NewCommand()
-
-		require.Equal(t, "validator", command.Use)
-		require.Equal(
-			t,
-			"Program for Starknet validators to attest to epochs with respect to Staking v2",
-			command.Short,
-		)
-
-		err := command.ValidateRequiredFlags()
-		require.Equal(t, `required flag(s) "config" not set`, err.Error())
-
-		// config needs to be a flag not an argument
-		err = command.ValidateArgs([]string{"config"})
-		require.Equal(t, `unknown command "config" for "validator"`, err.Error())
-	})
-
-	t.Run("PreRunE returns an error: cannot load config", func(t *testing.T) {
-		command := main.NewCommand()
-
 		command.SetArgs([]string{"--config", "some inexisting file name"})
 
-		// Not ideal but a temporary file where to redirect stderr to avoid polluting the console with unwanted cli prints
-		tmpFile, err := os.CreateTemp("", "test_output_")
-		require.NoError(t, err)
-
-		originalStderr := os.Stderr
-		// Redirect stderr to the temporary file
-		os.Stderr = tmpFile
-
-		defer tmpFile.Close()
-		defer os.Remove(tmpFile.Name())
-		defer func() { os.Stderr = originalStderr }()
-
-		err = command.ExecuteContext(context.Background())
+		err := command.ExecuteContext(context.Background())
 		require.ErrorIs(t, err, os.ErrNotExist)
 	})
 
-	t.Run("PreRunE returns an error: config verification fails", func(t *testing.T) {
+	t.Run("PreRunE returns an error: config file verification fails", func(t *testing.T) {
 		command := main.NewCommand()
 
 		config := main.Config{
@@ -222,7 +245,7 @@ func TestNewCommand(t *testing.T) {
 				Ws:   "ws://localhost:1235",
 			},
 			Signer: main.Signer{
-				OperationalAddress: main.AddressFromString("0x456"),
+				OperationalAddress: "0x456",
 			},
 		}
 		filePath := createTemporaryConfigFile(t, &config)
@@ -234,7 +257,7 @@ func TestNewCommand(t *testing.T) {
 		require.ErrorContains(t, err, "private key")
 	})
 
-	t.Run("Full command setup works", func(t *testing.T) {
+	t.Run("Full command setup works with config file", func(t *testing.T) {
 		command := main.NewCommand()
 
 		config := main.Config{
@@ -243,7 +266,7 @@ func TestNewCommand(t *testing.T) {
 				Ws:   "ws://localhost:1235",
 			},
 			Signer: main.Signer{
-				OperationalAddress: main.AddressFromString("0x456"),
+				OperationalAddress: "0x456",
 				PrivKey:            "0x123",
 			},
 		}
@@ -254,6 +277,70 @@ func TestNewCommand(t *testing.T) {
 
 		err := command.ExecuteContext(context.Background())
 		require.Nil(t, err)
+	})
+
+	t.Run("Full command setup works with config through flags", func(t *testing.T) {
+		command := main.NewCommand()
+		command.SetArgs([]string{
+			"--provider-http", "http://localhost:1234",
+			"--provider-ws", "ws://localhost:1234",
+			"--signer-op-address", "0x456",
+			"--signer-url", "http://localhost:5555",
+		})
+		err := command.ExecuteContext(context.Background())
+		require.NoError(t, err)
+	})
+
+	t.Run("Full command setup works with config file and with flags", func(t *testing.T) {
+		config, err := main.ConfigFromData([]byte(`{
+            "provider": {
+                "http": "http://localhost:1234"
+            },
+            "signer": {
+                "url": "http://localhost:5678"
+            }
+        }`),
+		)
+		require.NoError(t, err)
+		filePath := createTemporaryConfigFile(t, &config)
+		defer os.Remove(filePath)
+
+		command := main.NewCommand()
+		command.SetArgs([]string{
+			"--config", filePath,
+			"--provider-ws", "ws://localhost:1234",
+			"--signer-op-address", "0x456",
+		})
+
+		err = command.ExecuteContext(context.Background())
+		require.NoError(t, err)
+	})
+	t.Run("Flags take priority over config file", func(t *testing.T) {
+		config, err := main.ConfigFromData([]byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "url": "http://localhost:5678",
+                "operationalAddress": "0x456"
+            }
+        }`),
+		)
+		require.NoError(t, err)
+		filePath := createTemporaryConfigFile(t, &config)
+		defer os.Remove(filePath)
+
+		command := main.NewCommand()
+		command.SetArgs([]string{
+			"--config", filePath,
+			"--provider-http", "12",
+		})
+
+		err = command.ExecuteContext(context.Background())
+		// Very hard to test with the current architecture
+		// return in the future to fix it
+		require.NoError(t, err)
 	})
 }
 

@@ -29,9 +29,9 @@ func TestDispatch(t *testing.T) {
 		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddrFelt := main.AttestContract.ToFelt()
+		contractAddr := main.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
-			ContractAddress: &contractAddrFelt,
+			ContractAddress: contractAddr,
 			FunctionName:    "attest",
 			CallData:        []*felt.Felt{blockHashFelt},
 		}}
@@ -86,9 +86,9 @@ func TestDispatch(t *testing.T) {
 		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddrFelt := main.AttestContract.ToFelt()
+		contractAddr := main.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
-			ContractAddress: &contractAddrFelt,
+			ContractAddress: contractAddr,
 			FunctionName:    "attest",
 			CallData:        []*felt.Felt{blockHashFelt},
 		}}
@@ -171,9 +171,9 @@ func TestDispatch(t *testing.T) {
 		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddrFelt := main.AttestContract.ToFelt()
+		contractAddr := main.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
-			ContractAddress: &contractAddrFelt,
+			ContractAddress: contractAddr,
 			FunctionName:    "attest",
 			CallData:        []*felt.Felt{blockHashFelt},
 		}}
@@ -287,9 +287,9 @@ func TestDispatch(t *testing.T) {
 		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddrFelt := main.AttestContract.ToFelt()
+		contractAddr := main.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
-			ContractAddress: &contractAddrFelt,
+			ContractAddress: contractAddr,
 			FunctionName:    "attest",
 			CallData:        []*felt.Felt{blockHashFelt},
 		}}
@@ -379,9 +379,9 @@ func TestDispatch(t *testing.T) {
 
 		// For event A
 		blockHashFeltA := new(felt.Felt).SetUint64(1)
-		contractAddrFelt := main.AttestContract.ToFelt()
+		contractAddr := main.AttestContract.Felt()
 		callsA := []rpc.InvokeFunctionCall{{
-			ContractAddress: &contractAddrFelt,
+			ContractAddress: contractAddr,
 			FunctionName:    "attest",
 			CallData:        []*felt.Felt{blockHashFeltA},
 		}}
@@ -421,7 +421,7 @@ func TestDispatch(t *testing.T) {
 		// For event B
 		blockHashFeltB := new(felt.Felt).SetUint64(2)
 		callsB := []rpc.InvokeFunctionCall{{
-			ContractAddress: &contractAddrFelt,
+			ContractAddress: contractAddr,
 			FunctionName:    "attest",
 			CallData:        []*felt.Felt{blockHashFeltB},
 		}}
