@@ -20,14 +20,19 @@ type AccountData struct {
 	OperationalAddress Address `json:"operationalAddress"`
 }
 
-type Config struct {
-	HttpProviderUrl string `json:"httpProviderUrl"`
-	// TODO: should we have this additional url or do we parse the http one and create a ws out of it ?
-	// I think having a 2nd one is more flexible
-	WsProviderUrl     string `json:"wsProviderUrl"`
-	ExternalSignerUrl string `json:"externalSignerUrl"`
+type Provider struct {
+	Http string `json:"http"`
+	Ws   string `json:"ws"`
+}
+
+type Signer struct {
+	ExternalUrl string `json:"url"`
 	AccountData
-	useLocalSigner bool // not exported, set in preRunE
+}
+
+type Config struct {
+	Provider Provider `json:"provider"`
+	Signer   Signer   `json:"signer"`
 }
 
 // Function to load and parse the JSON file
@@ -46,32 +51,26 @@ func LoadConfig(filePath string) (Config, error) {
 	return config, nil
 }
 
-func VerifyLoadedConfig(config Config, useLocalSigner bool, useExternalSigner bool) error {
-	if config.HttpProviderUrl == "" {
-		return missingConfigGeneralField("httpProviderUrl")
+func checkProvider(provider *Provider) error {
+	if provider.Http != "" {
+		return errors.New("http provider url not set in config")
 	}
-
-	if config.WsProviderUrl == "" {
-		return missingConfigGeneralField("wsProviderUrl")
+	if provider.Ws != "" {
+		return errors.New("ws provider url not set in config")
 	}
+	return nil
+}
 
-	if config.OperationalAddress == Address(felt.Zero) {
-		return missingConfigGeneralField("operationalAddress")
+func checkSigner(signer *Signer) error {
+	if signer.ExternalUrl != "" {
+		return nil
 	}
-
-	// Enforce mutually exclusive flags
-	if useLocalSigner == useExternalSigner {
-		return errors.New("you must specify exactly one of --local-signer or --external-signer")
+	if signer.PrivKey == "" {
+		return errors.New("signer private key is not set")
 	}
-
-	if useLocalSigner && config.PrivKey == "" {
-		return missingConfigSignerField("privateKey", "--local-signer")
+	if signer.OperationalAddress == Address(felt.Zero) {
+		return errors.New("operational address is not set")
 	}
-
-	if useExternalSigner && config.ExternalSignerUrl == "" {
-		return missingConfigSignerField("externalSignerUrl", "--external-signer")
-	}
-
 	return nil
 }
 
@@ -82,7 +81,6 @@ func NewCommand() cobra.Command {
 	var config Config
 	var logger utils.ZapLogger
 
-	var useLocalSigner bool
 	var useExternalSigner bool
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
@@ -90,13 +88,8 @@ func NewCommand() cobra.Command {
 		if err != nil {
 			return err
 		}
-
-		if err := VerifyLoadedConfig(loadedConfig, useLocalSigner, useExternalSigner); err != nil {
-			return err
-		}
-
 		config = loadedConfig
-		config.useLocalSigner = useLocalSigner
+		useExternalSigner = loadedConfig.Signer.ExternalUrl != ""
 
 		var logLevel utils.LogLevel
 		if err := logLevel.Set(logLevelF); err != nil {
