@@ -124,7 +124,7 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 
 	// Building and signing the txn, as it needs a signature to estimate the fee
 	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(
-		s.OperationalAddress.Felt(),
+		s.Address(),
 		nonce,
 		formattedCallData,
 		makeResourceBoundsMapWithZeroValues(),

@@ -114,7 +114,7 @@ func checkSigner(signer *Signer) error {
 		return nil
 	}
 	if signer.PrivKey == "" {
-		return errors.New("signer private key is not set in config")
+		return errors.New("neither private key nor url properties set in signer config")
 	}
 	return nil
 }
