@@ -1,4 +1,4 @@
-package main_test
+package validator_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
-	main "github.com/NethermindEth/starknet-staking-v2/validator"
+	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/sourcegraph/conc"
 	"github.com/stretchr/testify/require"
@@ -26,10 +26,10 @@ func TestDispatch(t *testing.T) {
 
 	t.Run("Simple scenario: only 1 attest that succeeds", func(t *testing.T) {
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddr := main.AttestContract.Felt()
+		contractAddr := validator.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
 			ContractAddress: contractAddr,
 			FunctionName:    "attest",
@@ -38,7 +38,7 @@ func TestDispatch(t *testing.T) {
 		addTxHash := utils.HexToFelt(t, "0x123")
 		mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), calls, validator.FEE_ESTIMATION_MULTIPLIER).
 			Return(&mockedAddTxResp, nil)
 
 		mockAccount.EXPECT().
@@ -64,8 +64,8 @@ func TestDispatch(t *testing.T) {
 		wg.Go(func() { dispatcher.Dispatch(mockAccount, mockLogger) })
 
 		// Send event
-		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		blockHash := validator.BlockHash(*blockHashFelt)
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 		close(dispatcher.AttestRequired)
 
 		// Wait for dispatch routine (and consequently its spawned subroutines) to finish
@@ -73,7 +73,7 @@ func TestDispatch(t *testing.T) {
 
 		// Assert
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Successful, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttestStatus)
 	})
 
 	t.Run("Same AttestRequired events are ignored if already ongoing or successful", func(t *testing.T) {
@@ -83,10 +83,10 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event A is emitted and ignored (as 1st one finished & succeeded)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddr := main.AttestContract.Felt()
+		contractAddr := validator.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
 			ContractAddress: contractAddr,
 			FunctionName:    "attest",
@@ -96,7 +96,7 @@ func TestDispatch(t *testing.T) {
 		mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
 		// We expect BuildAndSendInvokeTxn to be called only once (even though 3 events are sent)
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), calls, validator.FEE_ESTIMATION_MULTIPLIER).
 			DoAndReturn(func(ctx context.Context, calls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
 				// The Dispatch routine will sleep 1 second so that we can assert ongoing status (see below)
 				time.Sleep(time.Second * 1)
@@ -127,30 +127,30 @@ func TestDispatch(t *testing.T) {
 		wg.Go(func() { dispatcher.Dispatch(mockAccount, mockLogger) })
 
 		// Send the same event x3
-		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		blockHash := validator.BlockHash(*blockHashFelt)
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
 		// Sleep just a bit so that dispatch routine has time to set the status as ongoing
 		time.Sleep(time.Second / 10)
 
 		// Mid-execution assertion: attestation is ongoing (dispatch go routine has not finished executing as it sleeps for 1 sec)
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Ongoing, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttestStatus)
 
 		// This 2nd event gets ignored when status is ongoing
 		// Proof: only 1 call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
 		// This time sleep is more than enough to make sure spawned trackAttest routine has time to execute (2nd event got ignored)
 		time.Sleep(time.Second * 2)
 
 		// Mid-execution assertion: attestation is successful (1st go routine has indeed finished executing)
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Successful, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttestStatus)
 
 		// This 3rd event gets ignored also when status is successful
 		// Proof: only 1 call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 		close(dispatcher.AttestRequired)
 
 		// Wait for dispatch routine (and consequently its spawned subroutines) to finish
@@ -158,7 +158,7 @@ func TestDispatch(t *testing.T) {
 
 		// Re-assert (3rd event got ignored)
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Successful, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttestStatus)
 	})
 
 	t.Run("Same AttestRequired events are ignored until attestation fails", func(t *testing.T) {
@@ -168,10 +168,10 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event is considered (as 1st one finished & failed)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddr := main.AttestContract.Felt()
+		contractAddr := validator.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
 			ContractAddress: contractAddr,
 			FunctionName:    "attest",
@@ -182,7 +182,7 @@ func TestDispatch(t *testing.T) {
 
 		// We expect BuildAndSendInvokeTxn to be called only once (for the 2 first events)
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), calls, validator.FEE_ESTIMATION_MULTIPLIER).
 			Return(&mockedAddTxResp1, nil).
 			Times(1)
 
@@ -214,26 +214,26 @@ func TestDispatch(t *testing.T) {
 		wg.Go(func() { dispatcher.Dispatch(mockAccount, mockLogger) })
 
 		// Send the same event x3
-		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		blockHash := validator.BlockHash(*blockHashFelt)
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
 		// Sleep just a bit so that dispatch routine has time to set the status as ongoing
 		time.Sleep(time.Second / 10)
 
 		// Mid-execution assertion: attestation is ongoing (1st go routine has not finished executing as it sleeps for 1 sec)
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Ongoing, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttestStatus)
 
 		// This 2nd event gets ignored when status is ongoing
 		// Proof: only 1 call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted so far
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
 		// This time sleep is more than enough to make sure spawned trackAttest routine has time to execute (2nd event got ignored)
 		time.Sleep(time.Second * 2)
 
 		// Mid-execution assertion: attestation has failed (1st go routine has indeed finished executing)
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Failed, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Failed, dispatcher.CurrentAttestStatus)
 
 		// Preparation for 3rd event
 
@@ -242,7 +242,7 @@ func TestDispatch(t *testing.T) {
 
 		// We expect a 2nd call to BuildAndSendInvokeTxn
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), calls, validator.FEE_ESTIMATION_MULTIPLIER).
 			Return(&mockedAddTxResp2, nil).
 			Times(1)
 
@@ -267,7 +267,7 @@ func TestDispatch(t *testing.T) {
 
 		// This 3rd event does not get ignored as previous attestation has failed
 		// Proof: a 2nd call to BuildAndSendInvokeTxn and GetTransactionStatus is asserted
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 		close(dispatcher.AttestRequired)
 
 		// Wait for dispatch routine (and consequently its spawned subroutines) to finish
@@ -275,7 +275,7 @@ func TestDispatch(t *testing.T) {
 
 		// Re-assert (3rd event got ignored)
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Successful, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttestStatus)
 	})
 
 	t.Run("Failed invoke tx also (just like TrackAttest) marks attest as failed if invoke tx fails", func(t *testing.T) {
@@ -284,10 +284,10 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event A is emitted and considered (as 1st one failed)
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
-		contractAddr := main.AttestContract.Felt()
+		contractAddr := validator.AttestContract.Felt()
 		calls := []rpc.InvokeFunctionCall{{
 			ContractAddress: contractAddr,
 			FunctionName:    "attest",
@@ -296,7 +296,7 @@ func TestDispatch(t *testing.T) {
 
 		// We expect BuildAndSendInvokeTxn to fail once
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), calls, validator.FEE_ESTIMATION_MULTIPLIER).
 			Return(nil, errors.New("invoke tx failed for some reason")).
 			Times(1)
 
@@ -313,7 +313,7 @@ func TestDispatch(t *testing.T) {
 
 		// Next call to BuildAndSendInvokeTxn to then succeed
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), calls, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), calls, validator.FEE_ESTIMATION_MULTIPLIER).
 			Return(&mockedAddTxResp, nil).
 			Times(1)
 
@@ -345,18 +345,18 @@ func TestDispatch(t *testing.T) {
 		wg.Go(func() { dispatcher.Dispatch(mockAccount, mockLogger) })
 
 		// Send the same event x2
-		blockHash := main.BlockHash(*blockHashFelt)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		blockHash := validator.BlockHash(*blockHashFelt)
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
 		// Sleep just a bit so that dispatch routine has time to execute invoke tx (which fails)
 		time.Sleep(time.Second / 5)
 
 		// Mid-execution assertion: attestation has failed
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Failed, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Failed, dispatcher.CurrentAttestStatus)
 
 		// This 2nd event gets considered as previous one failed
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHash}
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
 		close(dispatcher.AttestRequired)
 		// Wait for dispatch routine (and consequently its spawned subroutines) to finish
@@ -364,7 +364,7 @@ func TestDispatch(t *testing.T) {
 
 		// Mid-execution assertion: attestation has failed (1st go routine has indeed finished executing)
 		require.Equal(t, blockHash, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Successful, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttestStatus)
 	})
 
 	t.Run("AttestRequired events transition with EndOfWindow events", func(t *testing.T) {
@@ -375,11 +375,11 @@ func TestDispatch(t *testing.T) {
 		// - an EndOfWindow event for B is emitted
 
 		// Setup
-		dispatcher := main.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *mocks.MockLogger]()
 
 		// For event A
 		blockHashFeltA := new(felt.Felt).SetUint64(1)
-		contractAddr := main.AttestContract.Felt()
+		contractAddr := validator.AttestContract.Felt()
 		callsA := []rpc.InvokeFunctionCall{{
 			ContractAddress: contractAddr,
 			FunctionName:    "attest",
@@ -390,7 +390,7 @@ func TestDispatch(t *testing.T) {
 
 		// We expect BuildAndSendInvokeTxn to be called once for event A
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), callsA, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), callsA, validator.FEE_ESTIMATION_MULTIPLIER).
 			Return(&mockedAddTxRespA, nil).
 			Times(1)
 
@@ -430,7 +430,7 @@ func TestDispatch(t *testing.T) {
 
 		// We expect BuildAndSendInvokeTxn to be called once for event B
 		mockAccount.EXPECT().
-			BuildAndSendInvokeTxn(context.Background(), callsB, main.FEE_ESTIMATION_MULTIPLIER).
+			BuildAndSendInvokeTxn(context.Background(), callsB, validator.FEE_ESTIMATION_MULTIPLIER).
 			Return(&mockedAddTxRespB, nil).
 			Times(1)
 
@@ -465,29 +465,29 @@ func TestDispatch(t *testing.T) {
 		wg.Go(func() { dispatcher.Dispatch(mockAccount, mockLogger) })
 
 		// Send event A
-		blockHashA := main.BlockHash(*blockHashFeltA)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHashA}
+		blockHashA := validator.BlockHash(*blockHashFeltA)
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHashA}
 
 		// To give time for the spawned routine to execute
 		time.Sleep(time.Second / 5)
 
 		// Mid-execution assertion: attestation A is successful
 		require.Equal(t, blockHashA, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Successful, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttestStatus)
 
 		// Send EndOfWindow event for event A
 		dispatcher.EndOfWindow <- struct{}{}
 
 		// Send event B
-		blockHashB := main.BlockHash(*blockHashFeltB)
-		dispatcher.AttestRequired <- main.AttestRequired{BlockHash: blockHashB}
+		blockHashB := validator.BlockHash(*blockHashFeltB)
+		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHashB}
 
 		// Sleep just a bit so that dispatch routine has time to set the status as ongoing
 		time.Sleep(time.Second / 10)
 
 		// Mid-execution assertion: attestation B has failed
 		require.Equal(t, blockHashB, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Ongoing, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttestStatus)
 
 		// To give time for the spawned routine to finish executing
 		time.Sleep(time.Second * 1)
@@ -501,7 +501,7 @@ func TestDispatch(t *testing.T) {
 
 		// End of execution assertion: attestation B was successful
 		require.Equal(t, blockHashB, dispatcher.CurrentAttest.BlockHash)
-		require.Equal(t, main.Failed, dispatcher.CurrentAttestStatus)
+		require.Equal(t, validator.Failed, dispatcher.CurrentAttestStatus)
 	})
 }
 
@@ -518,7 +518,7 @@ func TestTrackAttest(t *testing.T) {
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 
 			blockHash := new(felt.Felt).SetUint64(1)
-			attestEvent := main.AttestRequired{BlockHash: main.BlockHash(*blockHash)}
+			attestEvent := validator.AttestRequired{BlockHash: validator.BlockHash(*blockHash)}
 
 			mockAccount.EXPECT().
 				GetTransactionStatus(context.Background(), txHash).
@@ -531,9 +531,9 @@ func TestTrackAttest(t *testing.T) {
 				"error", errors.New("some internal error"),
 			)
 
-			txStatus := main.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
+			txStatus := validator.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
 
-			require.Equal(t, main.Failed, txStatus)
+			require.Equal(t, validator.Failed, txStatus)
 		})
 
 		t.Run("attestation fails if REJECTED", func(t *testing.T) {
@@ -541,7 +541,7 @@ func TestTrackAttest(t *testing.T) {
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 
 			blockHash := new(felt.Felt).SetUint64(1)
-			attestEvent := main.AttestRequired{BlockHash: main.BlockHash(*blockHash)}
+			attestEvent := validator.AttestRequired{BlockHash: validator.BlockHash(*blockHash)}
 
 			mockAccount.EXPECT().
 				GetTransactionStatus(context.Background(), txHash).
@@ -555,9 +555,9 @@ func TestTrackAttest(t *testing.T) {
 				"transaction hash", txHash,
 			)
 
-			txStatus := main.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
+			txStatus := validator.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
 
-			require.Equal(t, main.Failed, txStatus)
+			require.Equal(t, validator.Failed, txStatus)
 		})
 
 		t.Run("attestation fails if accepted but REVERTED", func(t *testing.T) {
@@ -565,7 +565,7 @@ func TestTrackAttest(t *testing.T) {
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 
 			blockHash := new(felt.Felt).SetUint64(1)
-			attestEvent := main.AttestRequired{BlockHash: main.BlockHash(*blockHash)}
+			attestEvent := validator.AttestRequired{BlockHash: validator.BlockHash(*blockHash)}
 
 			revertError := "reverted for some reason"
 			mockAccount.EXPECT().
@@ -583,9 +583,9 @@ func TestTrackAttest(t *testing.T) {
 				"failure reason", revertError,
 			)
 
-			txStatus := main.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
+			txStatus := validator.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
 
-			require.Equal(t, main.Failed, txStatus)
+			require.Equal(t, validator.Failed, txStatus)
 		})
 
 		t.Run("attestation succeeds if accepted & SUCCEEDED", func(t *testing.T) {
@@ -593,7 +593,7 @@ func TestTrackAttest(t *testing.T) {
 			txRes := &rpc.AddInvokeTransactionResponse{TransactionHash: txHash}
 
 			blockHash := new(felt.Felt).SetUint64(1)
-			attestEvent := main.AttestRequired{BlockHash: main.BlockHash(*blockHash)}
+			attestEvent := validator.AttestRequired{BlockHash: validator.BlockHash(*blockHash)}
 
 			mockAccount.EXPECT().
 				GetTransactionStatus(context.Background(), txHash).
@@ -610,9 +610,9 @@ func TestTrackAttest(t *testing.T) {
 				"execution status", rpc.TxnExecutionStatusSUCCEEDED,
 			)
 
-			txStatus := main.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
+			txStatus := validator.TrackAttest(mockAccount, mockLogger, &attestEvent, txRes)
 
-			require.Equal(t, main.Successful, txStatus)
+			require.Equal(t, validator.Successful, txStatus)
 		})
 	})
 }
@@ -632,7 +632,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 			GetTransactionStatus(context.Background(), txHash).
 			Return(nil, errors.New("some internal error"))
 
-		status, err := main.TrackTransactionStatus(mockAccount, mockLogger, txHash)
+		status, err := validator.TrackTransactionStatus(mockAccount, mockLogger, txHash)
 
 		require.Nil(t, status)
 		require.Equal(t, errors.New("some internal error"), err)
@@ -641,14 +641,14 @@ func TestTrackTransactionStatus(t *testing.T) {
 	t.Run("Returning a tx hash not found error triggers a retry", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 		// Mock time.Sleep (no reason to wait in that test)
-		main.Sleep = func(d time.Duration) {
+		validator.Sleep = func(d time.Duration) {
 			// Do nothing
 		}
 
 		// Set expectations
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), txHash).
-			Return(nil, main.ErrTxnHashNotFound)
+			Return(nil, validator.ErrTxnHashNotFound)
 
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), txHash).
@@ -661,7 +661,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 			"transaction hash", txHash,
 		)
 
-		status, err := main.TrackTransactionStatus(mockAccount, mockLogger, txHash)
+		status, err := validator.TrackTransactionStatus(mockAccount, mockLogger, txHash)
 
 		require.Equal(t, &rpc.TxnStatusResp{
 			FinalityStatus: rpc.TxnStatus_Accepted_On_L2,
@@ -669,12 +669,12 @@ func TestTrackTransactionStatus(t *testing.T) {
 		require.Nil(t, err)
 
 		// Reset time.Sleep function
-		main.Sleep = time.Sleep
+		validator.Sleep = time.Sleep
 	})
 
 	t.Run("Returns an error if tx status does not change for `DEFAULT_MAX_RETRIES` seconds", func(t *testing.T) {
 		// Mock time.Sleep (absolutely no reason to wait in that test)
-		main.Sleep = func(d time.Duration) {
+		validator.Sleep = func(d time.Duration) {
 			// Do nothing
 		}
 
@@ -685,20 +685,20 @@ func TestTrackTransactionStatus(t *testing.T) {
 			Return(&rpc.TxnStatusResp{
 				FinalityStatus: rpc.TxnStatus_Received,
 			}, nil).
-			Times(main.DEFAULT_MAX_RETRIES)
+			Times(validator.DEFAULT_MAX_RETRIES)
 
 		mockLogger.
 			EXPECT().
 			Infow("Attest transaction status was RECEIVED: retrying tracking it...", "transaction hash", txHash).
-			Times(main.DEFAULT_MAX_RETRIES)
+			Times(validator.DEFAULT_MAX_RETRIES)
 
-		status, err := main.TrackTransactionStatus(mockAccount, mockLogger, txHash)
+		status, err := validator.TrackTransactionStatus(mockAccount, mockLogger, txHash)
 
 		require.Nil(t, status)
-		require.Equal(t, errors.New("Tx status did not change for at least "+strconv.Itoa(main.DEFAULT_MAX_RETRIES)+" seconds, retrying from next block"), err)
+		require.Equal(t, errors.New("Tx status did not change for at least "+strconv.Itoa(validator.DEFAULT_MAX_RETRIES)+" seconds, retrying from next block"), err)
 
 		// Reset time.Sleep function
-		main.Sleep = time.Sleep
+		validator.Sleep = time.Sleep
 	})
 
 	t.Run("Returns the status if different from RECEIVED, here ACCEPTED_ON_L2", func(t *testing.T) {
@@ -711,7 +711,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 			}, nil).
 			Times(1)
 
-		status, err := main.TrackTransactionStatus(mockAccount, mockLogger, txHash)
+		status, err := validator.TrackTransactionStatus(mockAccount, mockLogger, txHash)
 
 		require.Equal(t, &rpc.TxnStatusResp{
 			FinalityStatus: rpc.TxnStatus_Accepted_On_L2,
@@ -729,7 +729,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 			}, nil).
 			Times(1)
 
-		status, err := main.TrackTransactionStatus(mockAccount, mockLogger, txHash)
+		status, err := validator.TrackTransactionStatus(mockAccount, mockLogger, txHash)
 
 		require.Equal(t, &rpc.TxnStatusResp{
 			FinalityStatus: rpc.TxnStatus_Accepted_On_L1,

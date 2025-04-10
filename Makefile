@@ -1,7 +1,12 @@
+.PHONY: validator signer
 
-validator: ## compile
+validator: 
 	mkdir -p build
-	go build -o ./build/validator ./validator/.
+	go build -o "./build/validator" "./cmd/validator/."
+
+signer:
+	mkdir -p build
+	go build -o "./build/signer" "./cmd/signer/."
 
 remote-signer:
 	mkdir -p build
