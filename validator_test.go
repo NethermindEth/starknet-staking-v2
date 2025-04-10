@@ -71,7 +71,7 @@ func TestNewValidatorAccount(t *testing.T) {
 			provider, providerErr := rpc.NewProvider(envVars.httpProviderUrl)
 			require.NoError(t, providerErr)
 
-			validatorAccount, err := main.NewValidatorAccount(
+			validatorAccount, err := main.NewInternalSigner(
 				provider, logger, &main.Signer{},
 			)
 
@@ -91,7 +91,7 @@ func TestNewValidatorAccount(t *testing.T) {
 			}
 
 			// Test
-			validatorAccount, err := main.NewValidatorAccount(provider, logger, &signer)
+			validatorAccount, err := main.NewInternalSigner(provider, logger, &signer)
 
 			// Assert
 			accountAddr, err := new(felt.Felt).SetString(signer.OperationalAddress)
@@ -122,7 +122,7 @@ func TestNewValidatorAccount(t *testing.T) {
 			PrivKey:            "0x123",
 			OperationalAddress: "0x456",
 		}
-		validatorAccount, err := main.NewValidatorAccount(provider, logger, &accountData)
+		validatorAccount, err := main.NewInternalSigner(provider, logger, &accountData)
 
 		require.Equal(t, main.InternalSigner{}, validatorAccount)
 		require.ErrorContains(t, err, "Cannot create validator account:")

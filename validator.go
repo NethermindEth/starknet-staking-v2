@@ -36,7 +36,7 @@ type Accounter interface {
 // Represents an internal signer where we hold the private keys
 type InternalSigner account.Account
 
-func NewValidatorAccount[Log Logger](
+func NewInternalSigner[Log Logger](
 	provider *rpc.Provider, logger Log, signer *Signer,
 ) (InternalSigner, error) {
 	// todo(rdr): do we need to check the private key has maximum size
@@ -114,7 +114,7 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	functionCalls []rpc.InvokeFunctionCall,
 	multiplier float64,
 ) (*rpc.AddInvokeTransactionResponse, error) {
-	nonce, err := s.Nonce(ctx, rpc.WithBlockTag("pending"), s.OperationalAddress.Felt())
+	nonce, err := s.Nonce(ctx, rpc.WithBlockTag("pending"), s.Address())
 	if err != nil {
 		return nil, err
 	}

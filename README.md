@@ -28,11 +28,12 @@ The validator can be run with:
 ./build/validator --config <path_to_config_file> 
 ```
 
-The config file is `.json` which specify two types `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.8.0` or higher. For the `signer`, you can use our implementation provided in this program or one implemented by you.
+The config file is `.json` which specifies two types `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.8.0` or higher. Those endpoints are used to listen information from the network.
 
-Depending of the fields `signer` has set, it is stablished as either internal (provided by us) or external (provided by you). An internal signer requires the `operationalAddress` and `privateKey` values set while an external one requires the `operationalAddress` and `url` values set. The `url` should point to an *http* address through which this program and the external signer will communicate.
+For the `signer`, you need to speicfy the `operationalAddress` and either a `privateKey` or external `url`. By specifing your `privateKey` the program will sign the transactions using it. If you specify an `url` the program is going to ask through that `url` for the transaction to be signed. The only transaction that requires signing are the **attest** transactions.
+Through the use of an `url` for external signing the program remains agnostic over the users private key. The `url` should point to an *http* address through which this program and the signer program will communicate. The way this communication happens is specified [here](#external_signer).
 
-A full config file looks like this:
+A full configuration file looks like this:
 
 ```json
 {
@@ -48,18 +49,18 @@ A full config file looks like this:
 }
 ```
 
-If a signer is defined with both private key and external url, the program will assume that an external signer is intended.
+If a signer is defined with both a private key and a external url, the program will give priority to the external signer over signing it itself.
 
 ### With flags
 
-The same basics applies as described in the previous section. The following command runs the validator and provides all the necessary information about provider and signer:
+The same basics apply as described in the previous section. The following command runs the validator and provides all the necessary information about provider and signer:
 ```bash
 ./build/validator \
     --provider-http "http://localhost:6060/v0_8" \
     --provider-ws "ws://localhost:6061/v0_8" \
     --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
-    --private-key "0x456"
+    --signer-priv-key "0x456"
 ```
 
 ### With configuration file and flags
@@ -118,7 +119,7 @@ Run your node with both the `http` and `ws` flags set. One example using Juno bu
   --ws-port 6061 \
 ```
 
-The configuration file properties will look like:
+The configuration file properties for local signing will look like:
 ```json
 {
   "provider": {
