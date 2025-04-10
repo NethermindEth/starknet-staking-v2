@@ -7,8 +7,8 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
-	main "github.com/NethermindEth/starknet-staking-v2"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
+	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/sourcegraph/conc"

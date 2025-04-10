@@ -14,8 +14,8 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
-	main "github.com/NethermindEth/starknet-staking-v2"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
+	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
