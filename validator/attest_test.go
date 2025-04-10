@@ -10,6 +10,7 @@ import (
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
+	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/cockroachdb/errors"
@@ -30,23 +31,25 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
-		epochId := uint64(1516)
-		epochLength := uint64(40)
 		attestWindow := uint64(16)
-		epochStartingBlock := validator.BlockNumber(639270)
+		epoch := validator.EpochInfo{
+			StakerAddress:             main.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
+			Stake:                     uint128.New(1000000000000000000, 0),
+			EpochId:                   1516,
+			CurrentEpochStartingBlock: 639270,
+			EpochLen:                  40,
+		}
 		expectedTargetBlock := validator.BlockNumber(639291)
 		mockSuccessfullyFetchedEpochAndAttestInfo(
 			t,
 			mockAccount,
-			epochId,
-			epochLength,
+			&epoch,
 			attestWindow,
-			epochStartingBlock,
 			1,
 		)
 
 		targetBlockHash := validator.BlockHash(*utils.HexToFelt(t, "0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045"))
-		blockHeaders := mockHeaderFeed(t, epochStartingBlock, expectedTargetBlock, &targetBlockHash, epochLength)
+		blockHeaders := mockHeaderFeed(t, epoch.CurrentEpochStartingBlock, expectedTargetBlock, &targetBlockHash, epoch.EpochLen)
 
 		// Mock SetTargetBlockHashIfExists call
 		targetBlockUint64 := expectedTargetBlock.Uint64()
@@ -92,24 +95,36 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
+		stakerAddress := main.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stake := uint128.New(1000000000000000000, 0)
 		epochLength := uint64(40)
 		attestWindow := uint64(16)
 
-		epochId1 := uint64(1516)
-		epochStartingBlock1 := validator.BlockNumber(639270)
+		epoch1 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
+			Stake:                     stake,
+			EpochId:                   1516,
+			CurrentEpochStartingBlock: 639270,
+			EpochLen:                  epochLength,
+		}
 		expectedTargetBlock1 := validator.BlockNumber(639291) // calculated by fetch epoch & attest info call
-		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, epochId1, epochLength, attestWindow, epochStartingBlock1, 1)
+		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, &epoch1, attestWindow, 1)
 
-		epochId2 := uint64(1517)
-		epochStartingBlock2 := validator.BlockNumber(639310)
+		epoch2 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
+			Stake:                     stake,
+			EpochId:                   1517,
+			CurrentEpochStartingBlock: 639310,
+			EpochLen:                  epochLength,
+		}
 		expectedTargetBlock2 := validator.BlockNumber(639316) // calculated by fetch epoch & attest info call
-		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, epochId2, epochLength, attestWindow, epochStartingBlock2, 1)
+		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, &epoch2, attestWindow, 1)
 
 		targetBlockHashEpoch1 := validator.BlockHash(
 			*utils.HexToFelt(t, "0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045"),
 		)
 		blockHeaders1 := mockHeaderFeed(
-			t, epochStartingBlock1, expectedTargetBlock1, &targetBlockHashEpoch1, epochLength,
+			t, epoch1.CurrentEpochStartingBlock, expectedTargetBlock1, &targetBlockHashEpoch1, epoch1.EpochLen,
 		)
 
 		targetBlockHashEpoch2 := validator.BlockHash(
@@ -117,10 +132,10 @@ func TestProcessBlockHeaders(t *testing.T) {
 		)
 		blockHeaders2 := mockHeaderFeed(
 			t,
-			epochStartingBlock2,
+			epoch2.CurrentEpochStartingBlock,
 			expectedTargetBlock2,
 			&targetBlockHashEpoch2,
-			epochLength,
+			epoch2.EpochLen,
 		)
 
 		// Mock SetTargetBlockHashIfExists call
@@ -172,26 +187,38 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
+		stakerAddress := main.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stake := uint128.New(1000000000000000000, 0)
 		epochLength := uint64(40)
 		attestWindow := uint64(16)
 
-		epochId1 := uint64(1516)
-		epochStartingBlock1 := validator.BlockNumber(639270)
+		epoch1 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
+			Stake:                     stake,
+			EpochId:                   1516,
+			CurrentEpochStartingBlock: 639270,
+			EpochLen:                  epochLength,
+		}
 		expectedTargetBlock1 := validator.BlockNumber(639291) // calculated by fetch epoch & attest info call
-		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, epochId1, epochLength, attestWindow, epochStartingBlock1, 1)
+		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, &epoch1, attestWindow, 1)
 
-		epochId2 := uint64(1517)
-		epochStartingBlock2 := validator.BlockNumber(639311)  // Wrong new epoch start (1 block after expected one)
+		epoch2 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
+			Stake:                     stake,
+			EpochId:                   1517,
+			CurrentEpochStartingBlock: 639311, // Wrong new epoch start (1 block after expected one)
+			EpochLen:                  epochLength,
+		}
 		expectedTargetBlock2 := validator.BlockNumber(639316) // calculated by fetch epoch & attest info call
 		// The call to fetch next epoch's info will return an erroneous starting block
-		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, epochId2, epochLength, attestWindow, epochStartingBlock2, validator.DEFAULT_MAX_RETRIES+1)
+		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, &epoch2, attestWindow, validator.DEFAULT_MAX_RETRIES+1)
 
 		targetBlockHashEpoch1 := validator.BlockHash(*utils.HexToFelt(t, "0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045"))
-		blockHeaders1 := mockHeaderFeed(t, epochStartingBlock1, expectedTargetBlock1, &targetBlockHashEpoch1, epochLength)
+		blockHeaders1 := mockHeaderFeed(t, epoch1.CurrentEpochStartingBlock, expectedTargetBlock1, &targetBlockHashEpoch1, epoch1.EpochLen)
 
 		targetBlockHashEpoch2 := validator.BlockHash(*utils.HexToFelt(t, "0x2124ae375432a16ef644f539c3b148f63c706067bf576088f32033fe59c345e"))
-		// Have the feeder routine feed the correct epoch's starting block
-		blockHeaders2 := mockHeaderFeed(t, epochStartingBlock2-1, expectedTargetBlock2, &targetBlockHashEpoch2, epochLength)
+		// Have the feeder routine feed the next epoch's correct starting block
+		blockHeaders2 := mockHeaderFeed(t, epoch2.CurrentEpochStartingBlock-1, expectedTargetBlock2, &targetBlockHashEpoch2, epoch2.EpochLen)
 
 		// Mock SetTargetBlockHashIfExists call
 		targetBlockUint64 := expectedTargetBlock1.Uint64()
@@ -241,22 +268,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 
 		require.Equal(t, uint8(1), receivedEndOfWindowEvents)
 
-		stake := uint64(1000000000000000000)
-		expectedPrevEpoch := validator.EpochInfo{
-			StakerAddress:             validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
-			Stake:                     uint128.New(stake, 0),
-			EpochId:                   epochId1,
-			CurrentEpochStartingBlock: epochStartingBlock1,
-			EpochLen:                  epochLength,
-		}
-		expectedNewEpoch := validator.EpochInfo{
-			StakerAddress:             validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
-			Stake:                     uint128.New(stake, 0),
-			EpochId:                   epochId2,
-			CurrentEpochStartingBlock: epochStartingBlock2,
-			EpochLen:                  epochLength,
-		}
-		expectedReturnedError := errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", &expectedPrevEpoch, &expectedNewEpoch)
+		expectedReturnedError := errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", &epoch1, &epoch2)
 		require.Equal(t, expectedReturnedError.Error(), err.Error())
 	})
 }
@@ -301,10 +313,8 @@ func registerReceivedEvents[T validator.Accounter, Log validator.Logger](
 func mockSuccessfullyFetchedEpochAndAttestInfo(
 	t *testing.T,
 	mockAccount *mocks.MockAccounter,
-	epochId,
-	epochLength,
+	epoch *validator.EpochInfo,
 	attestWindow uint64,
-	epochStartingBlock validator.BlockNumber,
 	howManyTimes int,
 ) {
 	t.Helper()
@@ -330,9 +340,9 @@ func mockSuccessfullyFetchedEpochAndAttestInfo(
 			[]*felt.Felt{
 				validatorOperationalAddress,
 				new(felt.Felt).SetUint64(stake),
-				new(felt.Felt).SetUint64(epochLength),
-				new(felt.Felt).SetUint64(epochId),
-				new(felt.Felt).SetUint64(epochStartingBlock.Uint64()),
+				new(felt.Felt).SetUint64(epoch.EpochLen),
+				new(felt.Felt).SetUint64(epoch.EpochId),
+				new(felt.Felt).SetUint64(epoch.CurrentEpochStartingBlock.Uint64()),
 			},
 			nil,
 		).
@@ -481,6 +491,10 @@ func TestFetchEpochAndAttestInfoWithRetry(t *testing.T) {
 	noOpLogger := utils.NewNopZapLogger()
 
 	t.Run("Return error fetching epoch info", func(t *testing.T) {
+		// Sequence of actions:
+		// 1. Fetch epoch and attest info: error, causing to retry 10 times
+		// 2. After the 10 retries, exit with error
+
 		validatorOperationalAddress := utils.HexToFelt(t, "0x123")
 		fetchingError := "some internal error fetching epoch info"
 		mockFailedFetchingEpochAndAttestInfo(t, mockAccount, validatorOperationalAddress, fetchingError, validator.DEFAULT_MAX_RETRIES+1)
@@ -503,44 +517,43 @@ func TestFetchEpochAndAttestInfoWithRetry(t *testing.T) {
 	})
 
 	t.Run("Return epoch switch error (combine fetch info & epoch switch errors)", func(t *testing.T) {
+		// Sequence of actions:
+		// 1. Fetch epoch and attest info: error
+		// 2. Epoch switch: error, causing to retry 10 times
+		// 3. After the 10 retries, exit with error
+
 		validatorOperationalAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		fetchingError := "some internal error fetching epoch info"
 		mockFailedFetchingEpochAndAttestInfo(t, mockAccount, validatorOperationalAddress, fetchingError, 1)
 
-		newEpochIdUint := uint64(1516)
-		newEpochIdStr := strconv.FormatUint(newEpochIdUint, 10)
-
-		// fetchEpochInfo now works but returns a wrong next epoch
+		stakerAddress := validator.Address(*validatorOperationalAddress)
 		stake := uint64(1000000000000000000)
 		epochLength := uint64(40)
-		newEpochStartingBlock := validator.BlockNumber(639270)
-		attestWindow := uint64(16)
 
+		epoch1 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
+			Stake:                     uint128.New(stake, 0),
+			EpochLen:                  epochLength,
+			EpochId:                   1515,
+			CurrentEpochStartingBlock: 639230,
+		}
+
+		// Mock FetchEpochAndAttestInfo: returns a wrong next epoch (10 times)
+		epoch2 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
+			Stake:                     uint128.New(stake, 0),
+			EpochLen:                  epochLength,
+			EpochId:                   1516,
+			CurrentEpochStartingBlock: 639271, // wrong new epoch start (1 block after correct block)
+		}
+		attestWindow := uint64(16)
 		mockSuccessfullyFetchedEpochAndAttestInfo(
 			t,
 			mockAccount,
-			newEpochIdUint,
-			epochLength,
+			&epoch2,
 			attestWindow,
-			newEpochStartingBlock,
 			validator.DEFAULT_MAX_RETRIES,
 		)
-
-		prevEpoch := validator.EpochInfo{
-			StakerAddress:             validator.Address(*validatorOperationalAddress),
-			Stake:                     uint128.New(stake, 0),
-			EpochLen:                  epochLength,
-			EpochId:                   newEpochIdUint - 1,
-			CurrentEpochStartingBlock: newEpochStartingBlock - validator.BlockNumber(epochLength) + 1, // wrong new epoch start (shouldn't have + 1)
-		}
-
-		newEpoch := validator.EpochInfo{
-			StakerAddress:             validator.Address(*validatorOperationalAddress),
-			Stake:                     uint128.New(stake, 0),
-			EpochLen:                  epochLength,
-			EpochId:                   newEpochIdUint,
-			CurrentEpochStartingBlock: newEpochStartingBlock,
-		}
 
 		validator.Sleep = func(time.Duration) {
 			// do nothing (avoid waiting)
@@ -550,68 +563,76 @@ func TestFetchEpochAndAttestInfoWithRetry(t *testing.T) {
 		newEpochInfo, newAttestInfo, err := validator.FetchEpochAndAttestInfoWithRetry(
 			mockAccount,
 			noOpLogger,
-			&prevEpoch,
+			&epoch1,
 			validator.IsEpochSwitchCorrect,
-			newEpochIdStr,
+			strconv.FormatUint(epoch1.EpochId+1, 10),
 		)
 
 		require.Zero(t, newEpochInfo)
 		require.Zero(t, newAttestInfo)
-		expectedReturnedError := errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", &prevEpoch, &newEpoch)
+		expectedReturnedError := errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", &epoch1, &epoch2)
 		require.Equal(t, expectedReturnedError.Error(), err.Error())
 	})
 
 	t.Run("Successfully return epoch and attest info", func(t *testing.T) {
-		// 1st call to fetchEpochInfo fails
+		// Sequence of actions:
+		// 1. Fetch epoch and attest info: error (causing retry)
+		// 2. Fetch epoch and attest info: successful
+		// 3. Epoch switch: successful
+		// 4. Return new epoch and attest info
+
+		// Mock 1st call to FetchEpochAndAttestInfo: fails
 		validatorOperationalAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		fetchingError := "some internal error fetching epoch info"
 		mockFailedFetchingEpochAndAttestInfo(t, mockAccount, validatorOperationalAddress, fetchingError, 1)
 
-		// 2nd call to fetchEpochInfo succeeds
-		newEpochIdUint := uint64(1516)
-		newEpochIdStr := strconv.FormatUint(newEpochIdUint, 10)
-
 		// fetchEpochInfo now works and returns a correct next epoch
+		stakerAddress := validator.Address(*validatorOperationalAddress)
 		stake := uint64(1000000000000000000)
 		epochLength := uint64(40)
-		newEpochStartingBlock := validator.BlockNumber(639270)
-		attestWindow := uint64(16)
 
-		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, newEpochIdUint, epochLength, attestWindow, newEpochStartingBlock, 1)
-
-		prevEpoch := validator.EpochInfo{
-			StakerAddress:             validator.Address(*validatorOperationalAddress),
+		epoch1 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
 			Stake:                     uint128.New(stake, 0),
 			EpochLen:                  epochLength,
-			EpochId:                   newEpochIdUint - 1,
-			CurrentEpochStartingBlock: newEpochStartingBlock - validator.BlockNumber(epochLength),
+			EpochId:                   1515,
+			CurrentEpochStartingBlock: 639230,
 		}
+
+		// Mock 2nd FetchEpochAndAttestInfo: returns a correct next epoch
+		epoch2 := validator.EpochInfo{
+			StakerAddress:             stakerAddress,
+			Stake:                     uint128.New(stake, 0),
+			EpochLen:                  epochLength,
+			EpochId:                   1516,
+			CurrentEpochStartingBlock: 639270,
+		}
+		attestWindow := uint64(16)
+		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, &epoch2, attestWindow, 1)
 
 		validator.Sleep = func(time.Duration) {
 			// do nothing (avoid waiting)
 		}
 		defer func() { validator.Sleep = time.Sleep }()
 
-		newEpochInfo, newAttestInfo, err := validator.FetchEpochAndAttestInfoWithRetry(mockAccount, noOpLogger, &prevEpoch, validator.IsEpochSwitchCorrect, newEpochIdStr)
+		newEpochInfo, newAttestInfo, err := validator.FetchEpochAndAttestInfoWithRetry(
+			mockAccount,
+			noOpLogger,
+			&epoch1,
+			validator.IsEpochSwitchCorrect,
+			strconv.FormatUint(epoch1.EpochId+1, 10),
+		)
 
-		expectedNewEpoch := validator.EpochInfo{
-			StakerAddress:             validator.Address(*validatorOperationalAddress),
-			Stake:                     uint128.New(stake, 0),
-			EpochLen:                  epochLength,
-			EpochId:                   newEpochIdUint,
-			CurrentEpochStartingBlock: newEpochStartingBlock,
-		}
-
-		expectedTargetBlock := validator.BlockNumber(639291)
-		expectedNewAttestInfo := validator.AttestInfo{
-			TargetBlock:     expectedTargetBlock,
+		expectedEpoch2TargetBlock := validator.BlockNumber(639291)
+		expectedEpoch2AttestInfo := validator.AttestInfo{
+			TargetBlock:     expectedEpoch2TargetBlock,
 			TargetBlockHash: validator.BlockHash{},
-			WindowStart:     expectedTargetBlock + validator.BlockNumber(validator.MIN_ATTESTATION_WINDOW),
-			WindowEnd:       expectedTargetBlock + validator.BlockNumber(attestWindow),
+			WindowStart:     expectedEpoch2TargetBlock + validator.BlockNumber(validator.MIN_ATTESTATION_WINDOW),
+			WindowEnd:       expectedEpoch2TargetBlock + validator.BlockNumber(attestWindow),
 		}
 
-		require.Equal(t, expectedNewEpoch, newEpochInfo)
-		require.Equal(t, expectedNewAttestInfo, newAttestInfo)
+		require.Equal(t, &epoch2, &newEpochInfo)
+		require.Equal(t, expectedEpoch2AttestInfo, newAttestInfo)
 		require.Nil(t, err)
 	})
 }
