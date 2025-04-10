@@ -1,18 +1,16 @@
-package external_signer
+package signer
 
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"math/big"
 	"net/http"
-	"os"
 
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/cockroachdb/errors"
-	"github.com/joho/godotenv"
 )
 
 type SignRequest struct {
@@ -24,25 +22,12 @@ type SignResponse struct {
 }
 
 type Signer struct {
+	logger    *utils.ZapLogger
 	publicKey *big.Int
 	keyStore  *account.MemKeystore
 }
 
-func loadEnv() string {
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Printf("No '.env' file found %s, will try looking for PRIVATE_KEY as a cli environment variable", err)
-	}
-
-	signerKey := os.Getenv("PRIVATE_KEY")
-	if signerKey == "" {
-		panic("Failed to load PRIVATE_KEY, empty string")
-	}
-
-	return signerKey
-}
-
-func newSigner(privateKey string) (Signer, error) {
+func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
 	privKey, ok := new(big.Int).SetString(privateKey, 0)
 	if !ok {
 		return Signer{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
@@ -55,53 +40,61 @@ func newSigner(privateKey string) (Signer, error) {
 
 	ks := account.SetNewMemKeystore(publicKey.String(), privKey)
 
-	return Signer{keyStore: ks, publicKey: publicKey}, nil
+	return Signer{
+		logger:    logger,
+		keyStore:  ks,
+		publicKey: publicKey,
+	}, nil
 }
 
-func (s *Signer) sign(msg *felt.Felt) ([]*felt.Felt, error) {
-	msgBig := msg.BigInt(new(big.Int))
+// Listen for requests of the type `POST` at `<address>/sign`. The request
+// should include the hash of the transaction being signed.
+func (s *Signer) Listen(address string) error {
+	const sign_endpoint = "/sign"
+	http.HandleFunc(sign_endpoint, s.handler)
 
-	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), msgBig)
-	if err != nil {
-		return nil, err
-	}
+	s.logger.Infof("Server running at %s", address)
 
-	s1Felt := new(felt.Felt).SetBigInt(s1)
-	s2Felt := new(felt.Felt).SetBigInt(s2)
-
-	return []*felt.Felt{s1Felt, s2Felt}, nil
+	return http.ListenAndServe(address, nil)
 }
 
-func signHandler(w http.ResponseWriter, r *http.Request, signer *Signer) {
+// Decodes the request and signs it by returning the `r` and `v` values
+func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
+	s.logger.Debug("Recieving http request")
+
 	var req SignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	signature, err := signer.sign(&req.Hash)
+	signature, err := s.sign(&req.Hash)
 	if err != nil {
 		http.Error(w, "Failed to sign hash: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp := SignResponse{Signature: signature}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+
+	s.logger.Debugw("Answered http request", "response", resp)
 }
 
-func main() {
-	signerKey := loadEnv()
-	signer, err := newSigner(signerKey)
+func (s *Signer) sign(msg *felt.Felt) ([]*felt.Felt, error) {
+	s.logger.Infof("Signing message with hash: %s", msg)
+
+	msgBig := msg.BigInt(new(big.Int))
+
+	r, v, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), msgBig)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	http.HandleFunc("/sign_hash", func(w http.ResponseWriter, r *http.Request) {
-		signHandler(w, r, &signer)
-	})
+	s1Felt := new(felt.Felt).SetBigInt(r)
+	s2Felt := new(felt.Felt).SetBigInt(v)
 
-	log.Println("🚀 Server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	s.logger.Debugf("r", r, "v", v)
+
+	return []*felt.Felt{s1Felt, s2Felt}, nil
 }
