@@ -18,7 +18,7 @@ type SignRequest struct {
 }
 
 type SignResponse struct {
-	Signature []*felt.Felt `json:"signature"`
+	Signature [2]felt.Felt `json:"signature"`
 }
 
 type Signer struct {
@@ -81,20 +81,20 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	s.logger.Debugw("Answered http request", "response", resp)
 }
 
-func (s *Signer) sign(msg *felt.Felt) ([]*felt.Felt, error) {
+func (s *Signer) sign(msg *felt.Felt) ([2]felt.Felt, error) {
 	s.logger.Infof("Signing message with hash: %s", msg)
 
 	msgBig := msg.BigInt(new(big.Int))
 
-	r, v, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), msgBig)
+	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), msgBig)
 	if err != nil {
-		return nil, err
+		return [2]felt.Felt{}, err
 	}
 
-	s1Felt := new(felt.Felt).SetBigInt(r)
-	s2Felt := new(felt.Felt).SetBigInt(v)
+	s.logger.Debugf("r", s1, "s", s2)
 
-	s.logger.Debugf("r", r, "v", v)
-
-	return []*felt.Felt{s1Felt, s2Felt}, nil
+	return [2]felt.Felt{
+		*new(felt.Felt).SetBigInt(s1),
+		*new(felt.Felt).SetBigInt(s2),
+	}, nil
 }
