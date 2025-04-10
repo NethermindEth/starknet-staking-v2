@@ -79,15 +79,18 @@ Using a combination of both approaches is also valid. In this case, the values p
 
 ## External Signer 
 
-The external signer must implement a simple HTTP API, exposing a single `/sign` endpoint:
+To avoid users exposing their private keys our Validator program is capable of communicating with another process independent from the here provided. 
 
-- POST `/sign`: should return the signature for the transaction hash received as its input:
+This external signer must implement a simple HTTP server that waits for `POST` requests on an endpoint of the form `<signer_address>/sign`. This `<signer_address>` is the same one that it should be specified when initializing the validator tool in `signer-url`.
+
+The `POST` request will have the following form:
 ```json
 {
     "transaction_hash": "0x123"
 }
 ```
-Response should contain the ECDSA signature values r and s in an array:
+
+And answer with the ECDSA signature values `r` and `s` in an array:
 ```json
 {
   "signature": [
@@ -95,8 +98,43 @@ Response should contain the ECDSA signature values r and s in an array:
     "0xdef"
   ]
 }
+
 ```
-An example implementation is provided [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
+
+We have provided an implementation [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/signer/signer.go) for you to try and based your own if needed.
+
+### Try out our external signer
+
+First make sure you compile it from source with:
+```bash
+make signer
+```
+
+Then execute it with:
+```bash
+SIGNER_PRIVATE_KEY="0x123" ./build/signer \
+    --address localhost:8080
+```
+
+*On a separate terminal*, simulate the request for signing using the following request:
+```bash
+curl -X POST http://localhost:8080/sign \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_hash": "0x567"}
+```
+
+You should get the following answer:
+```json
+{
+    "signature": [
+        "0x2534533c18797c67974111a5b79210574bfa4a98c2adc97fb5a06164da4b2ea",
+        "0x434a779d865a617a7a47d1c48b7220dda230103ff1a006b752374f89d14f3ed"
+    ]
+}
+```
+
+This type of communication is exactly what will happen behind the curtains when using the validator tool and the signer each time there is an attestation required.
+
 
 ## Logging
 
