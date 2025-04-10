@@ -83,7 +83,7 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 			prevEpochInfo := epochInfo
 
 			if epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
-				account, logger, &prevEpochInfo, isEpochSwitchCorrect, strconv.FormatUint(prevEpochInfo.EpochId+1, 10),
+				account, logger, &prevEpochInfo, IsEpochSwitchCorrect, strconv.FormatUint(prevEpochInfo.EpochId+1, 10),
 			); err != nil {
 				return err
 			}
@@ -142,9 +142,9 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 
 	for i := 0; (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && i < DEFAULT_MAX_RETRIES; i++ {
 		if err != nil {
-			logger.Errorw("Failed to fetch epoch info", "epoch id", newEpochId, "error", err)
+			logger.Debugw("Failed to fetch epoch info", "epoch id", newEpochId, "error", err.Error())
 		} else {
-			logger.Errorw("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", newEpoch)
+			logger.Debugw("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", &newEpoch)
 		}
 		logger.Debugw("Retrying to fetch epoch info...", "attempt", i+1)
 		Sleep(time.Second)
@@ -161,13 +161,13 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 	} else if !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
 		return EpochInfo{},
 			AttestInfo{},
-			errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", prevEpoch, newEpoch)
+			errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", prevEpoch, &newEpoch)
 	}
 
 	return newEpoch, newAttestInfo, nil
 }
 
-func isEpochSwitchCorrect(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool {
+func IsEpochSwitchCorrect(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool {
 	return newEpoch.EpochId == prevEpoch.EpochId+1 &&
 		newEpoch.CurrentEpochStartingBlock.Uint64() == prevEpoch.CurrentEpochStartingBlock.Uint64()+prevEpoch.EpochLen
 }
