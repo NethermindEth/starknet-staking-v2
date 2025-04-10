@@ -133,6 +133,14 @@ The configuration file properties for local signing will look like:
 }
 ```
 
+## Contact us
+
+We are the team behind the Juno client. Please don't hesitate to contact us if you have questions or feedback:
+
+- [Telegram](https://t.me/StarknetJuno)
+- [Discord](https://discord.com/invite/TcHbSZ9ATd)
+- [X*(Formerly Twitter)*](https://x.com/NethermindStark)
+
 ##  License
 
 Starknet Staking v2 is open-source software licensed under the [Apache-2.0 License](https://github.com/NethermindEth/starknet-staking-v2/blob/main/LICENSE).
