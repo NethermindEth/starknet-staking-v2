@@ -31,7 +31,7 @@ The validator can be run with:
 The config file is `.json` which specifies two types `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.8.0` or higher. Those endpoints are used to listen information from the network.
 
 For the `signer`, you need to speicfy the `operationalAddress` and either a `privateKey` or external `url`. By specifing your `privateKey` the program will sign the transactions using it. If you specify an `url` the program is going to ask through that `url` for the transaction to be signed. The only transaction that requires signing are the **attest** transactions.
-Through the use of an `url` for external signing the program remains agnostic over the users private key. The `url` should point to an *http* address through which this program and the signer program will communicate. The way this communication happens is specified [here](#external_signer).
+Through the use of an `url` for external signing the program remains agnostic over the users private key. The `url` should point to an *http* address through which this program and the signer program will communicate. The way this communication happens is specified [here](#external-signer).
 
 A full configuration file looks like this:
 
@@ -132,6 +132,14 @@ The configuration file properties for local signing will look like:
   }
 }
 ```
+
+## Contact us
+
+We are the team behind the Juno client. Please don't hesitate to contact us if you have questions or feedback:
+
+- [Telegram](https://t.me/StarknetJuno)
+- [Discord](https://discord.com/invite/TcHbSZ9ATd)
+- [X(Formerly Twitter)](https://x.com/NethermindStark)
 
 ##  License
 
