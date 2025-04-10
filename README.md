@@ -19,42 +19,68 @@ This will compile the project and place the binary in *./build/validator*.
 
 ## Running
 
-For executing the validator, just run:
+To run the validator it needs certain data specified such as the node to connect to and the operational address of the staker. This data can be provided in two ways, either through a configuration file or through flags directly in the app.
+
+### With a configuration file
+
+The validator can be run with:
 ```bash
-./build/validator --config <path_to_config_file> --[local/external]-signer
+./build/validator --config <path_to_config_file> 
 ```
 
-The config file must be a `.json` with the following fields:
+The config file is `.json` which specifies two types `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.8.0` or higher. Those endpoints are used to listen information from the network.
 
-1. `privateKey`: For signing transactions from the operational address
-2. `operationalAddress`: Account address from where to do the attestation
-3. `httpProviderUrl`: Used to send the invoke transactions to the sequencer
-4. `wsProviderUrl`:  Used to subscribe to the block headers
-5. `externalSignerUrl`: External signer URL for signing attestation transactions
+For the `signer`, you need to speicfy the `operationalAddress` and either a `privateKey` or external `url`. By specifing your `privateKey` the program will sign the transactions using it. If you specify an `url` the program is going to ask through that `url` for the transaction to be signed. The only transaction that requires signing are the **attest** transactions.
+Through the use of an `url` for external signing the program remains agnostic over the users private key. The `url` should point to an *http* address through which this program and the signer program will communicate. The way this communication happens is specified [here](#external-signer).
 
+A full configuration file looks like this:
 
 ```json
 {
-    "privateKey": "<private_key>",
-    "operationalAddress": "<operational_address>",
-    "httpProviderUrl": "<http_provider_url>",
-    "wsProviderUrl": "<ws_provider_url>",
-    "externalSignerUrl": "<external_signer_url>"
+  "provider": {
+      "http": "http://localhost:6060/v0_8",
+      "ws": "ws://localhost:6061/v0_8"
+  },
+  "signer": {
+      "url": "http://localhost:8080",
+      "operationalAddress": "0x123"
+      "privateKey": "0x456", 
+  }
 }
 ```
 
-### Signatures
+If a signer is defined with both a private key and a external url, the program will give priority to the external signer over signing it itself.
 
-There are two options for signing attestation transactions sent by the tool.
+### With flags
 
-- You can use `--local-signer` flag. In this case, you must set the `privateKey` of the operational account in the json config file.
-Using this first option, the app will sign the attestation transactions locally using your private key.
-- You can use `--external-signer` flag. In this case, you must set the `externalSignerUrl` field in the json config file.
-Using this second option, the app will send the attestation transaction hash to an external signer for signing.
+The same basics apply as described in the previous section. The following command runs the validator and provides all the necessary information about provider and signer:
+```bash
+./build/validator \
+    --provider-http "http://localhost:6060/v0_8" \
+    --provider-ws "ws://localhost:6061/v0_8" \
+    --signer-url "http//localhost:8080" \
+    --signer-op-address "0x123" \
+    --signer-priv-key "0x456"
+```
 
-#### External Signer (blind signing)
+### With configuration file and flags
 
-The external signer must implement a simple HTTP API, exposing the single `/sign` endpoint:
+Using a combination of both approaches is also valid. In this case, the values provided by the flags override the values provided by the configuration file.
+
+```bash
+./build/validator \
+    --config <path_to_config_file> \
+    --provider-http "http://localhost:6060/v0_8" \
+    --provider-ws "ws://localhost:6061/v0_8" \
+    --signer-url "http//localhost:8080" \
+    --signer-op-address "0x123" \
+    --private-key "0x456"
+```
+
+## External Signer 
+
+The external signer must implement a simple HTTP API, exposing a single `/sign` endpoint:
+
 - POST `/sign`: should return the signature for the transaction hash received as its input:
 ```json
 {
@@ -70,16 +96,14 @@ Response should contain the ECDSA signature values r and s in an array:
   ]
 }
 ```
-A simple example implementation of the API is available [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
+An example implementation is provided [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
 
-### Additional features
-
-1. Logging
+## Logging
 
 You have the possibility to give an additional flag `--log-level [info/debug/trace/warn/error]` to control the level of logging.
 If not set, the log level will default to `info`.
 
-### Example with Juno
+## Example with Juno
 
 Once you have your own node set either built from source or through docker. [See how](https://github.com/NethermindEth/juno?tab=readme-ov-file#run-with-docker).
 
@@ -95,15 +119,27 @@ Run your node with both the `http` and `ws` flags set. One example using Juno bu
   --ws-port 6061 \
 ```
 
-The configuration file properties will look like:
+The configuration file properties for local signing will look like:
 ```json
 {
-    "httpProviderUrl": "http://localhost:6060/v0_8",
-    "wsProviderUrl": "ws://localhost:6061/v0_8"
+  "provider": {
+      "http": "http://localhost:6060/v0_8",
+      "ws": "ws://localhost:1235/v0_8"
+  },
+  "signer": {
+      "operationalAddress": "your operational address"
+      "privateKey": "your private key", 
+  }
 }
 ```
 
-It's important we specify the `v0_8` part so that we are routed through the right rpc version and not the node's default one.
+## Contact us
+
+We are the team behind the Juno client. Please don't hesitate to contact us if you have questions or feedback:
+
+- [Telegram](https://t.me/StarknetJuno)
+- [Discord](https://discord.com/invite/TcHbSZ9ATd)
+- [X(Formerly Twitter)](https://x.com/NethermindStark)
 
 ##  License
 

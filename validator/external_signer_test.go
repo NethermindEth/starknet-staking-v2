@@ -1,4 +1,4 @@
-package main_test
+package validator_test
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
-	main "github.com/NethermindEth/starknet-staking-v2"
+	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/stretchr/testify/require"
 )
 

@@ -1,4 +1,4 @@
-package main
+package validator
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 
 type Address felt.Felt
 
-func (a *Address) ToFelt() felt.Felt {
-	return felt.Felt(*a)
+func (a *Address) Felt() *felt.Felt {
+	return (*felt.Felt)(a)
 }
 
 func AddressFromString(addrStr string) Address {
@@ -21,6 +21,10 @@ func AddressFromString(addrStr string) Address {
 	}
 
 	return Address(*adr)
+}
+
+func (a *Address) String() string {
+	return (*felt.Felt)(a).String()
 }
 
 func (a *Address) UnmarshalJSON(data []byte) error {
@@ -46,13 +50,12 @@ func (b BlockNumber) Uint64() uint64 {
 
 type BlockHash felt.Felt
 
-func (b *BlockHash) ToFelt() felt.Felt {
-	return felt.Felt(*b)
+func (b *BlockHash) Felt() *felt.Felt {
+	return (*felt.Felt)(b)
 }
 
 func (b *BlockHash) String() string {
-	hashFelt := b.ToFelt()
-	return hashFelt.String()
+	return (*felt.Felt)(b).String()
 }
 
 //go:generate mockgen -destination=./mocks/mock_logger.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Logger
@@ -78,11 +81,9 @@ type EpochInfo struct {
 }
 
 func (e *EpochInfo) String() string {
-	addrFelt := e.StakerAddress.ToFelt()
-
 	return fmt.Sprintf(
 		"EpochInfo{StakerAddress: %s, Stake: %s, EpochId: %d, EpochLen: %d, CurrentEpochStartingBlock: %d}",
-		addrFelt.String(), e.Stake, e.EpochId, e.EpochLen, e.CurrentEpochStartingBlock,
+		e.StakerAddress.Felt().String(), e.Stake, e.EpochId, e.EpochLen, e.CurrentEpochStartingBlock,
 	)
 }
 

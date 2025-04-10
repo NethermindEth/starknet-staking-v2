@@ -17,6 +17,9 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# OS File
+.DS_Store
+
 # Go workspace file
 go.work
 go.work.sum
@@ -26,3 +29,6 @@ go.work.sum
 
 # binary location
 build
+# config file
+config.json
+

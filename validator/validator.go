@@ -1,4 +1,4 @@
-package main
+package validator
 
 import (
 	"context"
@@ -33,37 +33,40 @@ type Accounter interface {
 	Address() *felt.Felt
 }
 
-type ValidatorAccount account.Account
+// Represents an internal signer where we hold the private keys
+type InternalSigner account.Account
 
-func NewValidatorAccount[Log Logger](provider *rpc.Provider, logger Log, accountData *AccountData) (ValidatorAccount, error) {
-	privateKey, ok := new(big.Int).SetString(accountData.PrivKey, 0)
+func NewInternalSigner[Log Logger](
+	provider *rpc.Provider, logger Log, signer *Signer,
+) (InternalSigner, error) {
+	// todo(rdr): do we need to check the private key has maximum size
+	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
-		return ValidatorAccount{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
+		return InternalSigner{}, errors.Errorf("private key %s into a big int", privateKey)
 	}
 
 	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
 	if err != nil {
-		return ValidatorAccount{}, errors.New("Cannot derive public key from private key")
+		return InternalSigner{}, errors.New("Cannot derive public key from private key")
 	}
 
 	ks := account.SetNewMemKeystore(publicKey.String(), privateKey)
 
-	accountAddrFelt := accountData.OperationalAddress.ToFelt()
-
-	account, err := account.NewAccount(provider, &accountAddrFelt, publicKey.String(), ks, 2)
+	accountAddr := AddressFromString(signer.OperationalAddress)
+	account, err := account.NewAccount(provider, accountAddr.Felt(), publicKey.String(), ks, 2)
 	if err != nil {
-		return ValidatorAccount{}, errors.Errorf("Cannot create validator account: %s", err)
+		return InternalSigner{}, errors.Errorf("Cannot create validator account: %s", err)
 	}
 
-	logger.Debugw("Validator account has been set up", "address", accountAddrFelt.String())
-	return ValidatorAccount(*account), nil
+	logger.Debugw("Validator account has been set up", "address", accountAddr.String())
+	return InternalSigner(*account), nil
 }
 
-func (v *ValidatorAccount) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
+func (v *InternalSigner) GetTransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResp, error) {
 	return ((*account.Account)(v)).Provider.GetTransactionStatus(ctx, transactionHash)
 }
 
-func (v *ValidatorAccount) BuildAndSendInvokeTxn(
+func (v *InternalSigner) BuildAndSendInvokeTxn(
 	ctx context.Context,
 	functionCalls []rpc.InvokeFunctionCall,
 	multiplier float64,
@@ -71,18 +74,19 @@ func (v *ValidatorAccount) BuildAndSendInvokeTxn(
 	return ((*account.Account)(v)).BuildAndSendInvokeTxn(ctx, functionCalls, multiplier)
 }
 
-func (v *ValidatorAccount) Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
+func (v *InternalSigner) Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
 	return ((*account.Account)(v)).Provider.Call(ctx, call, blockId)
 }
 
-func (v *ValidatorAccount) BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (interface{}, error) {
+func (v *InternalSigner) BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (interface{}, error) {
 	return ((*account.Account)(v)).Provider.BlockWithTxHashes(ctx, blockID)
 }
 
-func (v *ValidatorAccount) Address() *felt.Felt {
+func (v *InternalSigner) Address() *felt.Felt {
 	return v.AccountAddress
 }
 
+// Used as a wrapper around an exgernal signer implementation
 type ExternalSigner struct {
 	*rpc.Provider
 	OperationalAddress Address
@@ -90,7 +94,7 @@ type ExternalSigner struct {
 	ChainId            felt.Felt
 }
 
-func NewExternalSigner(provider *rpc.Provider, operationalAddress Address, externalSignerUrl string) (ExternalSigner, error) {
+func NewExternalSigner(provider *rpc.Provider, signer *Signer) (ExternalSigner, error) {
 	chainID, err := provider.ChainID(context.Background())
 	if err != nil {
 		return ExternalSigner{}, err
@@ -99,15 +103,10 @@ func NewExternalSigner(provider *rpc.Provider, operationalAddress Address, exter
 
 	return ExternalSigner{
 		Provider:           provider,
-		OperationalAddress: operationalAddress,
-		ExternalSignerUrl:  externalSignerUrl,
+		OperationalAddress: AddressFromString(signer.OperationalAddress),
+		ExternalSignerUrl:  signer.ExternalUrl,
 		ChainId:            *chainId,
 	}, nil
-}
-
-func (s *ExternalSigner) Address() *felt.Felt {
-	addrFelt := s.OperationalAddress.ToFelt()
-	return &addrFelt
 }
 
 func (s *ExternalSigner) BuildAndSendInvokeTxn(
@@ -124,7 +123,12 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	formattedCallData := account.FmtCallDataCairo2(fnCallData)
 
 	// Building and signing the txn, as it needs a signature to estimate the fee
-	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(s.Address(), nonce, formattedCallData, makeResourceBoundsMapWithZeroValues())
+	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(
+		s.Address(),
+		nonce,
+		formattedCallData,
+		makeResourceBoundsMapWithZeroValues(),
+	)
 	if err := SignInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.ChainId, s.ExternalSignerUrl); err != nil {
 		return nil, err
 	}
@@ -149,6 +153,10 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	}
 
 	return txRes, nil
+}
+
+func (s *ExternalSigner) Address() *felt.Felt {
+	return s.OperationalAddress.Felt()
 }
 
 func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
@@ -206,10 +214,9 @@ func makeResourceBoundsMapWithZeroValues() rpc.ResourceBoundsMapping {
 // Postponing for now to not affect test code
 
 func FetchEpochInfo[Account Accounter](account Account) (EpochInfo, error) {
-	contractAddrFelt := StakingContract.ToFelt()
 
 	functionCall := rpc.FunctionCall{
-		ContractAddress:    &contractAddrFelt,
+		ContractAddress:    StakingContract.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt("get_attestation_info_by_operational_address"),
 		Calldata:           []*felt.Felt{account.Address()},
 	}
@@ -234,12 +241,10 @@ func FetchEpochInfo[Account Accounter](account Account) (EpochInfo, error) {
 }
 
 func FetchAttestWindow[Account Accounter](account Account) (uint64, error) {
-	contractAddrFelt := AttestContract.ToFelt()
-
 	result, err := account.Call(
 		context.Background(),
 		rpc.FunctionCall{
-			ContractAddress:    &contractAddrFelt,
+			ContractAddress:    AttestContract.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("attestation_window"),
 			Calldata:           []*felt.Felt{},
 		},
@@ -259,12 +264,10 @@ func FetchAttestWindow[Account Accounter](account Account) (uint64, error) {
 
 // For near future when tracking validator's balance
 func FetchValidatorBalance[Account Accounter](account Account) (Balance, error) {
-	contractAddrFelt := StrkTokenContract.ToFelt()
-
 	result, err := account.Call(
 		context.Background(),
 		rpc.FunctionCall{
-			ContractAddress:    &contractAddrFelt,
+			ContractAddress:    StrkTokenContract.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("balanceOf"),
 			Calldata:           []*felt.Felt{account.Address()},
 		},
@@ -316,13 +319,10 @@ func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, log
 func InvokeAttest[Account Accounter](account Account, attest *AttestRequired) (
 	*rpc.AddInvokeTransactionResponse, error,
 ) {
-	contractAddrFelt := AttestContract.ToFelt()
-	blockHashFelt := attest.BlockHash.ToFelt()
-
 	calls := []rpc.InvokeFunctionCall{{
-		ContractAddress: &contractAddrFelt,
+		ContractAddress: AttestContract.Felt(),
 		FunctionName:    "attest",
-		CallData:        []*felt.Felt{&blockHashFelt},
+		CallData:        []*felt.Felt{attest.BlockHash.Felt()},
 	}}
 
 	return account.BuildAndSendInvokeTxn(context.Background(), calls, FEE_ESTIMATION_MULTIPLIER)
