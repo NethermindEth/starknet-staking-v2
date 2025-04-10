@@ -101,7 +101,7 @@ And answer with the ECDSA signature values `r` and `s` in an array:
 
 ```
 
-We have provided an implementation [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/signer/signer.go) for you to try and based your own if needed.
+We have provided a functional implementation [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/signer/signer.go) for you to try and use as an example if you want to implement your own.
 
 ### Try out our external signer
 
@@ -133,7 +133,7 @@ You should get the following answer:
 }
 ```
 
-This type of communication is exactly what will happen behind the curtains when using the validator tool and the signer each time there is an attestation required.
+This type of communication is exactly what will happen behind the curtains when using the validator tool and the signer each time there is an attestation required. This way you don't have to trust the software to protect your key.
 
 
 ## Logging
