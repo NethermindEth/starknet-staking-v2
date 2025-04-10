@@ -1,7 +1,7 @@
 
 validator: ## compile
 	mkdir -p build
-	go build -o build/validator
+	go build -o ./build/validator ./validator/.
 
 remote-signer:
 	mkdir -p build
