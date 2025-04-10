@@ -20,7 +20,7 @@ type Provider struct {
 	Ws   string `json:"ws"`
 }
 
-// Merge it's missing fields with data from other provider
+// Merge its missing fields with data from other provider
 func (p *Provider) Fill(other *Provider) {
 	if isZero(p.Http) {
 		p.Http = other.Http
@@ -36,7 +36,7 @@ type Signer struct {
 	OperationalAddress string `json:"operationalAddress"`
 }
 
-// Merge it's missing fields with data from other signer
+// Merge its missing fields with data from other signer
 func (s *Signer) Fill(other *Signer) {
 	if isZero(s.ExternalUrl) {
 		s.ExternalUrl = other.ExternalUrl
@@ -75,13 +75,13 @@ func ConfigFromData(data []byte) (Config, error) {
 	return config, nil
 }
 
-// Fills it's missing fields with data from other config
+// Fills its missing fields with data from other config
 func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
 }
 
-// Verifies it's data is appropiatly set
+// Verifies its data is appropiatly set
 func (c *Config) Check() error {
 	if err := checkProvider(&c.Provider); err != nil {
 		return err
