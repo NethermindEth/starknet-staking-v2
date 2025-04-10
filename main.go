@@ -98,17 +98,17 @@ func (c *Config) Check() error {
 
 func checkProvider(provider *Provider) error {
 	if provider.Http == "" {
-		return errors.New("http provider url not set in config")
+		return errors.New("http provider url not set in provider config")
 	}
 	if provider.Ws == "" {
-		return errors.New("ws provider url not set in config")
+		return errors.New("ws provider url not set in provder config")
 	}
 	return nil
 }
 
 func checkSigner(signer *Signer) error {
 	if signer.OperationalAddress == "" {
-		return errors.New("operational address is not set in config")
+		return errors.New("operational address is not set in signer config")
 	}
 	if signer.External() {
 		return nil
