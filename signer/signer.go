@@ -58,9 +58,9 @@ func (s *Signer) Listen(address string) error {
 	return http.ListenAndServe(address, nil)
 }
 
-// Decodes the request and signs it by returning the `r` and `v` values
+// Decodes the request and returns ECDSA `r` and `s` signature values via http
 func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
-	s.logger.Debug("Recieving http request")
+	s.logger.Debug("Receiving http request")
 
 	var req SignRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -81,6 +81,7 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	s.logger.Debugw("Answered http request", "response", resp)
 }
 
+// Given a transaction hash returns the ECDSA `r` and `s` signature values
 func (s *Signer) sign(msg *felt.Felt) ([2]felt.Felt, error) {
 	s.logger.Infof("Signing message with hash: %s", msg)
 
@@ -91,7 +92,7 @@ func (s *Signer) sign(msg *felt.Felt) ([2]felt.Felt, error) {
 		return [2]felt.Felt{}, err
 	}
 
-	s.logger.Debugf("r", s1, "s", s2)
+	s.logger.Debugw("Signature", "r", s1, "s", s2)
 
 	return [2]felt.Felt{
 		*new(felt.Felt).SetBigInt(s1),

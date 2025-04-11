@@ -50,7 +50,7 @@ func NewCommand() cobra.Command {
 
 	var cmd = cobra.Command{
 		Use:     "signer",
-		Short:   "Program for Starknet validators to attest to epochs with respect to Staking v2",
+		Short:   "Program that signs transactions hashes recieved by http request",
 		PreRunE: preRunE,
 		RunE:    runE,
 		Args:    cobra.NoArgs,
@@ -77,7 +77,7 @@ func main() {
 }
 
 func readSignerKeyFromEnv(envFilePath string, logger *utils.ZapLogger) (string, error) {
-	err := godotenv.Load(".env")
+	err := godotenv.Load(envFilePath)
 	if err != nil {
 		logger.Debugf("Couldn't load env var at %s: %s", envFilePath, err)
 	}

@@ -79,9 +79,9 @@ Using a combination of both approaches is also valid. In this case, the values p
 
 ## External Signer 
 
-To avoid users exposing their private keys our Validator program is capable of communicating with another process independent from the here provided. 
+To avoid users exposing their private keys our Validator program is capable of communicating with another process independent from the one provided here.
 
-This external signer must implement a simple HTTP server that waits for `POST` requests on an endpoint of the form `<signer_address>/sign`. This `<signer_address>` is the same one that it should be specified when initializing the validator tool in `signer-url`.
+This external signer must implement a simple HTTP server that waits for `POST` requests on an endpoint of the form `<signer_address>/sign`. This `<signer_address>` is the same one that should be specified when initializing the validator tool in the `signer-url` flag.
 
 The `POST` request will have the following form:
 ```json
