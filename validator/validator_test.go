@@ -336,7 +336,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 			require.Nil(t, addInvokeTxRes)
 
 			expectedErrorMsg := fmt.Sprintf(
-				"Server error %d: %s", http.StatusInternalServerError, signerInternalError,
+				"server error %d: %s", http.StatusInternalServerError, signerInternalError,
 			)
 			require.EqualError(t, err, expectedErrorMsg)
 			require.Equal(t, 2, signerCalledCount)
@@ -524,7 +524,7 @@ func TestSignInvokeTx(t *testing.T) {
 
 		require.Equal(t, []*felt.Felt{}, invokeTx.Signature)
 		expectedErrorMsg := fmt.Sprintf(
-			"Server error %d: %s", http.StatusInternalServerError, serverError,
+			"server error %d: %s", http.StatusInternalServerError, serverError,
 		)
 		require.EqualError(t, err, expectedErrorMsg)
 	})

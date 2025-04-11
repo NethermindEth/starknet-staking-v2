@@ -42,7 +42,7 @@ func TestSignTxHash(t *testing.T) {
 		res, err := main.SignTxHash(hashToSign, mockServer.URL)
 
 		require.Zero(t, res)
-		expectedErrorMsg := fmt.Sprintf("Server error %d: %s", http.StatusInternalServerError, serverError)
+		expectedErrorMsg := fmt.Sprintf("server error %d: %s", http.StatusInternalServerError, serverError)
 		require.EqualError(t, err, expectedErrorMsg)
 	})
 
