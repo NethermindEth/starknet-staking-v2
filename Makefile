@@ -8,10 +8,6 @@ signer:
 	mkdir -p build
 	go build -o "./build/signer" "./cmd/signer/."
 
-remote-signer:
-	mkdir -p build
-	go build ./external_signer/. -o build/signer
-
 clean-testcache: ## Clean Go test cache
 	go clean -testcache
 
