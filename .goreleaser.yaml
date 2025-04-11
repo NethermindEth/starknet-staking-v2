@@ -1,0 +1,86 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: validator
+    main: .
+    binary: validator
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      starknet-staking-v2_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+dockers:
+  - image_templates:
+      - "nethermind/starknet-staking-v2:{{ .Version }}-amd64"
+    use: buildx
+    dockerfile: goreleaser.dockerfile
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/amd64"
+  - image_templates:
+      - "nethermind/starknet-staking-v2:{{ .Version }}-arm64"
+    use: buildx
+    dockerfile: goreleaser.dockerfile
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/arm64"
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "nethermind/starknet-staking-v2:{{ .Version }}"
+    image_templates:
+      - "nethermind/starknet-staking-v2:{{ .Version }}-amd64"
+      - "nethermind/starknet-staking-v2:{{ .Version }}-arm64"
+
+  - name_template: "nethermind/starknet-staking-v2:latest"
+    image_templates:
+      - "nethermind/starknet-staking-v2:{{ .Version }}-amd64"
+      - "nethermind/starknet-staking-v2:{{ .Version }}-arm64"
+
+release:
+  github:
+    owner: NethermindEth
+    name: starknet-staking-v2
+  prerelease: auto
+  draft: true
+  footer: |-
+    ## Docker Images
+
+    - `nethermind/starknet-staking-v2:{{ .Version }}`
+    - `nethermind/starknet-staking-v2:latest`
+
+    ---
