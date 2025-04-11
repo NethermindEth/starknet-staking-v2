@@ -25,7 +25,7 @@ To run the validator it needs certain data specified such as the node to connect
 
 The validator can be run with:
 ```bash
-./build/validator --config <path_to_config_file> 
+./build/validator --config <path_to_config_file>
 ```
 
 The config file is `.json` which specifies two types `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.8.0` or higher. Those endpoints are used to listen information from the network.
@@ -43,8 +43,8 @@ A full configuration file looks like this:
   },
   "signer": {
       "url": "http://localhost:8080",
-      "operationalAddress": "0x123"
-      "privateKey": "0x456", 
+      "operationalAddress": "0x123",
+      "privateKey": "0x456"
   }
 }
 ```
@@ -77,7 +77,7 @@ Using a combination of both approaches is also valid. In this case, the values p
     --private-key "0x456"
 ```
 
-## External Signer 
+## External Signer
 
 The external signer must implement a simple HTTP API, exposing a single `/sign` endpoint:
 
@@ -127,8 +127,8 @@ The configuration file properties for local signing will look like:
       "ws": "ws://localhost:1235/v0_8"
   },
   "signer": {
-      "operationalAddress": "your operational address"
-      "privateKey": "your private key", 
+      "operationalAddress": "your operational address",
+      "privateKey": "your private key"
   }
 }
 ```
