@@ -12,7 +12,10 @@ clean-testcache: ## Clean Go test cache
 	go clean -testcache
 
 test:
-	 go test -race ./...
+	 go test ./...
+
+test-race:
+	go test -race ./...
 
 test-cover: clean-testcache ## Run tests with coverage
 	mkdir -p coverage
