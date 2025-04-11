@@ -18,8 +18,8 @@ import (
 )
 
 type SignRequest struct {
-	*rpc.InvokeTxnV3
-	ChainId *felt.Felt `json:"chain_id"`
+	*rpc.InvokeTxnV3 `json:"transaction"`
+	ChainId          *felt.Felt `json:"chain_id"`
 }
 
 type SignResponse struct {

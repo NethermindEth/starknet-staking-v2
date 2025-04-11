@@ -13,8 +13,8 @@ import (
 )
 
 type SignRequest struct {
-	*rpc.InvokeTxnV3
-	ChainId string `json:"chain_id"`
+	*rpc.InvokeTxnV3 `json:"transaction"`
+	ChainId          string `json:"chain_id"`
 }
 
 type SignResponse struct {
