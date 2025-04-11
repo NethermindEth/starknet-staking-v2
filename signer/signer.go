@@ -14,6 +14,8 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+const SIGN_ENDPOINT = "/sign"
+
 type Request struct {
 	Hash felt.Felt `json:"transaction_hash"`
 }
@@ -35,8 +37,8 @@ func (r *Response) String() string {
 
 type Signer struct {
 	logger    *utils.ZapLogger
-	publicKey *big.Int
 	keyStore  *account.MemKeystore
+	publicKey string
 }
 
 func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
@@ -50,20 +52,20 @@ func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
 		return Signer{}, errors.New("Cannot derive public key from private key")
 	}
 
-	ks := account.SetNewMemKeystore(publicKey.String(), privKey)
+	publicKeyStr := publicKey.String()
+	ks := account.SetNewMemKeystore(publicKeyStr, privKey)
 
 	return Signer{
 		logger:    logger,
 		keyStore:  ks,
-		publicKey: publicKey,
+		publicKey: publicKeyStr,
 	}, nil
 }
 
 // Listen for requests of the type `POST` at `<address>/sign`. The request
 // should include the hash of the transaction being signed.
 func (s *Signer) Listen(address string) error {
-	const sign_endpoint = "/sign"
-	http.HandleFunc(sign_endpoint, s.handler)
+	http.HandleFunc(SIGN_ENDPOINT, s.handler)
 
 	s.logger.Infof("Server running at %s", address)
 
@@ -103,7 +105,7 @@ func (s *Signer) sign(msg *felt.Felt) ([2]felt.Felt, error) {
 
 	msgBig := msg.BigInt(new(big.Int))
 
-	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), msgBig)
+	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey, msgBig)
 	if err != nil {
 		return [2]felt.Felt{}, err
 	}

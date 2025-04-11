@@ -171,7 +171,7 @@ func TestNewExternalSigner(t *testing.T) {
 		expectedExternalSigner := main.ExternalSigner{
 			Provider:           provider,
 			OperationalAddress: expectedOpAddr,
-			ExternalSignerUrl:  signer.ExternalUrl,
+			Url:                signer.ExternalUrl,
 			ChainId:            *expectedChainId,
 		}
 		require.Equal(t, expectedExternalSigner, externalSigner)
@@ -535,25 +535,29 @@ func TestSignInvokeTx(t *testing.T) {
 		sigPart2 := "0x456"
 
 		// Create a mock server
-		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Simulate API response
-			w.WriteHeader(http.StatusOK)
+		mockServer := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					// Simulate API response
+					w.WriteHeader(http.StatusOK)
 
-			// Read and decode JSON body
-			bodyBytes, err := io.ReadAll(r.Body)
-			require.NoError(t, err)
-			defer r.Body.Close()
+					// Read and decode JSON body
+					bodyBytes, err := io.ReadAll(r.Body)
+					require.NoError(t, err)
+					defer require.NoError(t, r.Body.Close())
 
-			var req main.SignRequest
-			err = json.Unmarshal(bodyBytes, &req)
-			require.NoError(t, err)
+					var req main.SignRequest
+					err = json.Unmarshal(bodyBytes, &req)
+					require.NoError(t, err)
 
-			// Making sure received hash is the expected one
-			require.Equal(t, expectedTxHash.String(), req.Hash)
+					// Making sure received hash is the expected one
+					require.Equal(t, expectedTxHash.String(), req.Hash)
 
-			_, err = w.Write([]byte(fmt.Sprintf(`{"signature": ["%s", "%s"]}`, sigPart1, sigPart2)))
-			require.NoError(t, err)
-		}))
+					_, err = w.Write(
+						[]byte(fmt.Sprintf(`{"signature": ["%s", "%s"]}`, sigPart1, sigPart2)),
+					)
+					require.NoError(t, err)
+				}))
 		defer mockServer.Close()
 
 		err = main.SignInvokeTx(&invokeTx, &felt.Felt{}, mockServer.URL)

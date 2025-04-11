@@ -8,6 +8,7 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/starknet-staking-v2/signer"
 	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/stretchr/testify/require"
 )
@@ -79,10 +80,10 @@ func TestSignTxHash(t *testing.T) {
 		hashToSign := utils.HexToFelt(t, "0x123")
 		res, err := main.SignTxHash(hashToSign, mockServer.URL)
 
-		expectedResult := &main.SignResponse{
-			Signature: []*felt.Felt{
-				utils.HexToFelt(t, "0x123"),
-				utils.HexToFelt(t, "0x456"),
+		expectedResult := signer.Response{
+			Signature: [2]felt.Felt{
+				*new(felt.Felt).SetUint64(0x123),
+				*new(felt.Felt).SetUint64(0x456),
 			},
 		}
 		require.Equal(t, expectedResult, res)
