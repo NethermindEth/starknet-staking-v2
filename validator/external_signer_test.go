@@ -27,11 +27,14 @@ func TestSignTxHash(t *testing.T) {
 		serverError := "some internal error"
 
 		// Create a mock server
-		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Simulate API response
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(serverError))
-		}))
+		mockServer := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					// Simulate API response
+					w.WriteHeader(http.StatusInternalServerError)
+					_, err := w.Write([]byte(serverError))
+					require.NoError(t, err)
+				}))
 		defer mockServer.Close()
 
 		hashToSign := utils.HexToFelt(t, "0x123")
@@ -44,11 +47,14 @@ func TestSignTxHash(t *testing.T) {
 
 	t.Run("Request succeeded but error when decoding response body", func(t *testing.T) {
 		// Create a mock server
-		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Simulate API response
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("not a valid marshalled SignResponse object"))
-		}))
+		mockServer := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					// Simulate API response
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte("not a valid marshalled SignResponse object"))
+					require.NoError(t, err)
+				}))
 		defer mockServer.Close()
 
 		hashToSign := utils.HexToFelt(t, "0x123")
@@ -60,11 +66,14 @@ func TestSignTxHash(t *testing.T) {
 
 	t.Run("Successful request and response", func(t *testing.T) {
 		// Create a mock server
-		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Simulate API response
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
-		}))
+		mockServer := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					// Simulate API response
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
+					require.NoError(t, err)
+				}))
 		defer mockServer.Close()
 
 		hashToSign := utils.HexToFelt(t, "0x123")

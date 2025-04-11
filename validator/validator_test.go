@@ -82,8 +82,8 @@ func TestNewValidatorAccount(t *testing.T) {
 			require.Equal(t, expectedErrorMsg, err.Error())
 		})
 		t.Run("Successful account creation", func(t *testing.T) {
-			provider, providerErr := rpc.NewProvider(envVars.httpProviderUrl)
-			require.NoError(t, providerErr)
+			provider, err := rpc.NewProvider(envVars.httpProviderUrl)
+			require.NoError(t, err)
 
 			signer := main.Signer{
 				PrivKey:            "0x123",
@@ -92,6 +92,7 @@ func TestNewValidatorAccount(t *testing.T) {
 
 			// Test
 			validatorAccount, err := main.NewInternalSigner(provider, logger, &signer)
+			require.NoError(t, err)
 
 			// Assert
 			accountAddr, err := new(felt.Felt).SetString(signer.OperationalAddress)
@@ -262,10 +263,13 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, providerErr)
 
 		// Create a mock server
-		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Simulate API response
-			w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
-		}))
+		mockServer := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					// Simulate API response
+					_, err := w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
+					require.NoError(t, err)
+				}))
 		defer mockServer.Close()
 
 		signer := main.Signer{
@@ -286,16 +290,20 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		signerCalledCount := 0
 		signerInternalError := "error when signing the 2nd time"
-		mockSigner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			signerCalledCount++
-			if signerCalledCount == 1 {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(signerInternalError))
-			}
-		}))
+		mockSigner := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					signerCalledCount++
+					if signerCalledCount == 1 {
+						w.WriteHeader(http.StatusOK)
+						_, err := w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
+						require.NoError(t, err)
+					} else {
+						w.WriteHeader(http.StatusInternalServerError)
+						_, err := w.Write([]byte(signerInternalError))
+						require.NoError(t, err)
+					}
+				}))
 		defer mockSigner.Close()
 
 		provider, providerErr := rpc.NewProvider(mockRpc.URL)
@@ -323,15 +331,19 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		addInvoke := func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(serverInternalError))
+			_, err := w.Write([]byte(serverInternalError))
+			require.NoError(t, err)
 		}
 		mockRpc := createMockRpcServer(t, addInvoke)
 		defer mockRpc.Close()
 
-		mockSigner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
-		}))
+		mockSigner := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
+					require.NoError(t, err)
+				}))
 		defer mockSigner.Close()
 
 		provider, providerErr := rpc.NewProvider(mockRpc.URL)
@@ -361,15 +373,24 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		addInvoke := func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf(`{"jsonrpc": "2.0", "result": {"transaction_hash": "%s"}, "id": 1}`, expectedInvokeTxHash)))
+			_, err := w.Write(
+				[]byte(
+					fmt.Sprintf(
+						`{"jsonrpc": "2.0", "result": {"transaction_hash": "%s"}, "id": 1}`,
+						expectedInvokeTxHash,
+					)))
+			require.NoError(t, err)
 		}
 		mockRpc := createMockRpcServer(t, addInvoke)
 		defer mockRpc.Close()
 
-		mockSigner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
-		}))
+		mockSigner := httptest.NewServer(
+			http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"signature": ["0x111", "0x222"]}`))
+					require.NoError(t, err)
+				}))
 		defer mockSigner.Close()
 
 		provider, providerErr := rpc.NewProvider(mockRpc.URL)
@@ -405,10 +426,12 @@ func createMockRpcServer(t *testing.T, addInvoke func(w http.ResponseWriter, r *
 		switch req.Name {
 		case "starknet_chainId":
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x1", "id": 1}`))
+			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x1", "id": 1}`))
+			require.NoError(t, err)
 		case "starknet_getNonce":
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x2", "id": 1}`))
+			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x2", "id": 1}`))
+			require.NoError(t, err)
 		case "starknet_estimateFee":
 			mockFeeEstimate := []rpc.FeeEstimation{{
 				L1GasConsumed:     utils.HexToFelt(t, "0x123"),
@@ -423,12 +446,17 @@ func createMockRpcServer(t *testing.T, addInvoke func(w http.ResponseWriter, r *
 			feeEstBytes, err := json.Marshal(mockFeeEstimate)
 			require.NoError(t, err)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(fmt.Sprintf(`{"jsonrpc": "2.0", "result": %s, "id": 1}`, string(feeEstBytes))))
+			_, err = w.Write(
+				[]byte(
+					fmt.Sprintf(`{"jsonrpc": "2.0", "result": %s, "id": 1}`, string(feeEstBytes)),
+				))
+			require.NoError(t, err)
 		case "starknet_addInvokeTransaction":
 			addInvoke(w, r)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			w.Write([]byte(`Should not get here`))
+			_, err := w.Write([]byte(`Should not get here`))
+			require.NoError(t, err)
 		}
 	}))
 
@@ -523,7 +551,8 @@ func TestSignInvokeTx(t *testing.T) {
 			// Making sure received hash is the expected one
 			require.Equal(t, expectedTxHash.String(), req.Hash)
 
-			w.Write([]byte(fmt.Sprintf(`{"signature": ["%s", "%s"]}`, sigPart1, sigPart2)))
+			_, err = w.Write([]byte(fmt.Sprintf(`{"signature": ["%s", "%s"]}`, sigPart1, sigPart2)))
+			require.NoError(t, err)
 		}))
 		defer mockServer.Close()
 

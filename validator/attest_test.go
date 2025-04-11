@@ -64,10 +64,11 @@ func TestProcessBlockHeaders(t *testing.T) {
 		wgDispatcher := conc.NewWaitGroup()
 		wgDispatcher.Go(func() { registerReceivedEvents(t, &dispatcher, receivedAttestEvents, &receivedEndOfWindowEvents) })
 
-		validator.ProcessBlockHeaders(headersFeed, mockAccount, logger, &dispatcher)
+		err := validator.ProcessBlockHeaders(headersFeed, mockAccount, logger, &dispatcher)
+		require.NoError(t, err)
 
-		// No need to wait for wgFeed routine as it'll be the 1st closed, causing ProcessBlockHeaders to have returned
-		// Still calling it just in case.
+		// No need to wait for wgFeed routine as it'll be the 1st closed,
+		// causing ProcessBlockHeaders to have returned. Still calling it just in case.
 		wgFeed.Wait()
 
 		// Will terminate the registerReceivedEvents routine
@@ -140,7 +141,8 @@ func TestProcessBlockHeaders(t *testing.T) {
 		wgDispatcher := conc.NewWaitGroup()
 		wgDispatcher.Go(func() { registerReceivedEvents(t, &dispatcher, receivedAttestEvents, &receivedEndOfWindowEvents) })
 
-		validator.ProcessBlockHeaders(headersFeed, mockAccount, logger, &dispatcher)
+		err := validator.ProcessBlockHeaders(headersFeed, mockAccount, logger, &dispatcher)
+		require.NoError(t, err)
 
 		// No need to wait for wgFeed routine as it'll be the 1st closed, causing ProcessBlockHeaders to have returned
 		// Still calling it just in case.

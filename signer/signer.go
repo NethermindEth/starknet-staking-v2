@@ -3,6 +3,7 @@ package signer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http"
 
@@ -13,12 +14,23 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-type SignRequest struct {
+type Request struct {
 	Hash felt.Felt `json:"transaction_hash"`
 }
 
-type SignResponse struct {
+type Response struct {
 	Signature [2]felt.Felt `json:"signature"`
+}
+
+func (r *Response) String() string {
+	return fmt.Sprintf(`
+    {
+        r: %s,
+        s: %s
+    }
+    `,
+		&r.Signature[0],
+		&r.Signature[1])
 }
 
 type Signer struct {
@@ -62,7 +74,7 @@ func (s *Signer) Listen(address string) error {
 func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	s.logger.Debug("Receiving http request")
 
-	var req SignRequest
+	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -74,9 +86,13 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := SignResponse{Signature: signature}
+	resp := Response{Signature: signature}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		s.logger.Errorf("Error encoding response %s: %s", resp, err)
+		return
+	}
 
 	s.logger.Debugw("Answered http request", "response", resp)
 }
