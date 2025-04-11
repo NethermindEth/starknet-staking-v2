@@ -29,6 +29,7 @@ func BlockHeaderSubscription[Log Logger](wsProviderUrl string, logger Log) (
 	*rpc.WsProvider, chan *rpc.BlockHeader, error,
 ) {
 	logger.Debugw("Initializing websocket connection", "wsProviderUrl", wsProviderUrl)
+	// This needs a timeout or something
 	wsProvider, err := rpc.NewWebsocketProvider(wsProviderUrl)
 	if err != nil {
 		return nil, nil, errors.Errorf("Error dialing the WS provider at %s: %s", wsProviderUrl, err)

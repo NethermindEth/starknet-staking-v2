@@ -55,8 +55,14 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Build Application
+      - name: Build Validator
         run: make validator
 
-      - name: Verify Build Output
+      - name: Verify Validator Build Output
         run: test -f build/validator
+
+      - name: Build Signer
+        run: make signer
+
+      - name: Verify Signer Build Output
+        run: test -f build/signer

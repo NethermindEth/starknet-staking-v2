@@ -96,7 +96,6 @@ func TrackAttest[Account Accounter, Log Logger](
 	txResp *rpc.AddInvokeTransactionResponse,
 ) AttestStatus {
 	txStatus, err := TrackTransactionStatus(account, logger, txResp.TransactionHash)
-
 	if err != nil {
 		logger.Errorw(
 			"Attest transaction failed",
