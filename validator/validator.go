@@ -41,7 +41,7 @@ func NewInternalSigner[Log Logger](
 ) (InternalSigner, error) {
 	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
-		return InternalSigner{}, errors.Errorf("private key %s into a big int", privateKey)
+		return InternalSigner{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
 	}
 
 	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
