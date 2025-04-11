@@ -125,11 +125,11 @@ func ComputeBlockNumberToAttestTo[Account Accounter](
 		accountAddress,
 	)
 
-	var hashBigInt *big.Int = new(big.Int)
+	hashBigInt := new(big.Int)
 	hashBigInt = hash.BigInt(hashBigInt)
 
-	var blockOffsetBigInt *big.Int = new(big.Int)
-	blockOffsetBigInt = blockOffsetBigInt.Mod(hashBigInt, big.NewInt(int64(epochInfo.EpochLen-attestWindow)))
+	blockOffset := new(big.Int)
+	blockOffset = blockOffset.Mod(hashBigInt, big.NewInt(int64(epochInfo.EpochLen-attestWindow)))
 
-	return BlockNumber(epochInfo.CurrentEpochStartingBlock.Uint64() + blockOffsetBigInt.Uint64())
+	return BlockNumber(epochInfo.CurrentEpochStartingBlock.Uint64() + blockOffset.Uint64())
 }

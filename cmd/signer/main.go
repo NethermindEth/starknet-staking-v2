@@ -79,14 +79,14 @@ func main() {
 func readSignerKeyFromEnv(envFilePath string, logger *utils.ZapLogger) (string, error) {
 	err := godotenv.Load(envFilePath)
 	if err != nil {
-		logger.Debugf("Couldn't load env var at %s: %s", envFilePath, err)
+		logger.Debugf("couldn't load env var at %s: %s", envFilePath, err)
 	}
 
 	signerKey := os.Getenv("SIGNER_PRIVATE_KEY")
 	if signerKey == "" {
 		return "",
 			errors.New(
-				"Couldn't read SIGNER_PRIVATE_KEY env var." +
+				"couldn't read SIGNER_PRIVATE_KEY env var." +
 					"Please make sure it is set before running this program",
 			)
 	}

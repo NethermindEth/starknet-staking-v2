@@ -389,12 +389,11 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 
 		addInvoke := func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write(
-				[]byte(
-					fmt.Sprintf(
-						`{"jsonrpc": "2.0", "result": {"transaction_hash": "%s"}, "id": 1}`,
-						expectedInvokeTxHash,
-					)))
+			_, err := fmt.Fprintf(
+				w,
+				`{"jsonrpc": "2.0", "result": {"transaction_hash": "%s"}, "id": 1}`,
+				expectedInvokeTxHash,
+			)
 			require.NoError(t, err)
 		}
 		mockRpc := createMockRpcServer(t, addInvoke)
@@ -435,7 +434,7 @@ func createMockRpcServer(
 		// Read and decode JSON body
 		bodyBytes, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		defer r.Body.Close()
+		defer func() { require.NoError(t, r.Body.Close()) }()
 
 		var req Method
 		err = json.Unmarshal(bodyBytes, &req)
@@ -464,10 +463,11 @@ func createMockRpcServer(
 			feeEstBytes, err := json.Marshal(mockFeeEstimate)
 			require.NoError(t, err)
 			w.WriteHeader(http.StatusOK)
-			_, err = w.Write(
-				[]byte(
-					fmt.Sprintf(`{"jsonrpc": "2.0", "result": %s, "id": 1}`, string(feeEstBytes)),
-				))
+			_, err = fmt.Fprintf(
+				w,
+				`{"jsonrpc": "2.0", "result": %s, "id": 1}`,
+				string(feeEstBytes),
+			)
 			require.NoError(t, err)
 		case "starknet_addInvokeTransaction":
 			addInvoke(w, r)
@@ -577,9 +577,7 @@ func TestSignInvokeTx(t *testing.T) {
 					// Making sure received hash is the expected one
 					require.Equal(t, *expectedTxHash, request.Hash)
 
-					_, err = w.Write(
-						[]byte(fmt.Sprintf(`{"signature": ["%s", "%s"]}`, sigR, sigS)),
-					)
+					_, err = fmt.Fprintf(w, `{"signature": ["%s", "%s"]}`, sigR, sigS)
 					require.NoError(t, err)
 				}))
 		defer mockServer.Close()

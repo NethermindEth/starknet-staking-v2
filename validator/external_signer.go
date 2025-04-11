@@ -122,7 +122,7 @@ func SignTxHash(hash *felt.Felt, externalSignerUrl string) (signer.Response, err
 	if err != nil {
 		return signer.Response{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // Intentionally ignoring the error, will fix in future
 
 	// Read and decode response
 	body, err := io.ReadAll(resp.Body)
@@ -133,7 +133,7 @@ func SignTxHash(hash *felt.Felt, externalSignerUrl string) (signer.Response, err
 	// Check if status code indicates an error (non-2xx)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return signer.Response{},
-			fmt.Errorf("Server error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			fmt.Errorf("server error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var signResp signer.Response

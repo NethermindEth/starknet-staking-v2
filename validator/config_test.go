@@ -28,7 +28,7 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		// Remove temporary file at the end of test
-		defer os.Remove(tmpFile.Name())
+		defer func() { require.NoError(t, os.Remove(tmpFile.Name())) }()
 
 		// Invalid JSON content
 		invalidJSON := `{"someField": 1,}` // Trailing comma makes it invalid
@@ -37,7 +37,7 @@ func TestLoadConfig(t *testing.T) {
 		if _, err := tmpFile.Write([]byte(invalidJSON)); err != nil {
 			require.NoError(t, err)
 		}
-		tmpFile.Close()
+		require.NoError(t, tmpFile.Close())
 
 		config, err := main.ConfigFromFile(tmpFile.Name())
 
