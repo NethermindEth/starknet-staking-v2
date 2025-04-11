@@ -9,26 +9,28 @@ import (
 	"strings"
 
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/starknet.go/rpc"
 )
 
 type SignRequest struct {
-	Hash string `json:"transaction_hash"`
+	*rpc.InvokeTxnV3
+	ChainId string `json:"chain_id"`
 }
 
 type SignResponse struct {
 	Signature []*felt.Felt `json:"signature"`
 }
 
-func SignTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error) {
+func HashAndSignTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) (*SignResponse, error) {
 	// Create request body
-	reqBody := SignRequest{Hash: hash.String()}
+	reqBody := SignRequest{InvokeTxnV3: invokeTxnV3, ChainId: chainId.String()}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err
 	}
 
 	// Make POST request
-	resp, err := http.Post(externalSignerUrl+"/sign_hash", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post(externalSignerUrl+"/sign", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}

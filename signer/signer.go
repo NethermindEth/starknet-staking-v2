@@ -11,12 +11,15 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
+	"github.com/NethermindEth/starknet.go/hash"
+	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
 	"github.com/joho/godotenv"
 )
 
 type SignRequest struct {
-	Hash felt.Felt `json:"transaction_hash"`
+	*rpc.InvokeTxnV3
+	ChainId *felt.Felt `json:"chain_id"`
 }
 
 type SignResponse struct {
@@ -58,10 +61,15 @@ func newSigner(privateKey string) (Signer, error) {
 	return Signer{keyStore: ks, publicKey: publicKey}, nil
 }
 
-func (s *Signer) sign(msg *felt.Felt) ([]*felt.Felt, error) {
-	msgBig := msg.BigInt(new(big.Int))
+func (s *Signer) hashAndSign(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt) ([]*felt.Felt, error) {
+	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
+	if err != nil {
+		return nil, err
+	}
 
-	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), msgBig)
+	hashBig := hash.BigInt(new(big.Int))
+
+	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), hashBig)
 	if err != nil {
 		return nil, err
 	}
@@ -79,9 +87,9 @@ func signHandler(w http.ResponseWriter, r *http.Request, signer *Signer) {
 		return
 	}
 
-	signature, err := signer.sign(&req.Hash)
+	signature, err := signer.hashAndSign(req.InvokeTxnV3, req.ChainId)
 	if err != nil {
-		http.Error(w, "Failed to sign hash: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to sign tx: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -98,7 +106,7 @@ func main() {
 		panic(err)
 	}
 
-	http.HandleFunc("/sign_hash", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/sign", func(w http.ResponseWriter, r *http.Request) {
 		signHandler(w, r, &signer)
 	})
 

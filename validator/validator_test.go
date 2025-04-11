@@ -15,9 +15,9 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
+	external_signer "github.com/NethermindEth/starknet-staking-v2/signer"
 	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/account"
-	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/joho/godotenv"
@@ -436,15 +436,6 @@ func createMockRpcServer(t *testing.T, addInvoke func(w http.ResponseWriter, r *
 }
 
 func TestSignInvokeTx(t *testing.T) {
-
-	t.Run("Error hashing tx", func(t *testing.T) {
-		invokeTx := rpc.InvokeTxnV3{}
-		err := main.SignInvokeTx(&invokeTx, &felt.Felt{}, "url not getting called anyway")
-
-		require.Equal(t, ([]*felt.Felt)(nil), invokeTx.Signature)
-		require.EqualError(t, err, "not all neccessary parameters have been set")
-	})
-
 	t.Run("Error signing tx", func(t *testing.T) {
 		invokeTx := rpc.InvokeTxnV3{
 			Type:          rpc.TransactionType_Invoke,
@@ -500,8 +491,7 @@ func TestSignInvokeTx(t *testing.T) {
 			FeeMode:               rpc.DAModeL1,
 		}
 
-		expectedTxHash, err := hash.TransactionHashInvokeV3(&invokeTx, &felt.Felt{})
-		require.NoError(t, err)
+		chainId := new(felt.Felt).SetUint64(1)
 
 		sigPart1 := "0x123"
 		sigPart2 := "0x456"
@@ -516,18 +506,19 @@ func TestSignInvokeTx(t *testing.T) {
 			require.NoError(t, err)
 			defer r.Body.Close()
 
-			var req main.SignRequest
+			var req external_signer.SignRequest
 			err = json.Unmarshal(bodyBytes, &req)
 			require.NoError(t, err)
 
-			// Making sure received hash is the expected one
-			require.Equal(t, expectedTxHash.String(), req.Hash)
+			// Making sure received tx and chainId are the expected ones
+			require.Equal(t, &invokeTx, req.InvokeTxnV3)
+			require.Equal(t, chainId, req.ChainId)
 
 			w.Write([]byte(fmt.Sprintf(`{"signature": ["%s", "%s"]}`, sigPart1, sigPart2)))
 		}))
 		defer mockServer.Close()
 
-		err = main.SignInvokeTx(&invokeTx, &felt.Felt{}, mockServer.URL)
+		err := main.SignInvokeTx(&invokeTx, chainId, mockServer.URL)
 
 		expectedSignature := []*felt.Felt{utils.HexToFelt(t, sigPart1), utils.HexToFelt(t, sigPart2)}
 		require.Equal(t, expectedSignature, invokeTx.Signature)
