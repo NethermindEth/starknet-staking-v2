@@ -2,6 +2,11 @@ package validator_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -19,6 +24,139 @@ import (
 	"go.uber.org/mock/gomock"
 	"lukechampine.com/uint128"
 )
+
+func TestAttest(t *testing.T) {
+	t.Run("Successful setting up attest (internal signer)", func(t *testing.T) {
+		env, err := loadEnv(t)
+		if err != nil {
+			t.Skipf("Ignoring test due to env variables loading failed: %s", err)
+		}
+
+		operationalAddress := utils.HexToFelt(t, "0x123")
+		serverInternalError := "Some internal server error when fetching epoch and attest info (internal signer test)"
+
+		mockRpc := mockRpcServer(t, operationalAddress, serverInternalError)
+		defer mockRpc.Close()
+
+		config := &validator.Config{
+			Provider: validator.Provider{
+				Http: mockRpc.URL,
+				Ws:   env.wsProviderUrl,
+			},
+			Signer: validator.Signer{
+				OperationalAddress: operationalAddress.String(),
+				ExternalUrl:        "http://localhost:5678",
+			},
+		}
+
+		validator.Sleep = func(d time.Duration) {
+			// No need to wait
+		}
+		defer func() { validator.Sleep = time.Sleep }()
+
+		logger := utils.NewNopZapLogger()
+		err = validator.Attest(config, *logger)
+
+		expectedErrorMsg := fmt.Sprintf(
+			"Failed to fetch epoch info for epoch id at app startup: Error when calling entrypoint `get_attestation_info_by_operational_address`: -32603 The error is not a valid RPC error: %d Internal Server Error: %s",
+			http.StatusInternalServerError,
+			serverInternalError,
+		)
+
+		require.ErrorContains(t, err, expectedErrorMsg)
+	})
+
+	t.Run("Successful setting up attest (external signer)", func(t *testing.T) {
+		env, err := loadEnv(t)
+		if err != nil {
+			t.Skipf("Ignoring test due to env variables loading failed: %s", err)
+		}
+
+		operationalAddress := utils.HexToFelt(t, "0x456")
+		serverInternalError := "Some internal server error when fetching epoch and attest info (external signer test)"
+
+		mockRpc := mockRpcServer(t, operationalAddress, serverInternalError)
+		defer mockRpc.Close()
+
+		config := &validator.Config{
+			Provider: validator.Provider{
+				Http: mockRpc.URL,
+				Ws:   env.wsProviderUrl,
+			},
+			Signer: validator.Signer{
+				OperationalAddress: operationalAddress.String(),
+				PrivKey:            "0x123",
+			},
+		}
+
+		validator.Sleep = func(d time.Duration) {
+			// No need to wait
+		}
+		defer func() { validator.Sleep = time.Sleep }()
+
+		logger := utils.NewNopZapLogger()
+		err = validator.Attest(config, *logger)
+
+		expectedErrorMsg := fmt.Sprintf(
+			"Failed to fetch epoch info for epoch id at app startup: Error when calling entrypoint `get_attestation_info_by_operational_address`: -32603 The error is not a valid RPC error: %d Internal Server Error: %s",
+			http.StatusInternalServerError,
+			serverInternalError,
+		)
+
+		require.ErrorContains(t, err, expectedErrorMsg)
+	})
+}
+
+func mockRpcServer(t *testing.T, operationalAddress *felt.Felt, serverInternalError string) *httptest.Server {
+	t.Helper()
+
+	mockRpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Read and decode JSON body
+		bodyBytes, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		defer r.Body.Close()
+
+		var req Method
+		err = json.Unmarshal(bodyBytes, &req)
+		require.NoError(t, err)
+
+		switch req.Name {
+		case "starknet_chainId":
+			const SN_SEPOLIA_ID = "0x534e5f5345504f4c4941"
+			chainIdResponse := fmt.Sprintf(`{"jsonrpc": "2.0", "result": "%s", "id": 1}`, SN_SEPOLIA_ID)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(chainIdResponse))
+		case "starknet_call":
+			// Marshal the `Params` back into JSON
+			paramsBytes, err := json.Marshal(req.Params[0])
+			require.NoError(t, err)
+
+			// Unmarshal `Params` into `FunctionCall`
+			var fnCall rpc.FunctionCall
+			err = json.Unmarshal(paramsBytes, &fnCall)
+			require.NoError(t, err)
+
+			// Just making sure it's the call expected
+			expectedEpochInfoFnCall := rpc.FunctionCall{
+				ContractAddress: utils.HexToFelt(t, validator.STAKING_CONTRACT_ADDRESS),
+				EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
+					"get_attestation_info_by_operational_address",
+				),
+				Calldata: []*felt.Felt{operationalAddress},
+			}
+
+			require.Equal(t, expectedEpochInfoFnCall, fnCall)
+
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(serverInternalError))
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte(`Should not get here`))
+		}
+	}))
+
+	return mockRpc
+}
 
 func TestProcessBlockHeaders(t *testing.T) {
 	mockCtrl := gomock.NewController(t)

@@ -37,16 +37,17 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 
 	dispatcher := NewEventDispatcher[Accounter, *utils.ZapLogger]()
 	wg := conc.NewWaitGroup()
-	defer wg.Wait()
 	wg.Go(func() { dispatcher.Dispatch(signer, &logger) })
+	defer wg.Wait()
+	defer close(dispatcher.AttestRequired)
 
 	// Subscribe to the block headers
 	wsProvider, headersFeed, err := BlockHeaderSubscription(config.Provider.Ws, &logger)
 	if err != nil {
 		return err
 	}
-	defer wsProvider.Close()
 	defer close(headersFeed)
+	defer wsProvider.Close()
 
 	if err := ProcessBlockHeaders(headersFeed, signer, &logger, &dispatcher); err != nil {
 		return err

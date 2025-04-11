@@ -32,7 +32,8 @@ type envVariable struct {
 }
 
 type Method struct {
-	Name string `json:"method"`
+	Name   string `json:"method"`
+	Params []any  `json:"params"`
 }
 
 func loadEnv(t *testing.T) (envVariable, error) {
