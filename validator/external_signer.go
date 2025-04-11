@@ -112,7 +112,7 @@ func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSign
 func SignTxHash(hash *felt.Felt, externalSignerUrl string) (signer.Response, error) {
 	// Create request body
 	reqBody := signer.Request{Hash: *hash}
-	jsonData, err := json.Marshal(reqBody)
+	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
 		return signer.Response{}, err
 	}

@@ -33,7 +33,7 @@ func TestNewCommand(t *testing.T) {
 			},
 		}
 		filePath := createTemporaryConfigFile(t, &config)
-		defer require.NoError(t, os.Remove(filePath))
+		defer deleteFile(t, filePath)
 
 		command.SetArgs([]string{"--config", filePath})
 
@@ -55,7 +55,7 @@ func TestNewCommand(t *testing.T) {
 			},
 		}
 		filePath := createTemporaryConfigFile(t, &config)
-		defer require.NoError(t, os.Remove(filePath))
+		defer deleteFile(t, filePath)
 
 		command.SetArgs([]string{"--config", filePath})
 
@@ -87,7 +87,7 @@ func TestNewCommand(t *testing.T) {
 		)
 		require.NoError(t, err)
 		filePath := createTemporaryConfigFile(t, &config)
-		defer require.NoError(t, os.Remove(filePath))
+		defer deleteFile(t, filePath)
 
 		command := main.NewCommand()
 		command.SetArgs([]string{
@@ -113,7 +113,7 @@ func TestNewCommand(t *testing.T) {
 		)
 		require.NoError(t, err)
 		filePath := createTemporaryConfigFile(t, &config)
-		defer require.NoError(t, os.Remove(filePath))
+		defer deleteFile(t, filePath)
 
 		command := main.NewCommand()
 		command.SetArgs([]string{
@@ -144,4 +144,9 @@ func createTemporaryConfigFile(t *testing.T, config *validator.Config) string {
 	require.NoError(t, err)
 
 	return tmpFile.Name()
+}
+
+func deleteFile(t *testing.T, filePath string) {
+	t.Helper()
+	require.NoError(t, os.Remove(filePath))
 }

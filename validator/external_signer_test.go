@@ -20,7 +20,7 @@ func TestSignTxHash(t *testing.T) {
 
 		res, err := main.SignTxHash(hashToSign, externalSignerUrl)
 
-		require.Nil(t, res)
+		require.Zero(t, res)
 		require.ErrorContains(t, err, "connection refused")
 	})
 
@@ -41,7 +41,7 @@ func TestSignTxHash(t *testing.T) {
 		hashToSign := utils.HexToFelt(t, "0x123")
 		res, err := main.SignTxHash(hashToSign, mockServer.URL)
 
-		require.Nil(t, res)
+		require.Zero(t, res)
 		expectedErrorMsg := fmt.Sprintf("Server error %d: %s", http.StatusInternalServerError, serverError)
 		require.EqualError(t, err, expectedErrorMsg)
 	})
@@ -61,7 +61,7 @@ func TestSignTxHash(t *testing.T) {
 		hashToSign := utils.HexToFelt(t, "0x123")
 		res, err := main.SignTxHash(hashToSign, mockServer.URL)
 
-		require.Nil(t, res)
+		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
 	})
 
@@ -86,7 +86,7 @@ func TestSignTxHash(t *testing.T) {
 				*new(felt.Felt).SetUint64(0x456),
 			},
 		}
+		require.NoError(t, err)
 		require.Equal(t, expectedResult, res)
-		require.Nil(t, err)
 	})
 }
