@@ -48,7 +48,7 @@ func NewCommand() cobra.Command {
 		return remoteSigner.Listen(address)
 	}
 
-	var cmd = cobra.Command{
+	cmd := cobra.Command{
 		Use:     "signer",
 		Short:   "Program that signs transactions hashes recieved by http request",
 		PreRunE: preRunE,

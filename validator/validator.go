@@ -126,7 +126,6 @@ func makeResourceBoundsMapWithZeroValues() rpc.ResourceBoundsMapping {
 // Postponing for now to not affect test code
 
 func FetchEpochInfo[Account Accounter](account Account) (EpochInfo, error) {
-
 	functionCall := rpc.FunctionCall{
 		ContractAddress:    StakingContract.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt("get_attestation_info_by_operational_address"),
@@ -162,7 +161,6 @@ func FetchAttestWindow[Account Accounter](account Account) (uint64, error) {
 		},
 		rpc.BlockID{Tag: "latest"},
 	)
-
 	if err != nil {
 		return 0, entrypointInternalError("attestation_window", err)
 	}
@@ -185,7 +183,6 @@ func FetchValidatorBalance[Account Accounter](account Account) (Balance, error) 
 		},
 		rpc.BlockID{Tag: "latest"},
 	)
-
 	if err != nil {
 		return Balance{}, entrypointInternalError("balanceOf", err)
 	}

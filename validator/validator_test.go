@@ -464,7 +464,6 @@ func createMockRpcServer(t *testing.T, addInvoke func(w http.ResponseWriter, r *
 }
 
 func TestSignInvokeTx(t *testing.T) {
-
 	t.Run("Error hashing tx", func(t *testing.T) {
 		invokeTx := rpc.InvokeTxnV3{}
 		err := main.SignInvokeTx(&invokeTx, &felt.Felt{}, "url not getting called anyway")
@@ -566,7 +565,6 @@ func TestSignInvokeTx(t *testing.T) {
 		require.Equal(t, expectedSignature, invokeTx.Signature)
 		require.NoError(t, err)
 	})
-
 }
 
 func TestFetchEpochInfo(t *testing.T) {

@@ -48,7 +48,7 @@ func NewCommand() cobra.Command {
 		}
 	}
 
-	var cmd = cobra.Command{
+	cmd := cobra.Command{
 		Use:     "validator",
 		Short:   "Program for Starknet validators to attest to epochs with respect to Staking v2",
 		PreRunE: preRunE,
