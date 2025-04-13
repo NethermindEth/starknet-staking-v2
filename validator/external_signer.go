@@ -97,8 +97,8 @@ func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSign
 	}
 
 	invokeTxnV3.Signature = []*felt.Felt{
-		&signResp.Signature[0],
-		&signResp.Signature[1],
+		signResp.Signature[0],
+		signResp.Signature[1],
 	}
 
 	return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 
@@ -24,18 +25,15 @@ type Request struct {
 }
 
 type Response struct {
-	Signature [2]felt.Felt `json:"signature"`
+	Signature [2]*felt.Felt `json:"signature"`
 }
 
 func (r *Response) String() string {
-	return fmt.Sprintf(`
-    {
-        r: %s,
-        s: %s
-    }
-    `,
-		&r.Signature[0],
-		&r.Signature[1])
+	return fmt.Sprintf(
+		`{r: %s, s: %s}`,
+		r.Signature[0],
+		r.Signature[1],
+	)
 }
 
 type Signer struct {
@@ -79,9 +77,17 @@ func (s *Signer) Listen(address string) error {
 func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	s.logger.Debug("Receiving http request")
 
+	defer func() { _ = r.Body.Close() }()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	var req Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "Failed to decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -103,25 +109,25 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Given a transaction hash returns the ECDSA `r` and `s` signature values
-func (s *Signer) hashAndSign(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt) ([2]felt.Felt, error) {
-	s.logger.Infow("Signing transaction", "tx", invokeTxnV3, "chainId", chainId)
+func (s *Signer) hashAndSign(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt) ([2]*felt.Felt, error) {
+	s.logger.Infow("Signing transaction", "transaction", invokeTxnV3, "chainId", chainId)
 
 	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
 	if err != nil {
-		return [2]felt.Felt{}, err
+		return [2]*felt.Felt{}, err
 	}
 
 	hashBig := hash.BigInt(new(big.Int))
 
 	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey, hashBig)
 	if err != nil {
-		return [2]felt.Felt{}, err
+		return [2]*felt.Felt{}, err
 	}
 
 	s.logger.Debugw("Signature", "r", s1, "s", s2)
 
-	return [2]felt.Felt{
-		*new(felt.Felt).SetBigInt(s1),
-		*new(felt.Felt).SetBigInt(s2),
+	return [2]*felt.Felt{
+		new(felt.Felt).SetBigInt(s1),
+		new(felt.Felt).SetBigInt(s2),
 	}, nil
 }
