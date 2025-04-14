@@ -312,9 +312,7 @@ func TestDispatch(t *testing.T) {
 
 			// Start routine
 			wg := &conc.WaitGroup{}
-			x, _ := utils.NewZapLogger(utils.DEBUG, true)
-			x = logger
-			wg.Go(func() { dispatcher.Dispatch(mockAccount, x) })
+			wg.Go(func() { dispatcher.Dispatch(mockAccount, logger) })
 
 			// Send the same event x2
 			blockHash := validator.BlockHash(*blockHashFelt)
@@ -610,7 +608,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 			require.Equal(
 				t,
 				fmt.Errorf(
-					"Tx status did not change for at least %s seconds",
+					"tx status did not change for at least %s seconds",
 					strconv.Itoa(validator.DEFAULT_MAX_RETRIES),
 				),
 				err,
@@ -657,7 +655,7 @@ func TestTrackTransactionStatus(t *testing.T) {
 func waitFor(duration time.Duration, condition func() bool) bool {
 	startTime := time.Now()
 	interval := duration / 100
-	for time.Now().Sub(startTime) < duration {
+	for time.Since(startTime) < duration {
 		time.Sleep(interval)
 		if condition() {
 			return true

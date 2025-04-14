@@ -179,7 +179,7 @@ func TrackTransactionStatus[Account Accounter, Log Logger](
 	// seconds
 	// Return and retry from the next block (if still in attestation window)
 	return nil, fmt.Errorf(
-		"Tx status did not change for at least %s seconds",
+		"tx status did not change for at least %s seconds",
 		strconv.Itoa(DEFAULT_MAX_RETRIES),
 	)
 }
