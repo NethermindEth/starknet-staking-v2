@@ -10,7 +10,6 @@ import (
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
-	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ func TestHashAndSignTx(t *testing.T) {
 			rpc.ResourceBoundsMapping{},
 		)
 		chainId := new(felt.Felt).SetUint64(1)
-		res, err := main.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, externalSignerUrl)
+		res, err := validator.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, externalSignerUrl)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "connection refused")
@@ -80,7 +79,7 @@ func TestHashAndSignTx(t *testing.T) {
 			rpc.ResourceBoundsMapping{},
 		)
 		chainId := new(felt.Felt).SetUint64(1)
-		res, err := main.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
+		res, err := validator.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
@@ -105,7 +104,7 @@ func TestHashAndSignTx(t *testing.T) {
 			rpc.ResourceBoundsMapping{},
 		)
 		chainId := new(felt.Felt).SetUint64(1)
-		res, err := main.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
+		res, err := validator.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
 
 		expectedResult := signer.Response{
 			Signature: [2]*felt.Felt{
