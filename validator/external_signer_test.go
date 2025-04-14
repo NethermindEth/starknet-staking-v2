@@ -108,9 +108,9 @@ func TestHashAndSignTx(t *testing.T) {
 		res, err := main.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
 
 		expectedResult := signer.Response{
-			Signature: [2]felt.Felt{
-				*new(felt.Felt).SetUint64(0x123),
-				*new(felt.Felt).SetUint64(0x456),
+			Signature: [2]*felt.Felt{
+				new(felt.Felt).SetUint64(0x123),
+				new(felt.Felt).SetUint64(0x456),
 			},
 		}
 		require.NoError(t, err)
