@@ -8,15 +8,14 @@ signer:
 	mkdir -p build
 	go build -o "./build/signer" "./cmd/signer/."
 
-remote-signer:
-	mkdir -p build
-	go build ./external_signer/. -o build/signer
-
 clean-testcache: ## Clean Go test cache
 	go clean -testcache
 
 test:
 	 go test ./...
+
+test-race:
+	go test -race ./...
 
 test-cover: clean-testcache ## Run tests with coverage
 	mkdir -p coverage
@@ -28,3 +27,6 @@ test-cover: clean-testcache ## Run tests with coverage
 generate: ## Generate mocks
 	mkdir -p mocks
 	go generate ./...
+
+lint:
+	go tool golangci-lint run --fix

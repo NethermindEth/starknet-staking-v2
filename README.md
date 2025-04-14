@@ -49,7 +49,16 @@ A full configuration file looks like this:
 }
 ```
 
-If a signer is defined with both a private key and a external url, the program will give priority to the external signer over signing it itself.
+#### With Docker
+
+To run the validator using Docker, prepare a valid config file locally and mount it into the container:
+
+```bash
+docker run \
+  -v <path_to_config_file>:/app/config/config.json \
+  nethermind/starknet-staking-v2:latest --config /app/config/config.json 
+```
+
 
 ### With flags
 
@@ -61,6 +70,20 @@ The same basics apply as described in the previous section. The following comman
     --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
     --signer-priv-key "0x456"
+```
+
+#### With Docker
+
+To run the validator using Docker without a config file, just make sure to pass all the required flags.
+
+```bash
+docker run \
+    nethermind/starknet-staking-v2:latest \
+        --provider-http "http://localhost:6060/v0_8" \
+        --provider-ws "ws://localhost:6061/v0_8" \
+        --signer-url "http//localhost:8080" \
+        --signer-op-address "0x123" \
+        --signer-priv-key "0x456"
 ```
 
 ### With configuration file and flags
@@ -79,15 +102,18 @@ Using a combination of both approaches is also valid. In this case, the values p
 
 ## External Signer 
 
-The external signer must implement a simple HTTP API, exposing a single `/sign` endpoint:
+To avoid users exposing their private keys our Validator program is capable of communicating with another process independent from the one provided here.
 
-- POST `/sign`: should return the signature for the transaction hash received as its input:
+This external signer must implement a simple HTTP server that waits for `POST` requests on an endpoint of the form `<signer_address>/sign`. This `<signer_address>` is the same one that should be specified when initializing the validator tool in the `signer-url` flag.
+
+The `POST` request will have the following form:
 ```json
 {
     "transaction_hash": "0x123"
 }
 ```
-Response should contain the ECDSA signature values r and s in an array:
+
+And answer with the ECDSA signature values `r` and `s` in an array:
 ```json
 {
   "signature": [
@@ -95,8 +121,43 @@ Response should contain the ECDSA signature values r and s in an array:
     "0xdef"
   ]
 }
+
 ```
-An example implementation is provided [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/example-signer/remote_signer.go).
+
+We have provided a functional implementation [here](https://github.com/NethermindEth/starknet-staking-v2/tree/main/signer/signer.go) for you to try and use as an example if you want to implement your own.
+
+### Try out our external signer
+
+First make sure you compile it from source with:
+```bash
+make signer
+```
+
+Then execute it with:
+```bash
+SIGNER_PRIVATE_KEY="0x123" ./build/signer \
+    --address localhost:8080
+```
+
+*On a separate terminal*, simulate the request for signing using the following request:
+```bash
+curl -X POST http://localhost:8080/sign \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_hash": "0x567"}
+```
+
+You should get the following answer:
+```json
+{
+    "signature": [
+        "0x2534533c18797c67974111a5b79210574bfa4a98c2adc97fb5a06164da4b2ea",
+        "0x434a779d865a617a7a47d1c48b7220dda230103ff1a006b752374f89d14f3ed"
+    ]
+}
+```
+
+This type of communication is exactly what will happen behind the curtains when using the validator tool and the signer each time there is an attestation required. This way you don't have to trust the software to protect your key.
+
 
 ## Logging
 

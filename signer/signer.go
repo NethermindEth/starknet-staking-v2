@@ -1,48 +1,47 @@
-package external_signer
+package signer
 
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"math/big"
 	"net/http"
-	"os"
 
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/cockroachdb/errors"
-	"github.com/joho/godotenv"
 )
 
-type SignRequest struct {
+const SIGN_ENDPOINT = "/sign"
+
+type Request struct {
 	Hash felt.Felt `json:"transaction_hash"`
 }
 
-type SignResponse struct {
-	Signature []*felt.Felt `json:"signature"`
+type Response struct {
+	Signature [2]felt.Felt `json:"signature"`
+}
+
+func (r *Response) String() string {
+	return fmt.Sprintf(`
+    {
+        r: %s,
+        s: %s
+    }
+    `,
+		&r.Signature[0],
+		&r.Signature[1])
 }
 
 type Signer struct {
-	publicKey *big.Int
+	logger    *utils.ZapLogger
 	keyStore  *account.MemKeystore
+	publicKey string
 }
 
-func loadEnv() string {
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Printf("No '.env' file found %s, will try looking for PRIVATE_KEY as a cli environment variable", err)
-	}
-
-	signerKey := os.Getenv("PRIVATE_KEY")
-	if signerKey == "" {
-		panic("Failed to load PRIVATE_KEY, empty string")
-	}
-
-	return signerKey
-}
-
-func newSigner(privateKey string) (Signer, error) {
+func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
 	privKey, ok := new(big.Int).SetString(privateKey, 0)
 	if !ok {
 		return Signer{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
@@ -53,55 +52,68 @@ func newSigner(privateKey string) (Signer, error) {
 		return Signer{}, errors.New("Cannot derive public key from private key")
 	}
 
-	ks := account.SetNewMemKeystore(publicKey.String(), privKey)
+	publicKeyStr := publicKey.String()
+	ks := account.SetNewMemKeystore(publicKeyStr, privKey)
 
-	return Signer{keyStore: ks, publicKey: publicKey}, nil
+	return Signer{
+		logger:    logger,
+		keyStore:  ks,
+		publicKey: publicKeyStr,
+	}, nil
 }
 
-func (s *Signer) sign(msg *felt.Felt) ([]*felt.Felt, error) {
-	msgBig := msg.BigInt(new(big.Int))
+// Listen for requests of the type `POST` at `<address>/sign`. The request
+// should include the hash of the transaction being signed.
+func (s *Signer) Listen(address string) error {
+	http.HandleFunc(SIGN_ENDPOINT, s.handler)
 
-	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey.String(), msgBig)
-	if err != nil {
-		return nil, err
-	}
+	s.logger.Infof("Server running at %s", address)
 
-	s1Felt := new(felt.Felt).SetBigInt(s1)
-	s2Felt := new(felt.Felt).SetBigInt(s2)
-
-	return []*felt.Felt{s1Felt, s2Felt}, nil
+	return http.ListenAndServe(address, nil)
 }
 
-func signHandler(w http.ResponseWriter, r *http.Request, signer *Signer) {
-	var req SignRequest
+// Decodes the request and returns ECDSA `r` and `s` signature values via http
+func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
+	s.logger.Debug("Receiving http request")
+
+	var req Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	signature, err := signer.sign(&req.Hash)
+	signature, err := s.sign(&req.Hash)
 	if err != nil {
 		http.Error(w, "Failed to sign hash: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	resp := SignResponse{Signature: signature}
-
+	resp := Response{Signature: signature}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
-func main() {
-	signerKey := loadEnv()
-	signer, err := newSigner(signerKey)
+	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
-		panic(err)
+		s.logger.Errorf("Error encoding response %s: %s", resp, err)
+		return
 	}
 
-	http.HandleFunc("/sign_hash", func(w http.ResponseWriter, r *http.Request) {
-		signHandler(w, r, &signer)
-	})
+	s.logger.Debugw("Answered http request", "response", resp)
+}
 
-	log.Println("🚀 Server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+// Given a transaction hash returns the ECDSA `r` and `s` signature values
+func (s *Signer) sign(msg *felt.Felt) ([2]felt.Felt, error) {
+	s.logger.Infof("Signing message with hash: %s", msg)
+
+	msgBig := msg.BigInt(new(big.Int))
+
+	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey, msgBig)
+	if err != nil {
+		return [2]felt.Felt{}, err
+	}
+
+	s.logger.Debugw("Signature", "r", s1, "s", s2)
+
+	return [2]felt.Felt{
+		*new(felt.Felt).SetBigInt(s1),
+		*new(felt.Felt).SetBigInt(s2),
+	}, nil
 }

@@ -48,7 +48,7 @@ func NewCommand() cobra.Command {
 		}
 	}
 
-	var rootCmd = cobra.Command{
+	cmd := cobra.Command{
 		Use:     "validator",
 		Short:   "Program for Starknet validators to attest to epochs with respect to Staking v2",
 		PreRunE: preRunE,
@@ -57,22 +57,22 @@ func NewCommand() cobra.Command {
 	}
 
 	// Config file path flag
-	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to JSON config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to JSON config file")
 
 	// Config provider flags
-	rootCmd.Flags().StringVar(&config.Provider.Http, "provider-http", "", "Provider http address")
-	rootCmd.Flags().StringVar(&config.Provider.Ws, "provider-ws", "", "Provider ws address")
+	cmd.Flags().StringVar(&config.Provider.Http, "provider-http", "", "Provider http address")
+	cmd.Flags().StringVar(&config.Provider.Ws, "provider-ws", "", "Provider ws address")
 	// Config signer flags
-	rootCmd.Flags().StringVar(
+	cmd.Flags().StringVar(
 		&config.Signer.ExternalUrl,
 		"signer-url",
 		"",
 		"Signer url address, required if using an external signer",
 	)
-	rootCmd.Flags().StringVar(
+	cmd.Flags().StringVar(
 		&config.Signer.PrivKey, "signer-priv-key", "", "Signer private key, required for signing",
 	)
-	rootCmd.Flags().StringVar(
+	cmd.Flags().StringVar(
 		&config.Signer.OperationalAddress,
 		"signer-op-address",
 		"",
@@ -80,11 +80,11 @@ func NewCommand() cobra.Command {
 	)
 
 	// Other flags
-	rootCmd.Flags().StringVar(
+	cmd.Flags().StringVar(
 		&logLevelF, "log-level", utils.INFO.String(), "Options: trace, debug, info, warn, error.",
 	)
 
-	return rootCmd
+	return cmd
 }
 
 func main() {

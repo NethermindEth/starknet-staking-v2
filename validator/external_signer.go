@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,47 +10,132 @@ import (
 	"strings"
 
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/starknet-staking-v2/signer"
+	"github.com/NethermindEth/starknet.go/account"
+	"github.com/NethermindEth/starknet.go/hash"
+	"github.com/NethermindEth/starknet.go/rpc"
+	"github.com/NethermindEth/starknet.go/utils"
 )
 
-type SignRequest struct {
-	Hash string `json:"transaction_hash"`
+// Used as a wrapper around an exgernal signer implementation
+type ExternalSigner struct {
+	*rpc.Provider
+	OperationalAddress Address
+	ChainId            felt.Felt
+	Url                string
 }
 
-type SignResponse struct {
-	Signature []*felt.Felt `json:"signature"`
+func NewExternalSigner(provider *rpc.Provider, signer *Signer) (ExternalSigner, error) {
+	chainID, err := provider.ChainID(context.Background())
+	if err != nil {
+		return ExternalSigner{}, err
+	}
+	chainId := new(felt.Felt).SetBytes([]byte(chainID))
+
+	return ExternalSigner{
+		Provider:           provider,
+		OperationalAddress: AddressFromString(signer.OperationalAddress),
+		Url:                signer.ExternalUrl,
+		ChainId:            *chainId,
+	}, nil
 }
 
-func SignTxHash(hash *felt.Felt, externalSignerUrl string) (*SignResponse, error) {
+func (s *ExternalSigner) BuildAndSendInvokeTxn(
+	ctx context.Context,
+	functionCalls []rpc.InvokeFunctionCall,
+	multiplier float64,
+) (*rpc.AddInvokeTransactionResponse, error) {
+	nonce, err := s.Nonce(ctx, rpc.WithBlockTag("pending"), s.Address())
+	if err != nil {
+		return nil, err
+	}
+
+	fnCallData := utils.InvokeFuncCallsToFunctionCalls(functionCalls)
+	formattedCallData := account.FmtCallDataCairo2(fnCallData)
+
+	// Building and signing the txn, as it needs a signature to estimate the fee
+	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(
+		s.Address(),
+		nonce,
+		formattedCallData,
+		makeResourceBoundsMapWithZeroValues(),
+	)
+	if err := SignInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.ChainId, s.Url); err != nil {
+		return nil, err
+	}
+
+	// Estimate txn fee
+	estimateFee, err := s.EstimateFee(
+		ctx,
+		[]rpc.BroadcastTxn{broadcastInvokeTxnV3},
+		[]rpc.SimulationFlag{},
+		rpc.WithBlockTag("pending"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	txnFee := estimateFee[0]
+	fillEmptyFeeEstimation(ctx, &txnFee, s.Provider) // temporary
+	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
+
+	// Signing the txn again with the estimated fee,
+	// as the fee value is used in the txn hash calculation
+	if err := SignInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.ChainId, s.Url); err != nil {
+		return nil, err
+	}
+
+	return s.AddInvokeTransaction(ctx, broadcastInvokeTxnV3)
+}
+
+func (s *ExternalSigner) Address() *felt.Felt {
+	return s.OperationalAddress.Felt()
+}
+
+func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
+	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
+	if err != nil {
+		return err
+	}
+
+	signResp, err := SignTxHash(hash, externalSignerUrl)
+	if err != nil {
+		return err
+	}
+
+	invokeTxnV3.Signature = []*felt.Felt{
+		&signResp.Signature[0],
+		&signResp.Signature[1],
+	}
+	return nil
+}
+
+func SignTxHash(hash *felt.Felt, externalSignerUrl string) (signer.Response, error) {
 	// Create request body
-	reqBody := SignRequest{Hash: hash.String()}
-	jsonData, err := json.Marshal(reqBody)
+	reqBody := signer.Request{Hash: *hash}
+	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
-		return nil, err
+		return signer.Response{}, err
 	}
 
-	// Make POST request
-	resp, err := http.Post(externalSignerUrl+"/sign_hash", "application/json", bytes.NewBuffer(jsonData))
+	signEndPoint := externalSignerUrl + signer.SIGN_ENDPOINT
+	resp, err := http.Post(signEndPoint, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, err
+		return signer.Response{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // Intentionally ignoring the error, will fix in future
 
 	// Read and decode response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return signer.Response{}, err
 	}
 
 	// Check if status code indicates an error (non-2xx)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("Server error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return signer.Response{},
+			fmt.Errorf("server error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	var signResp SignResponse
-	err = json.Unmarshal(body, &signResp)
-	if err != nil {
-		return nil, err
-	}
-
-	return &signResp, nil
+	var signResp signer.Response
+	return signResp, json.Unmarshal(body, &signResp)
 }
