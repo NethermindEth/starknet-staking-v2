@@ -3,6 +3,7 @@ package validator_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -117,8 +118,8 @@ func TestDispatch(t *testing.T) {
 			blockHash := validator.BlockHash(*blockHashFelt)
 			dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
-			// Mid-execution assertion: attestation is ongoing (dispatch go routine has not finished
-			// executing as it sleeps for 1 sec)
+			// Mid-execution assertion: attestation is ongoing (dispatch go routine has not
+			// finished executing as it sleeps for 1 sec)
 			require.Truef(
 				t,
 				waitFor(
@@ -587,29 +588,34 @@ func TestTrackTransactionStatus(t *testing.T) {
 		validator.Sleep = time.Sleep
 	})
 
-	t.Run("Returns an error if tx status does not change for `DEFAULT_MAX_RETRIES` seconds", func(t *testing.T) {
-		// Mock time.Sleep (absolutely no reason to wait in that test)
-		validator.Sleep = func(d time.Duration) {
-			// Do nothing
-		}
+	t.Run(
+		"Returns an error if tx status does not change for `DEFAULT_MAX_RETRIES` seconds",
+		func(t *testing.T) {
+			// Mock time.Sleep (absolutely no reason to wait in that test)
+			validator.Sleep = func(d time.Duration) {}
+			defer func() { validator.Sleep = time.Sleep }()
 
-		txHash := new(felt.Felt).SetUint64(1)
+			txHash := new(felt.Felt).SetUint64(1)
 
-		mockAccount.EXPECT().
-			GetTransactionStatus(context.Background(), txHash).
-			Return(&rpc.TxnStatusResp{
-				FinalityStatus: rpc.TxnStatus_Received,
-			}, nil).
-			Times(validator.DEFAULT_MAX_RETRIES)
+			mockAccount.EXPECT().
+				GetTransactionStatus(context.Background(), txHash).
+				Return(&rpc.TxnStatusResp{
+					FinalityStatus: rpc.TxnStatus_Received,
+				}, nil).
+				Times(validator.DEFAULT_MAX_RETRIES)
 
-		status, err := validator.TrackTransactionStatus(mockAccount, logger, txHash)
+			status, err := validator.TrackTransactionStatus(mockAccount, logger, txHash)
 
-		require.Nil(t, status)
-		require.Equal(t, errors.New("Tx status did not change for at least "+strconv.Itoa(validator.DEFAULT_MAX_RETRIES)+" seconds, retrying from next block"), err)
-
-		// Reset time.Sleep function
-		validator.Sleep = time.Sleep
-	})
+			require.Nil(t, status)
+			require.Equal(
+				t,
+				fmt.Errorf(
+					"Tx status did not change for at least %s seconds",
+					strconv.Itoa(validator.DEFAULT_MAX_RETRIES),
+				),
+				err,
+			)
+		})
 
 	t.Run("Returns the status if different from RECEIVED, here ACCEPTED_ON_L2", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)

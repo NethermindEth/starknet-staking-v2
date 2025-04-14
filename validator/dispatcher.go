@@ -152,19 +152,12 @@ func TrackTransactionStatus[Account Accounter, Log Logger](
 ) (*rpc.TxnStatusResp, error) {
 	println("a0")
 	for elapsedSeconds := 0; elapsedSeconds < DEFAULT_MAX_RETRIES; elapsedSeconds++ {
-		println("a1")
 		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
-		println("a2")
-		logger.Debugw(
-			"Tracking transaction",
-			"hash", txHash.String(),
-			"status", txStatus.FinalityStatus,
-		)
-
 		if err != nil && err.Error() != ErrTxnHashNotFound.Error() {
 			return nil, err
 		}
 		if err == nil && txStatus.FinalityStatus != rpc.TxnStatus_Received {
+			println("Done")
 			return txStatus, nil
 		}
 
@@ -179,7 +172,6 @@ func TrackTransactionStatus[Account Accounter, Log Logger](
 				"hash", txHash,
 			)
 		}
-
 		Sleep(time.Second)
 	}
 
