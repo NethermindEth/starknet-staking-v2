@@ -66,6 +66,7 @@ func (d *EventDispatcher[Account, Log]) Dispatch(
 
 			logger.Infow("Attestation sent", "block hash", event.BlockHash.String())
 			resp, err := InvokeAttest(account, &event)
+			logger.Debugw("Attest transaction sent", "transaction hash", resp.TransactionHash)
 			if err != nil {
 				logger.Errorw("Failed to attest", "block hash", event.BlockHash.String(), "error", err)
 				d.CurrentAttestStatus = Failed
