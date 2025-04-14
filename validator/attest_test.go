@@ -125,7 +125,8 @@ func mockRpcServer(t *testing.T, operationalAddress *felt.Felt, serverInternalEr
 			const SN_SEPOLIA_ID = "0x534e5f5345504f4c4941"
 			chainIdResponse := fmt.Sprintf(`{"jsonrpc": "2.0", "result": "%s", "id": 1}`, SN_SEPOLIA_ID)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(chainIdResponse))
+			_, err := w.Write([]byte(chainIdResponse))
+			require.NoError(t, err)
 		case "starknet_call":
 			// Marshal the `Params` back into JSON
 			paramsBytes, err := json.Marshal(req.Params[0])
@@ -148,10 +149,12 @@ func mockRpcServer(t *testing.T, operationalAddress *felt.Felt, serverInternalEr
 			require.Equal(t, expectedEpochInfoFnCall, fnCall)
 
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(serverInternalError))
+			_, err = w.Write([]byte(serverInternalError))
+			require.NoError(t, err)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			w.Write([]byte(`Should not get here`))
+			_, err = w.Write([]byte(`Should not get here`))
+			require.NoError(t, err)
 		}
 	}))
 
