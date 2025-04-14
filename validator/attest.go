@@ -1,4 +1,4 @@
-package main
+package validator
 
 import (
 	"context"
@@ -14,41 +14,41 @@ import (
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
 func Attest(config *Config, logger utils.ZapLogger) error {
-	provider, err := NewProvider(config.HttpProviderUrl, &logger)
+	provider, err := NewProvider(config.Provider.Http, &logger)
 	if err != nil {
 		return err
 	}
 
-	var account Accounter
-	if config.useLocalSigner {
-		validatorAccount, err := NewValidatorAccount(provider, &logger, &config.AccountData)
+	var signer Accounter
+	if config.Signer.External() {
+		externalSigner, err := NewExternalSigner(provider, &config.Signer)
 		if err != nil {
 			return err
 		}
-		account = &validatorAccount
+		signer = &externalSigner
+
 	} else {
-		externalSigner, err := NewExternalSigner(provider, config.AccountData.OperationalAddress, config.ExternalSignerUrl)
+		internalSigner, err := NewInternalSigner(provider, &logger, &config.Signer)
 		if err != nil {
 			return err
 		}
-		account = &externalSigner
+		signer = &internalSigner
 	}
 
 	dispatcher := NewEventDispatcher[Accounter, *utils.ZapLogger]()
-
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
-	wg.Go(func() { dispatcher.Dispatch(account, &logger) })
+	wg.Go(func() { dispatcher.Dispatch(signer, &logger) })
 
 	// Subscribe to the block headers
-	wsProvider, headersFeed, err := BlockHeaderSubscription(config.WsProviderUrl, &logger)
+	wsProvider, headersFeed, err := BlockHeaderSubscription(config.Provider.Ws, &logger)
 	if err != nil {
 		return err
 	}
 	defer wsProvider.Close()
 	defer close(headersFeed)
 
-	if err := ProcessBlockHeaders(headersFeed, account, &logger, &dispatcher); err != nil {
+	if err := ProcessBlockHeaders(headersFeed, signer, &logger, &dispatcher); err != nil {
 		return err
 	}
 	// I'd also like to check the balance of the address from time to time to verify

@@ -1,4 +1,4 @@
-package main
+package validator
 
 const (
 	STAKING_CONTRACT_ADDRESS          = "0x034370fc9931c636ab07b16ada82d60f05d32993943debe2376847e0921c1162"
