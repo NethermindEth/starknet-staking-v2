@@ -49,7 +49,16 @@ A full configuration file looks like this:
 }
 ```
 
-If a signer is defined with both a private key and a external url, the program will give priority to the external signer over signing it itself.
+#### With Docker
+
+To run the validator using Docker, prepare a valid config file locally and mount it into the container:
+
+```bash
+docker run \
+  -v <path_to_config_file>:/app/config/config.json \
+  nethermind/starknet-staking-v2:latest --config /app/config/config.json 
+```
+
 
 ### With flags
 
@@ -61,6 +70,20 @@ The same basics apply as described in the previous section. The following comman
     --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
     --signer-priv-key "0x456"
+```
+
+#### With Docker
+
+To run the validator using Docker without a config file, just make sure to pass all the required flags.
+
+```bash
+docker run \
+    nethermind/starknet-staking-v2:latest \
+        --provider-http "http://localhost:6060/v0_8" \
+        --provider-ws "ws://localhost:6061/v0_8" \
+        --signer-url "http//localhost:8080" \
+        --signer-op-address "0x123" \
+        --signer-priv-key "0x456"
 ```
 
 ### With configuration file and flags
