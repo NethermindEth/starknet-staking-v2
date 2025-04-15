@@ -15,7 +15,6 @@ import (
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
-	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/cockroachdb/errors"
@@ -114,7 +113,10 @@ func mockRpcServer(t *testing.T, operationalAddress *felt.Felt, serverInternalEr
 		// Read and decode JSON body
 		bodyBytes, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		defer r.Body.Close()
+		defer func() {
+			err := r.Body.Close()
+			require.NoError(t, err)
+		}()
 
 		var req Method
 		err = json.Unmarshal(bodyBytes, &req)
@@ -174,7 +176,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 
 		attestWindow := uint64(16)
 		epoch := validator.EpochInfo{
-			StakerAddress:             main.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
+			StakerAddress:             validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
 			Stake:                     uint128.New(1000000000000000000, 0),
 			EpochId:                   1516,
 			CurrentEpochStartingBlock: 639270,
@@ -237,7 +239,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
-		stakerAddress := main.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		stake := uint128.New(1000000000000000000, 0)
 		epochLength := uint64(40)
 		attestWindow := uint64(16)
@@ -330,7 +332,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
-		stakerAddress := main.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		stake := uint128.New(1000000000000000000, 0)
 		epochLength := uint64(40)
 		attestWindow := uint64(16)
