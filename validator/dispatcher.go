@@ -22,15 +22,47 @@ const (
 	Failed
 )
 
-type AttestTracking struct {
+type AttestTracker struct {
 	Event           AttestRequired
 	TransactionHash felt.Felt
 	Status          AttestStatus
 }
 
+func NewAttestTracker() AttestTracker {
+	return AttestTracker{
+		Event:           AttestRequired{},
+		TransactionHash: felt.Zero,
+		Status:          Failed,
+	}
+}
+
+func (a *AttestTracker) setOngoing() {
+	a.Status = Ongoing
+}
+
+func (a *AttestTracker) setSuccessful() {
+	a.Status = Successful
+}
+
+func (a *AttestTracker) setFailed() {
+	a.Status = Failed
+}
+
+func (a *AttestTracker) setEvent(event *AttestRequired) {
+	a.Event = *event
+}
+
+func (a *AttestTracker) setTransactionHash(txHash *felt.Felt) {
+	a.TransactionHash = *txHash
+}
+
+func (a *AttestTracker) resetTransactionHash() {
+	a.TransactionHash = felt.Zero
+}
+
 type EventDispatcher[Account Accounter, Log Logger] struct {
-	// Current epoch attest related fields
-	CurrentAttest AttestTracking
+	// Current epoch attest-related fields
+	CurrentAttest AttestTracker
 	// Event channels
 	AttestRequired chan AttestRequired
 	EndOfWindow    chan struct{}
@@ -38,11 +70,7 @@ type EventDispatcher[Account Accounter, Log Logger] struct {
 
 func NewEventDispatcher[Account Accounter, Log Logger]() EventDispatcher[Account, Log] {
 	return EventDispatcher[Account, Log]{
-		CurrentAttest: AttestTracking{
-			Event:           AttestRequired{},
-			TransactionHash: felt.Zero,
-			Status:          Failed,
-		},
+		CurrentAttest:  NewAttestTracker(),
 		AttestRequired: make(chan AttestRequired),
 		EndOfWindow:    make(chan struct{}),
 	}
@@ -62,8 +90,10 @@ func (d *EventDispatcher[Account, Log]) Dispatch(
 				return
 			}
 
-			if event == d.CurrentAttest.Event && d.CurrentAttest.Status != Successful && d.CurrentAttest.TransactionHash != felt.Zero {
-				d.CurrentAttest.Status = TrackAttest(account, logger, &d.CurrentAttest.Event, &d.CurrentAttest.TransactionHash)
+			if event == d.CurrentAttest.Event &&
+				d.CurrentAttest.Status != Successful &&
+				d.CurrentAttest.TransactionHash != felt.Zero {
+				setAttestStatusOnTracking(account, logger, &d.CurrentAttest)
 			}
 
 			if event == d.CurrentAttest.Event &&
@@ -71,8 +101,8 @@ func (d *EventDispatcher[Account, Log]) Dispatch(
 				continue
 			}
 
-			d.CurrentAttest.Event = event
-			d.CurrentAttest.Status = Ongoing
+			d.CurrentAttest.setEvent(&event)
+			d.CurrentAttest.setOngoing()
 
 			logger.Infow("Invoking attest", "block hash", event.BlockHash.String())
 			resp, err := InvokeAttest(account, &event)
@@ -80,17 +110,17 @@ func (d *EventDispatcher[Account, Log]) Dispatch(
 				logger.Errorw(
 					"Failed to attest", "block hash", event.BlockHash.String(), "error", err,
 				)
-				d.CurrentAttest.Status = Failed
-				d.CurrentAttest.TransactionHash = felt.Zero
+				d.CurrentAttest.setFailed()
+				d.CurrentAttest.resetTransactionHash()
 				continue
 			}
 			logger.Debugw("Attest transaction sent", "hash", resp.TransactionHash)
-			d.CurrentAttest.TransactionHash = *resp.TransactionHash
+			d.CurrentAttest.setTransactionHash(resp.TransactionHash)
 		case <-d.EndOfWindow:
 			logger.Infow("End of window reached")
 
 			if d.CurrentAttest.Status != Successful {
-				d.CurrentAttest.Status = TrackAttest(account, logger, &d.CurrentAttest.Event, &d.CurrentAttest.TransactionHash)
+				setAttestStatusOnTracking(account, logger, &d.CurrentAttest)
 			}
 
 			if d.CurrentAttest.Status == Successful {
@@ -105,6 +135,24 @@ func (d *EventDispatcher[Account, Log]) Dispatch(
 				)
 			}
 		}
+	}
+}
+
+func setAttestStatusOnTracking[Account Accounter, Log Logger](
+	account Account,
+	logger Log,
+	attestToTrack *AttestTracker,
+) {
+	status := TrackAttest(account, logger, &attestToTrack.Event, &attestToTrack.TransactionHash)
+	switch status {
+	case Ongoing:
+		attestToTrack.setOngoing()
+	case Successful:
+		attestToTrack.setSuccessful()
+	case Failed:
+		attestToTrack.setFailed()
+	default:
+		logger.Errorw("Invalid attest status", "status", status)
 	}
 }
 

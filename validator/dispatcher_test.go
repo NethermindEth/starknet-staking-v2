@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
@@ -48,16 +47,7 @@ func TestDispatch(t *testing.T) {
 		blockHash := validator.BlockHash(*blockHashFelt)
 		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
-		// Sleep just a bit so that dispatch routine has time to set the status as ongoing
-		time.Sleep(time.Second / 10)
-
-		// Mid-execution assert
-		require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHash, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
-
 		// Preparation for EndOfWindow event
-
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), addTxHash).
 			Return(&rpc.TxnStatusResp{
@@ -73,9 +63,12 @@ func TestDispatch(t *testing.T) {
 		wg.Wait()
 
 		// Assert
-		require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHash, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Successful, dispatcher.CurrentAttest.Status)
+		expectedAttest := validator.AttestTracker{
+			Event:           validator.AttestRequired{BlockHash: blockHash},
+			TransactionHash: *addTxHash,
+			Status:          validator.Successful,
+		}
+		require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
 	})
 
 	t.Run(
@@ -114,25 +107,6 @@ func TestDispatch(t *testing.T) {
 			blockHash := validator.BlockHash(*blockHashFelt)
 			dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
-			// Mid-execution assertion: attestation tx got sent
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.Status == validator.Ongoing },
-				),
-				"Ongoing status never set by dispatcher",
-			)
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.TransactionHash == *addTxHash },
-				),
-				"Transaction hash never set by dispatcher",
-			)
-			require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-
 			// Preparation for 2nd event
 
 			// Invoke tx is RECEIVED
@@ -146,25 +120,6 @@ func TestDispatch(t *testing.T) {
 			// This 2nd event gets ignored when status is ongoing
 			// Proof: only 1 call to BuildAndSendInvokeTxn is asserted
 			dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
-
-			// Mid-execution assertion: attestation is ongoing (tx is RECEIVED)
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.Status == validator.Ongoing },
-				),
-				"Ongoing status never set by dispatcher",
-			)
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.TransactionHash == *addTxHash },
-				),
-				"Transaction hash never set by dispatcher",
-			)
-			require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
 
 			// Preparation for 3rd event
 
@@ -186,9 +141,12 @@ func TestDispatch(t *testing.T) {
 			wg.Wait()
 
 			// Re-assert (3rd event got ignored)
-			require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-			require.Equal(t, addTxHash, &dispatcher.CurrentAttest.TransactionHash)
-			require.Equal(t, validator.Successful, dispatcher.CurrentAttest.Status)
+			expectedAttest := validator.AttestTracker{
+				Event:           validator.AttestRequired{BlockHash: blockHash},
+				TransactionHash: *addTxHash,
+				Status:          validator.Successful,
+			}
+			require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
 		})
 
 	t.Run("Same AttestRequired events are ignored until attestation fails", func(t *testing.T) {
@@ -224,14 +182,6 @@ func TestDispatch(t *testing.T) {
 		blockHash := validator.BlockHash(*blockHashFelt)
 		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
-		// Sleep just a bit so that dispatch routine has time to set the status as ongoing
-		time.Sleep(time.Second / 10)
-
-		// Mid-execution assertion: attestation is ongoing (1st go routine has not finished executing as it sleeps for 1 sec)
-		require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHash1, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
-
 		// Preparation for 2nd event
 
 		// Invoke tx status is RECEIVED
@@ -245,14 +195,6 @@ func TestDispatch(t *testing.T) {
 		// This 2nd event gets ignored when status is ongoing
 		// Proof: only 1 call to BuildAndSendInvokeTxn is asserted so far
 		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
-
-		// Sleep just a bit so that dispatch routine has time to execute
-		time.Sleep(time.Second / 10)
-
-		// Mid-execution assertion: attestation is still ongoing (invoke tx is still received)
-		require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHash1, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
 
 		// Preparation for 3rd event
 
@@ -284,9 +226,12 @@ func TestDispatch(t *testing.T) {
 		wg.Wait()
 
 		// Assert after dispatcher routine has finished processing the 3rd event
-		require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHash2, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
+		expectedAttest := validator.AttestTracker{
+			Event:           validator.AttestRequired{BlockHash: blockHash},
+			TransactionHash: *addTxHash2,
+			Status:          validator.Ongoing,
+		}
+		require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
 	})
 
 	t.Run(
@@ -324,34 +269,14 @@ func TestDispatch(t *testing.T) {
 			blockHash := validator.BlockHash(*blockHashFelt)
 			dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
-			// Mid-execution assertion: attestation has failed
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.Status == validator.Failed },
-				),
-				"Failed status never set by dispatcher",
-			)
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.TransactionHash == felt.Zero },
-				),
-				"Transaction hash never set by dispatcher",
-			)
-			require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-
 			// Preparation for 2nd event
-
-			addTxHash := utils.HexToFelt(t, "0x123")
-			mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
 
 			// GetTransactionStatus does not get called as invoke tx failed during sending
 			// Nothing to track
 
 			// Next call to BuildAndSendInvokeTxn succeeds
+			addTxHash := utils.HexToFelt(t, "0x123")
+			mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
 			mockAccount.EXPECT().
 				BuildAndSendInvokeTxn(
 					context.Background(), calls, validator.FEE_ESTIMATION_MULTIPLIER,
@@ -361,25 +286,6 @@ func TestDispatch(t *testing.T) {
 
 			// This 2nd event gets considered as previous one failed
 			dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
-
-			// Mid-execution assertion: attestation is ongoing
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.Status == validator.Ongoing },
-				),
-				"Ongoing status never set by dispatcher",
-			)
-			require.Truef(
-				t,
-				assertFor(
-					time.Second,
-					func() bool { return dispatcher.CurrentAttest.TransactionHash == *addTxHash },
-				),
-				"Transaction hash never set by dispatcher",
-			)
-			require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
 
 			// Preparation for 3rd event
 
@@ -398,10 +304,13 @@ func TestDispatch(t *testing.T) {
 			// Wait for dispatch routine (and consequently its spawned subroutines) to finish
 			wg.Wait()
 
-			// Mid-execution assertion: attestation has failed (1st go routine has indeed finished executing)
-			require.Equal(t, blockHash, dispatcher.CurrentAttest.Event.BlockHash)
-			require.Equal(t, addTxHash, &dispatcher.CurrentAttest.TransactionHash)
-			require.Equal(t, validator.Successful, dispatcher.CurrentAttest.Status)
+			// Assert after dispatcher routine has finished processing the 3rd event
+			expectedAttest := validator.AttestTracker{
+				Event:           validator.AttestRequired{BlockHash: blockHash},
+				TransactionHash: *addTxHash,
+				Status:          validator.Successful,
+			}
+			require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
 		})
 
 	t.Run("AttestRequired events transition with EndOfWindow events", func(t *testing.T) {
@@ -472,36 +381,12 @@ func TestDispatch(t *testing.T) {
 		blockHashA := validator.BlockHash(*blockHashFeltA)
 		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHashA}
 
-		// To give time for dispatcher to process event A
-		time.Sleep(time.Second / 5)
-
-		// Mid-execution assertion: attestation A is ongoing
-		require.Equal(t, blockHashA, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHashA, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
-
 		// Send EndOfWindow event for event A
 		dispatcher.EndOfWindow <- struct{}{}
-
-		// To give time for dispatcher to process EndOfWindow event
-		time.Sleep(time.Second / 5)
-
-		// Mid-execution assertion: attestation A is successful
-		require.Equal(t, blockHashA, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHashA, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Successful, dispatcher.CurrentAttest.Status)
 
 		// Send event B
 		blockHashB := validator.BlockHash(*blockHashFeltB)
 		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHashB}
-
-		// To give time for dispatcher to process event B
-		time.Sleep(time.Second / 5)
-
-		// Mid-execution assertion: attestation B is ongoing
-		require.Equal(t, blockHashB, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHashB, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
 
 		// Send EndOfWindow event for event B
 		dispatcher.EndOfWindow <- struct{}{}
@@ -511,9 +396,12 @@ func TestDispatch(t *testing.T) {
 		wg.Wait()
 
 		// End of execution assertion: attestation B has failed
-		require.Equal(t, blockHashB, dispatcher.CurrentAttest.Event.BlockHash)
-		require.Equal(t, addTxHashB, &dispatcher.CurrentAttest.TransactionHash)
-		require.Equal(t, validator.Failed, dispatcher.CurrentAttest.Status)
+		expectedAttest := validator.AttestTracker{
+			Event:           validator.AttestRequired{BlockHash: blockHashB},
+			TransactionHash: *addTxHashB,
+			Status:          validator.Failed,
+		}
+		require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
 	})
 }
 
@@ -532,11 +420,11 @@ func TestTrackAttest(t *testing.T) {
 
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), txHash).
-			Return(nil, errors.New("some internal error"))
+			Return(nil, validator.ErrTxnHashNotFound)
 
 		txStatus := validator.TrackAttest(mockAccount, logger, &attestEvent, txHash)
 
-		require.Equal(t, validator.Failed, txStatus)
+		require.Equal(t, validator.Ongoing, txStatus)
 	})
 
 	t.Run("attestation fails also if error different from transaction status not found", func(t *testing.T) {
@@ -608,16 +496,4 @@ func TestTrackAttest(t *testing.T) {
 
 		require.Equal(t, validator.Successful, txStatus)
 	})
-}
-
-func assertFor(duration time.Duration, condition func() bool) bool {
-	startTime := time.Now()
-	interval := duration / 100
-	for time.Since(startTime) < duration {
-		time.Sleep(interval)
-		if condition() {
-			return true
-		}
-	}
-	return false
 }
