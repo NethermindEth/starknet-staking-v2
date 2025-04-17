@@ -470,8 +470,7 @@ func TestTrackAttest(t *testing.T) {
 				GetTransactionStatus(context.Background(), txHash).
 				Return(nil, errors.New("some internal error"))
 
-			x, _ := utils.NewZapLogger(utils.DEBUG, true)
-			txStatus := validator.TrackAttest(mockAccount, x, &attestEvent, txRes)
+			txStatus := validator.TrackAttest(mockAccount, logger, &attestEvent, txRes)
 
 			require.Equal(t, validator.Failed, txStatus)
 		})

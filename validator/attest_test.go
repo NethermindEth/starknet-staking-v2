@@ -182,9 +182,9 @@ func sendHeaders(t *testing.T, headersFeed chan *rpc.BlockHeader, blockHeaders [
 
 // Test helper function to register received events to assert on them
 // Note: to exit this function, close the AttestRequired channel
-func registerReceivedEvents[T validator.Accounter, Log validator.Logger](
+func registerReceivedEvents[T validator.Accounter, Logger utils.Logger](
 	t *testing.T,
-	dispatcher *validator.EventDispatcher[T, Log],
+	dispatcher *validator.EventDispatcher[T, Logger],
 	receivedAttestRequired map[validator.AttestRequired]uint,
 	receivedEndOfWindowCount *uint8,
 ) {
@@ -294,7 +294,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockAccount := mocks.NewMockAccounter(mockCtrl)
-	mockLogger := mocks.NewMockLogger(mockCtrl)
+	logger := utils.NewNopZapLogger()
 
 	t.Run("Target block does not already exist", func(t *testing.T) {
 		targetBlockNumber := uint64(1)
@@ -306,7 +306,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 		attestInfo := validator.AttestInfo{
 			TargetBlock: validator.BlockNumber(targetBlockNumber),
 		}
-		validator.SetTargetBlockHashIfExists(mockAccount, mockLogger, &attestInfo)
+		validator.SetTargetBlockHashIfExists(mockAccount, logger, &attestInfo)
 
 		require.Equal(t, validator.BlockHash{}, attestInfo.TargetBlockHash)
 	})
@@ -321,7 +321,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 		attestInfo := validator.AttestInfo{
 			TargetBlock: validator.BlockNumber(targetBlockNumber),
 		}
-		validator.SetTargetBlockHashIfExists(mockAccount, mockLogger, &attestInfo)
+		validator.SetTargetBlockHashIfExists(mockAccount, logger, &attestInfo)
 
 		require.Equal(t, validator.BlockHash{}, attestInfo.TargetBlockHash)
 	})
@@ -340,16 +340,11 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 			Return(&blockWithTxs, nil)
 
 		targetBlockHash := validator.BlockHash(*targetBlockHashFelt)
-		mockLogger.EXPECT().
-			Infow(
-				"Target block already exists, registered block hash to attest to it if still within attestation window",
-				"block hash", targetBlockHash.String(),
-			)
 
 		attestInfo := validator.AttestInfo{
 			TargetBlock: validator.BlockNumber(targetBlockNumber),
 		}
-		validator.SetTargetBlockHashIfExists(mockAccount, mockLogger, &attestInfo)
+		validator.SetTargetBlockHashIfExists(mockAccount, logger, &attestInfo)
 
 		require.Equal(t, targetBlockHash, attestInfo.TargetBlockHash)
 	})

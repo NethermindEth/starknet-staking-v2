@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
+	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -35,8 +36,8 @@ type Accounter interface {
 // Represents an internal signer where we hold the private keys
 type InternalSigner account.Account
 
-func NewInternalSigner[Log Logger](
-	provider *rpc.Provider, logger Log, signer *Signer,
+func NewInternalSigner[Logger junoUtils.Logger](
+	provider *rpc.Provider, logger Logger, signer *Signer,
 ) (InternalSigner, error) {
 	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
@@ -193,7 +194,7 @@ func FetchValidatorBalance[Account Accounter](account Account) (Balance, error) 
 	return Balance(*result[0]), nil
 }
 
-func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, logger Log) (EpochInfo, AttestInfo, error) {
+func FetchEpochAndAttestInfo[Account Accounter, Logger junoUtils.Logger](account Account, logger Logger) (EpochInfo, AttestInfo, error) {
 	epochInfo, err := FetchEpochInfo(account)
 	if err != nil {
 		return EpochInfo{}, AttestInfo{}, err

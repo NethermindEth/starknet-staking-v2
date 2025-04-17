@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/sourcegraph/conc"
 )
@@ -24,7 +25,7 @@ const (
 	Failed
 )
 
-type EventDispatcher[Account Accounter, Log Logger] struct {
+type EventDispatcher[Account Accounter, Logger utils.Logger] struct {
 	// Current epoch attest related fields
 	CurrentAttest       AttestRequired
 	CurrentAttestStatus AttestStatus
@@ -34,8 +35,8 @@ type EventDispatcher[Account Accounter, Log Logger] struct {
 	EndOfWindow    chan struct{}
 }
 
-func NewEventDispatcher[Account Accounter, Log Logger]() EventDispatcher[Account, Log] {
-	return EventDispatcher[Account, Log]{
+func NewEventDispatcher[Account Accounter, Logger utils.Logger]() EventDispatcher[Account, Logger] {
+	return EventDispatcher[Account, Logger]{
 		CurrentAttest:       AttestRequired{},
 		CurrentAttestStatus: Failed,
 		AttestRequired:      make(chan AttestRequired),
@@ -43,9 +44,9 @@ func NewEventDispatcher[Account Accounter, Log Logger]() EventDispatcher[Account
 	}
 }
 
-func (d *EventDispatcher[Account, Log]) Dispatch(
+func (d *EventDispatcher[Account, Logger]) Dispatch(
 	account Account,
-	logger Log,
+	logger Logger,
 ) {
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
@@ -100,9 +101,9 @@ func (d *EventDispatcher[Account, Log]) Dispatch(
 	}
 }
 
-func TrackAttest[Account Accounter, Log Logger](
+func TrackAttest[Account Accounter, Logger utils.Logger](
 	account Account,
-	logger Log,
+	logger Logger,
 	event *AttestRequired,
 	txResp *rpc.AddInvokeTransactionResponse,
 ) AttestStatus {
@@ -147,8 +148,8 @@ func TrackAttest[Account Accounter, Log Logger](
 	return Successful
 }
 
-func TrackTransactionStatus[Account Accounter, Log Logger](
-	account Account, logger Log, txHash *felt.Felt,
+func TrackTransactionStatus[Account Accounter, Logger utils.Logger](
+	account Account, logger Logger, txHash *felt.Felt,
 ) (*rpc.TxnStatusResp, error) {
 	for elapsedSeconds := 0; elapsedSeconds < DEFAULT_MAX_RETRIES; elapsedSeconds++ {
 		txStatus, err := account.GetTransactionStatus(context.Background(), txHash)
