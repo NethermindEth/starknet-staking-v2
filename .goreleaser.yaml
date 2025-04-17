@@ -6,7 +6,7 @@ before:
 
 builds:
   - id: validator
-    main: .
+    main: ./cmd/validator/
     binary: validator
     env:
       - CGO_ENABLED=0
