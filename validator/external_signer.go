@@ -74,7 +74,6 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 		return nil, err
 	}
 	txnFee := estimateFee[0]
-	fillEmptyFeeEstimation(ctx, &txnFee, s.Provider) // temporary
 	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
 
 	// Signing the txn again with the estimated fee,

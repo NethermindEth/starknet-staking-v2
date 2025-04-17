@@ -85,25 +85,6 @@ func (v *InternalSigner) Address() *felt.Felt {
 	return v.AccountAddress
 }
 
-// When there's no transaction in the pending block, the L1DataGasConsumed and L1DataGasPrice fields are comming empty.
-// This is causing the transaction to fail with the error:
-// "55 Account validation failed: Max L1DataGas amount (0) is lower than the minimal gas amount: 128"
-// This function fills the empty fields.
-//
-// TODO: remove this function once the issue is fixed in the RPC
-func fillEmptyFeeEstimation(ctx context.Context, feeEstimation *rpc.FeeEstimation, provider rpc.RpcProvider) {
-	if feeEstimation.L1DataGasConsumed.IsZero() {
-		// default value for L1DataGasConsumed in most cases
-		feeEstimation.L1DataGasConsumed = new(felt.Felt).SetUint64(224)
-	}
-	if feeEstimation.L1DataGasPrice.IsZero() {
-		// getting the L1DataGasPrice from the latest block as reference
-		result, _ := provider.BlockWithTxHashes(ctx, rpc.WithBlockTag("latest"))
-		block := result.(*rpc.BlockTxHashes)
-		feeEstimation.L1DataGasPrice = block.L1DataGasPrice.PriceInFRI
-	}
-}
-
 func makeResourceBoundsMapWithZeroValues() rpc.ResourceBoundsMapping {
 	return rpc.ResourceBoundsMapping{
 		L1Gas: rpc.ResourceBounds{
