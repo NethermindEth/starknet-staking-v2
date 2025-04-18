@@ -17,12 +17,12 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }} -X main.date={{ .Date }}
 
 archives:
   - formats: [tar.gz]
     name_template: >-
-      starknet-staking-v2_
+      starknet-staking-v2_{{ .Tag }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
@@ -45,14 +45,15 @@ changelog:
 
 dockers:
   - image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Version }}-amd64"
+      - "nethermind/starknet-staking-v2:{{ .Tag }}-amd64"
     use: buildx
     dockerfile: goreleaser.dockerfile
     build_flag_templates:
       - "--pull"
       - "--platform=linux/amd64"
+
   - image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Version }}-arm64"
+      - "nethermind/starknet-staking-v2:{{ .Tag }}-arm64"
     use: buildx
     dockerfile: goreleaser.dockerfile
     build_flag_templates:
@@ -61,15 +62,15 @@ dockers:
     goarch: arm64
 
 docker_manifests:
-  - name_template: "nethermind/starknet-staking-v2:{{ .Version }}"
+  - name_template: "nethermind/starknet-staking-v2:{{ .Tag }}"
     image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Version }}-amd64"
-      - "nethermind/starknet-staking-v2:{{ .Version }}-arm64"
+      - "nethermind/starknet-staking-v2:{{ .Tag }}-amd64"
+      - "nethermind/starknet-staking-v2:{{ .Tag }}-arm64"
 
   - name_template: "nethermind/starknet-staking-v2:latest"
     image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Version }}-amd64"
-      - "nethermind/starknet-staking-v2:{{ .Version }}-arm64"
+      - "nethermind/starknet-staking-v2:{{ .Tag }}-amd64"
+      - "nethermind/starknet-staking-v2:{{ .Tag }}-arm64"
 
 release:
   github:
@@ -80,7 +81,5 @@ release:
   footer: |-
     ## Docker Images
 
-    - `nethermind/starknet-staking-v2:{{ .Version }}`
+    - `nethermind/starknet-staking-v2:{{ .Tag }}`
     - `nethermind/starknet-staking-v2:latest`
-
-    ---
