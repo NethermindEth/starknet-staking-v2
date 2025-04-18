@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -152,7 +153,7 @@ func setAttestStatusOnTracking[Account Accounter, Log Logger](
 	case Failed:
 		attestToTrack.setFailed()
 	default:
-		logger.Errorw("Invalid attest status", "status", status)
+		panic(fmt.Sprintf("Invalid attest status: %d", status))
 	}
 }
 
