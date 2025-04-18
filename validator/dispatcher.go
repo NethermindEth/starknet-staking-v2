@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/sourcegraph/conc"
 )
@@ -61,7 +62,7 @@ func (a *AttestTracker) resetTransactionHash() {
 	a.TransactionHash = felt.Zero
 }
 
-type EventDispatcher[Account Accounter, Log Logger] struct {
+type EventDispatcher[Account Accounter, Logger utils.Logger] struct {
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
 	// Event channels
@@ -69,17 +70,17 @@ type EventDispatcher[Account Accounter, Log Logger] struct {
 	EndOfWindow    chan struct{}
 }
 
-func NewEventDispatcher[Account Accounter, Log Logger]() EventDispatcher[Account, Log] {
-	return EventDispatcher[Account, Log]{
+func NewEventDispatcher[Account Accounter, Logger utils.Logger]() EventDispatcher[Account, Logger] {
+	return EventDispatcher[Account, Logger]{
 		CurrentAttest:  NewAttestTracker(),
 		AttestRequired: make(chan AttestRequired),
 		EndOfWindow:    make(chan struct{}),
 	}
 }
 
-func (d *EventDispatcher[Account, Log]) Dispatch(
+func (d *EventDispatcher[Account, Logger]) Dispatch(
 	account Account,
-	logger Log,
+	logger Logger,
 ) {
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
@@ -139,9 +140,9 @@ func (d *EventDispatcher[Account, Log]) Dispatch(
 	}
 }
 
-func setAttestStatusOnTracking[Account Accounter, Log Logger](
+func setAttestStatusOnTracking[Account Accounter, Logger utils.Logger](
 	account Account,
-	logger Log,
+	logger Logger,
 	attestToTrack *AttestTracker,
 ) {
 	status := TrackAttest(account, logger, &attestToTrack.Event, &attestToTrack.TransactionHash)
@@ -157,9 +158,9 @@ func setAttestStatusOnTracking[Account Accounter, Log Logger](
 	}
 }
 
-func TrackAttest[Account Accounter, Log Logger](
+func TrackAttest[Account Accounter, Logger utils.Logger](
 	account Account,
-	logger Log,
+	logger Logger,
 	event *AttestRequired,
 	txHash *felt.Felt,
 ) AttestStatus {

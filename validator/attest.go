@@ -60,11 +60,11 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 	return nil
 }
 
-func ProcessBlockHeaders[Account Accounter, Log Logger](
+func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
 	headersFeed chan *rpc.BlockHeader,
 	account Account,
-	logger Log,
-	dispatcher *EventDispatcher[Account, Log],
+	logger Logger,
+	dispatcher *EventDispatcher[Account, Logger],
 ) error {
 	noEpochSwitch := func(*EpochInfo, *EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(account, logger, nil, noEpochSwitch, "at app startup")
@@ -110,9 +110,9 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 	return nil
 }
 
-func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
+func SetTargetBlockHashIfExists[Account Accounter, Logger utils.Logger](
 	account Account,
-	logger Log,
+	logger Logger,
 	attestInfo *AttestInfo,
 ) {
 	targetBlockNumber := attestInfo.TargetBlock.Uint64()
@@ -131,9 +131,9 @@ func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
 	}
 }
 
-func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
+func FetchEpochAndAttestInfoWithRetry[Account Accounter, Logger utils.Logger](
 	account Account,
-	logger Log,
+	logger Logger,
 	prevEpoch *EpochInfo,
 	isEpochSwitchCorrect func(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool,
 	newEpochId string,
