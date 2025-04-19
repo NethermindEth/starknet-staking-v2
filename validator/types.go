@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -63,6 +64,13 @@ type EpochInfo struct {
 	EpochLen                  uint64          `json:"epoch_len"`
 	EpochId                   uint64          `json:"epoch_id"`
 	CurrentEpochStartingBlock BlockNumber     `json:"current_epoch_starting_block"`
+}
+
+func (e *EpochInfo) String() string {
+	return fmt.Sprintf(
+		"EpochInfo{StakerAddress: %s, Stake: %s, EpochId: %d, EpochLen: %d, CurrentEpochStartingBlock: %d}",
+		e.StakerAddress.Felt().String(), e.Stake, e.EpochId, e.EpochLen, e.CurrentEpochStartingBlock,
+	)
 }
 
 type AttestRequired struct {
