@@ -895,7 +895,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		validatorOperationalAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		mockAccount.EXPECT().Address().Return(validatorOperationalAddress)
 
-		stakerAddress := utils.HexToFelt(t, "0x123") // does not matter, is not used anyway
+		stakerAddress := utils.HexToFelt(t, "0x123")
 		stake := uint64(1000000000000000000)
 		epochLen := uint64(40)
 		epochId := uint64(1516)
@@ -934,16 +934,6 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			Call(context.Background(), expectedWindowFnCall, rpc.BlockID{Tag: "latest"}).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(attestWindow)}, nil)
 
-		// Mock ComputeBlockNumberToAttestTo call
-		mockAccount.EXPECT().Address().Return(validatorOperationalAddress)
-
-		expectedTargetBlock := validator.BlockNumber(639291)
-		expectedAttestInfo := validator.AttestInfo{
-			TargetBlock: expectedTargetBlock,
-			WindowStart: expectedTargetBlock + validator.BlockNumber(validator.MIN_ATTESTATION_WINDOW),
-			WindowEnd:   expectedTargetBlock + validator.BlockNumber(attestWindow),
-		}
-
 		// Test
 		epochInfo, attestInfo, err := validator.FetchEpochAndAttestInfo(mockAccount, logger)
 
@@ -955,9 +945,16 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			EpochId:                   epochId,
 			CurrentEpochStartingBlock: validator.BlockNumber(epochStartingBlock),
 		}
-
 		require.Equal(t, expectedEpochInfo, epochInfo)
+
+		expectedTargetBlock := validator.BlockNumber(639276)
+		expectedAttestInfo := validator.AttestInfo{
+			TargetBlock: expectedTargetBlock,
+			WindowStart: expectedTargetBlock + validator.BlockNumber(validator.MIN_ATTESTATION_WINDOW),
+			WindowEnd:   expectedTargetBlock + validator.BlockNumber(attestWindow),
+		}
 		require.Equal(t, expectedAttestInfo, attestInfo)
+
 		require.Nil(t, err)
 	})
 }

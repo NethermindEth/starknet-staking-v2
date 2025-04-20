@@ -27,14 +27,16 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
+		stakerAddress := utils.HexToFelt(t, "0x123")
 		epochId := uint64(1516)
 		epochLength := uint64(40)
 		attestWindow := uint64(16)
 		epochStartingBlock := validator.BlockNumber(639270)
-		expectedTargetBlock := validator.BlockNumber(639291)
+		expectedTargetBlock := validator.BlockNumber(639276)
 		mockFetchedEpochAndAttestInfo(
 			t,
 			mockAccount,
+			stakerAddress,
 			epochId,
 			epochLength,
 			attestWindow,
@@ -89,18 +91,19 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
+		stakerAddress := utils.HexToFelt(t, "0x123")
 		epochLength := uint64(40)
 		attestWindow := uint64(16)
 
 		epochId1 := uint64(1516)
 		epochStartingBlock1 := validator.BlockNumber(639270)
-		expectedTargetBlock1 := validator.BlockNumber(639291)
-		mockFetchedEpochAndAttestInfo(t, mockAccount, epochId1, epochLength, attestWindow, epochStartingBlock1)
+		expectedTargetBlock1 := validator.BlockNumber(639276)
+		mockFetchedEpochAndAttestInfo(t, mockAccount, stakerAddress, epochId1, epochLength, attestWindow, epochStartingBlock1)
 
 		epochId2 := uint64(1517)
 		epochStartingBlock2 := validator.BlockNumber(639310)
-		expectedTargetBlock2 := validator.BlockNumber(639316)
-		mockFetchedEpochAndAttestInfo(t, mockAccount, epochId2, epochLength, attestWindow, epochStartingBlock2)
+		expectedTargetBlock2 := validator.BlockNumber(639315)
+		mockFetchedEpochAndAttestInfo(t, mockAccount, stakerAddress, epochId2, epochLength, attestWindow, epochStartingBlock2)
 
 		targetBlockHashEpoch1 := validator.BlockHash(
 			*utils.HexToFelt(t, "0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045"),
@@ -209,6 +212,7 @@ func registerReceivedEvents[T validator.Accounter, Logger utils.Logger](
 func mockFetchedEpochAndAttestInfo(
 	t *testing.T,
 	mockAccount *mocks.MockAccounter,
+	stakerAddress *felt.Felt,
 	epochId,
 	epochLength,
 	attestWindow uint64,
@@ -220,7 +224,6 @@ func mockFetchedEpochAndAttestInfo(
 	validatorOperationalAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 	mockAccount.EXPECT().Address().Return(validatorOperationalAddress)
 
-	stakerAddress := utils.HexToFelt(t, "0x123") // does not matter, is not used anyway
 	stake := uint64(1000000000000000000)
 
 	expectedEpochInfoFnCall := rpc.FunctionCall{
@@ -256,9 +259,6 @@ func mockFetchedEpochAndAttestInfo(
 		EXPECT().
 		Call(context.Background(), expectedWindowFnCall, rpc.BlockID{Tag: "latest"}).
 		Return([]*felt.Felt{new(felt.Felt).SetUint64(attestWindow)}, nil)
-
-	// Mock ComputeBlockNumberToAttestTo call
-	mockAccount.EXPECT().Address().Return(validatorOperationalAddress)
 }
 
 func mockHeaderFeedWithLogger(

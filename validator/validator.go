@@ -192,7 +192,7 @@ func FetchEpochAndAttestInfo[Account Accounter, Logger junoUtils.Logger](account
 		return EpochInfo{}, AttestInfo{}, windowErr
 	}
 
-	blockNum := ComputeBlockNumberToAttestTo(account, &epochInfo, attestWindow)
+	blockNum := ComputeBlockNumberToAttestTo(&epochInfo, attestWindow)
 
 	attestInfo := AttestInfo{
 		TargetBlock: blockNum,
