@@ -20,6 +20,23 @@ type Provider struct {
 	Ws   string `json:"ws"`
 }
 
+func ProviderFromEnv() Provider {
+	return Provider{
+		Http: os.Getenv("PROVIDER_HTTP_URL"),
+		Ws:   os.Getenv("PROVIDER_WS_URL"),
+	}
+}
+
+func (p *Provider) Check() error {
+	if p.Http == "" {
+		return errors.New("http provider url not set in provider configuration")
+	}
+	if p.Ws == "" {
+		return errors.New("ws provider url not set in provider configuration")
+	}
+	return nil
+}
+
 // Merge its missing fields with data from other provider
 func (p *Provider) Fill(other *Provider) {
 	if isZero(p.Http) {
@@ -34,6 +51,27 @@ type Signer struct {
 	ExternalUrl        string `json:"url"`
 	PrivKey            string `json:"privateKey"`
 	OperationalAddress string `json:"operationalAddress"`
+}
+
+func (s *Signer) Check() error {
+	if s.OperationalAddress == "" {
+		return errors.New("operational address is not set in signer configuration")
+	}
+	if s.External() {
+		return nil
+	}
+	if s.PrivKey == "" {
+		return errors.New("neither private key nor external url set in signer configuration")
+	}
+	return nil
+}
+
+func SignerFromEnv() Signer {
+	return Signer{
+		ExternalUrl:        os.Getenv("SIGNER_EXTERNAL_URL"),
+		PrivKey:            os.Getenv("SIGNER_PRIVATE_KEY"),
+		OperationalAddress: os.Getenv("SIGNER_OPERATIONAL_ADDRESS"),
+	}
 }
 
 // Merge its missing fields with data from other signer
@@ -56,6 +94,13 @@ func (s *Signer) External() bool {
 type Config struct {
 	Provider Provider `json:"provider"`
 	Signer   Signer   `json:"signer"`
+}
+
+func ConfigFromEnv() Config {
+	return Config{
+		Provider: ProviderFromEnv(),
+		Signer:   SignerFromEnv(),
+	}
 }
 
 // Function to load and parse the JSON file
@@ -83,34 +128,11 @@ func (c *Config) Fill(other *Config) {
 
 // Verifies its data is appropiatly set
 func (c *Config) Check() error {
-	if err := checkProvider(&c.Provider); err != nil {
+	if err := c.Provider.Check(); err != nil {
 		return err
 	}
-	if err := checkSigner(&c.Signer); err != nil {
+	if err := c.Signer.Check(); err != nil {
 		return err
-	}
-	return nil
-}
-
-func checkProvider(provider *Provider) error {
-	if provider.Http == "" {
-		return errors.New("http provider url not set in provider config")
-	}
-	if provider.Ws == "" {
-		return errors.New("ws provider url not set in provder config")
-	}
-	return nil
-}
-
-func checkSigner(signer *Signer) error {
-	if signer.OperationalAddress == "" {
-		return errors.New("operational address is not set in signer config")
-	}
-	if signer.External() {
-		return nil
-	}
-	if signer.PrivKey == "" {
-		return errors.New("neither private key nor url properties set in signer config")
 	}
 	return nil
 }

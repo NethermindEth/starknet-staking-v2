@@ -18,13 +18,21 @@ func NewCommand() cobra.Command {
 	var logger utils.ZapLogger
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
+		// Config takes the values from flags directly,
+		// then fills the missing ones from the env vars
+		configFromEnv := validator.ConfigFromEnv()
+		config.Fill(&configFromEnv)
+
+		// It fills the missing one from the ones defined
+		// in a config file
 		if configPath != "" {
-			fileConfig, err := validator.ConfigFromFile(configPath)
+			configFromFile, err := validator.ConfigFromFile(configPath)
 			if err != nil {
 				return err
 			}
-			config.Fill(&fileConfig)
+			config.Fill(&configFromFile)
 		}
+
 		if err := config.Check(); err != nil {
 			return err
 		}

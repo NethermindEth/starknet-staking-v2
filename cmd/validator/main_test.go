@@ -99,7 +99,8 @@ func TestNewCommand(t *testing.T) {
 		err = command.ExecuteContext(context.Background())
 		require.NoError(t, err)
 	})
-	t.Run("Flags take priority over config file", func(t *testing.T) {
+	t.Run("Priority order is flags -> env vars -> config file", func(t *testing.T) {
+		// Configuration through file
 		config, err := validator.ConfigFromData([]byte(`{
             "provider": {
                 "http": "http://localhost:1234",
@@ -114,6 +115,12 @@ func TestNewCommand(t *testing.T) {
 		require.NoError(t, err)
 		filePath := createTemporaryConfigFile(t, &config)
 		defer deleteFile(t, filePath)
+
+		// Configuration through env var
+		require.NoError(t, os.Setenv("SIGNER_EXTERNAL_URL", "some other"))
+		defer func() {
+			require.NoError(t, os.Unsetenv("SIGNER_EXTERNAL_URL"))
+		}()
 
 		command := main.NewCommand()
 		command.SetArgs([]string{
