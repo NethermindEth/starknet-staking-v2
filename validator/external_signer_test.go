@@ -9,16 +9,24 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
-	main "github.com/NethermindEth/starknet-staking-v2/validator"
+	"github.com/NethermindEth/starknet-staking-v2/validator"
+	"github.com/NethermindEth/starknet.go/rpc"
+	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSignTxHash(t *testing.T) {
+func TestHashAndSignTx(t *testing.T) {
 	t.Run("Error making request", func(t *testing.T) {
-		hashToSign := utils.HexToFelt(t, "0x123")
 		externalSignerUrl := "http://localhost:1234"
 
-		res, err := main.SignTxHash(hashToSign, externalSignerUrl)
+		invokeTxnV3 := snGoUtils.BuildInvokeTxn(
+			utils.HexToFelt(t, "0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			rpc.ResourceBoundsMapping{},
+		)
+		chainId := new(felt.Felt).SetUint64(1)
+		res, err := validator.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, externalSignerUrl)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "connection refused")
@@ -38,8 +46,14 @@ func TestSignTxHash(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		hashToSign := utils.HexToFelt(t, "0x123")
-		res, err := main.SignTxHash(hashToSign, mockServer.URL)
+		invokeTxnV3 := snGoUtils.BuildInvokeTxn(
+			utils.HexToFelt(t, "0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			rpc.ResourceBoundsMapping{},
+		)
+		chainId := new(felt.Felt).SetUint64(1)
+		res, err := validator.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
 
 		require.Zero(t, res)
 		expectedErrorMsg := fmt.Sprintf("server error %d: %s", http.StatusInternalServerError, serverError)
@@ -58,8 +72,14 @@ func TestSignTxHash(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		hashToSign := utils.HexToFelt(t, "0x123")
-		res, err := main.SignTxHash(hashToSign, mockServer.URL)
+		invokeTxnV3 := snGoUtils.BuildInvokeTxn(
+			utils.HexToFelt(t, "0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			rpc.ResourceBoundsMapping{},
+		)
+		chainId := new(felt.Felt).SetUint64(1)
+		res, err := validator.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
@@ -77,13 +97,19 @@ func TestSignTxHash(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		hashToSign := utils.HexToFelt(t, "0x123")
-		res, err := main.SignTxHash(hashToSign, mockServer.URL)
+		invokeTxnV3 := snGoUtils.BuildInvokeTxn(
+			utils.HexToFelt(t, "0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			rpc.ResourceBoundsMapping{},
+		)
+		chainId := new(felt.Felt).SetUint64(1)
+		res, err := validator.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainId, mockServer.URL)
 
 		expectedResult := signer.Response{
-			Signature: [2]felt.Felt{
-				*new(felt.Felt).SetUint64(0x123),
-				*new(felt.Felt).SetUint64(0x456),
+			Signature: [2]*felt.Felt{
+				new(felt.Felt).SetUint64(0x123),
+				new(felt.Felt).SetUint64(0x456),
 			},
 		}
 		require.NoError(t, err)

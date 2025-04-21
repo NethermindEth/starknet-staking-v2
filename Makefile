@@ -1,6 +1,6 @@
 .PHONY: validator signer
 
-validator: 
+validator:
 	mkdir -p build
 	go build -o "./build/validator" "./cmd/validator/."
 
@@ -19,7 +19,7 @@ test-race:
 
 test-cover: clean-testcache ## Run tests with coverage
 	mkdir -p coverage
-	go test -coverprofile=coverage/coverage.out -covermode=atomic .
+	go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
 	go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	open coverage/coverage.html
 

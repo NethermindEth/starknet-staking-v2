@@ -4,9 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
-	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	main "github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -229,10 +227,10 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockAccounter(mockCtrl)
 	t.Run("Correct target block number computation - example 1", func(t *testing.T) {
-		mockAccount.EXPECT().Address().Return(utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"))
+		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		epochInfo := main.EpochInfo{
+			StakerAddress:             main.Address(*stakerAddress),
 			Stake:                     uint128.From64(1000000000000000000),
 			EpochLen:                  40,
 			EpochId:                   1516,
@@ -240,18 +238,15 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 		}
 		attestationWindow := uint64(16)
 
-		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, &epochInfo, attestationWindow)
+		blockNumber := main.ComputeBlockNumberToAttestTo(&epochInfo, attestationWindow)
 
 		require.Equal(t, main.BlockNumber(639291), blockNumber)
 	})
 
 	t.Run("Correct target block number computation - example 2", func(t *testing.T) {
-		test, err := new(felt.Felt).SetString("0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
-		require.NoError(t, err)
-		mockAccount.EXPECT().Address().Return(test)
-
+		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		epochInfo := main.EpochInfo{
-			StakerAddress:             main.Address(*test),
+			StakerAddress:             main.Address(*stakerAddress),
 			Stake:                     uint128.From64(1000000000000000000),
 			EpochLen:                  40,
 			EpochId:                   1517,
@@ -259,13 +254,14 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 		}
 		attestationWindow := uint64(16)
 
-		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, &epochInfo, attestationWindow)
+		blockNumber := main.ComputeBlockNumberToAttestTo(&epochInfo, attestationWindow)
 		require.Equal(t, main.BlockNumber(639316), blockNumber)
 	})
 
 	t.Run("Correct target block number computation - example 3", func(t *testing.T) {
-		mockAccount.EXPECT().Address().Return(utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"))
+		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		epochInfo := main.EpochInfo{
+			StakerAddress:             main.Address(*stakerAddress),
 			Stake:                     uint128.From64(1000000000000000000),
 			EpochLen:                  40,
 			EpochId:                   1518,
@@ -273,7 +269,7 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 		}
 		attestationWindow := uint64(16)
 
-		blockNumber := main.ComputeBlockNumberToAttestTo(mockAccount, &epochInfo, attestationWindow)
+		blockNumber := main.ComputeBlockNumberToAttestTo(&epochInfo, attestationWindow)
 
 		require.Equal(t, main.BlockNumber(639369), blockNumber)
 	})

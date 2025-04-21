@@ -25,7 +25,7 @@ import (
 )
 
 func TestAttest(t *testing.T) {
-	t.Run("Successful setting up attest (internal signer)", func(t *testing.T) {
+	t.Run("Successful set up (internal signer)", func(t *testing.T) {
 		env, err := loadEnv(t)
 		if err != nil {
 			t.Skipf("Ignoring test due to env variables loading failed: %s", err)
@@ -65,7 +65,7 @@ func TestAttest(t *testing.T) {
 		require.ErrorContains(t, err, expectedErrorMsg)
 	})
 
-	t.Run("Successful setting up attest (external signer)", func(t *testing.T) {
+	t.Run("Successful set up (external signer)", func(t *testing.T) {
 		env, err := loadEnv(t)
 		if err != nil {
 			t.Skipf("Ignoring test due to env variables loading failed: %s", err)
@@ -176,13 +176,13 @@ func TestProcessBlockHeaders(t *testing.T) {
 
 		attestWindow := uint64(16)
 		epoch := validator.EpochInfo{
-			StakerAddress:             validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e"),
+			StakerAddress:             validator.AddressFromString("0x123"),
 			Stake:                     uint128.New(1000000000000000000, 0),
 			EpochId:                   1516,
 			CurrentEpochStartingBlock: 639270,
 			EpochLen:                  40,
 		}
-		expectedTargetBlock := validator.BlockNumber(639291)
+		expectedTargetBlock := validator.BlockNumber(639276)
 		mockSuccessfullyFetchedEpochAndAttestInfo(
 			t,
 			mockAccount,
@@ -239,7 +239,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
-		stakerAddress := validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := validator.AddressFromString("0x123")
 		stake := uint128.New(1000000000000000000, 0)
 		epochLength := uint64(40)
 		attestWindow := uint64(16)
@@ -251,7 +251,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 			CurrentEpochStartingBlock: 639270,
 			EpochLen:                  epochLength,
 		}
-		expectedTargetBlock1 := validator.BlockNumber(639291) // calculated by fetch epoch & attest info call
+		expectedTargetBlock1 := validator.BlockNumber(639276) // calculated by fetch epoch & attest info call
 		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, &epoch1, attestWindow, 1)
 
 		epoch2 := validator.EpochInfo{
@@ -261,7 +261,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 			CurrentEpochStartingBlock: 639310,
 			EpochLen:                  epochLength,
 		}
-		expectedTargetBlock2 := validator.BlockNumber(639316) // calculated by fetch epoch & attest info call
+		expectedTargetBlock2 := validator.BlockNumber(639315) // calculated by fetch epoch & attest info call
 		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockAccount, &epoch2, attestWindow, 1)
 
 		targetBlockHashEpoch1 := validator.BlockHash(
@@ -418,8 +418,6 @@ func TestProcessBlockHeaders(t *testing.T) {
 	})
 }
 
-// TODO: Add test with error when calling FetchEpochAndAttestInfo <-- for whole Attest test
-
 // Test helper function to send headers
 func sendHeaders(t *testing.T, headersFeed chan *rpc.BlockHeader, blockHeaders []rpc.BlockHeader) {
 	t.Helper()
@@ -431,9 +429,9 @@ func sendHeaders(t *testing.T, headersFeed chan *rpc.BlockHeader, blockHeaders [
 
 // Test helper function to register received events to assert on them
 // Note: to exit this function, close the AttestRequired channel
-func registerReceivedEvents[T validator.Accounter, Log validator.Logger](
+func registerReceivedEvents[T validator.Accounter, Logger utils.Logger](
 	t *testing.T,
-	dispatcher *validator.EventDispatcher[T, Log],
+	dispatcher *validator.EventDispatcher[T, Logger],
 	receivedAttestRequired map[validator.AttestRequired]uint,
 	receivedEndOfWindowCount *uint8,
 ) {
@@ -468,8 +466,6 @@ func mockSuccessfullyFetchedEpochAndAttestInfo(
 	validatorOperationalAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 	mockAccount.EXPECT().Address().Return(validatorOperationalAddress).Times(howManyTimes)
 
-	stake := uint64(1000000000000000000)
-
 	expectedEpochInfoFnCall := rpc.FunctionCall{
 		ContractAddress: utils.HexToFelt(t, validator.STAKING_CONTRACT_ADDRESS),
 		EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
@@ -483,8 +479,8 @@ func mockSuccessfullyFetchedEpochAndAttestInfo(
 		Call(context.Background(), expectedEpochInfoFnCall, rpc.BlockID{Tag: "latest"}).
 		Return(
 			[]*felt.Felt{
-				validatorOperationalAddress,
-				new(felt.Felt).SetUint64(stake),
+				epoch.StakerAddress.Felt(),
+				new(felt.Felt).SetBigInt(epoch.Stake.Big()),
 				new(felt.Felt).SetUint64(epoch.EpochLen),
 				new(felt.Felt).SetUint64(epoch.EpochId),
 				new(felt.Felt).SetUint64(epoch.CurrentEpochStartingBlock.Uint64()),
@@ -505,9 +501,6 @@ func mockSuccessfullyFetchedEpochAndAttestInfo(
 		Call(context.Background(), expectedWindowFnCall, rpc.BlockID{Tag: "latest"}).
 		Return([]*felt.Felt{new(felt.Felt).SetUint64(attestWindow)}, nil).
 		Times(howManyTimes)
-
-	// Mock ComputeBlockNumberToAttestTo call
-	mockAccount.EXPECT().Address().Return(validatorOperationalAddress).Times(howManyTimes)
 }
 
 func mockFailedFetchingEpochAndAttestInfo(
@@ -567,7 +560,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockAccount := mocks.NewMockAccounter(mockCtrl)
-	mockLogger := mocks.NewMockLogger(mockCtrl)
+	logger := utils.NewNopZapLogger()
 
 	t.Run("Target block does not already exist", func(t *testing.T) {
 		targetBlockNumber := uint64(1)
@@ -579,7 +572,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 		attestInfo := validator.AttestInfo{
 			TargetBlock: validator.BlockNumber(targetBlockNumber),
 		}
-		validator.SetTargetBlockHashIfExists(mockAccount, mockLogger, &attestInfo)
+		validator.SetTargetBlockHashIfExists(mockAccount, logger, &attestInfo)
 
 		require.Equal(t, validator.BlockHash{}, attestInfo.TargetBlockHash)
 	})
@@ -594,7 +587,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 		attestInfo := validator.AttestInfo{
 			TargetBlock: validator.BlockNumber(targetBlockNumber),
 		}
-		validator.SetTargetBlockHashIfExists(mockAccount, mockLogger, &attestInfo)
+		validator.SetTargetBlockHashIfExists(mockAccount, logger, &attestInfo)
 
 		require.Equal(t, validator.BlockHash{}, attestInfo.TargetBlockHash)
 	})
@@ -613,16 +606,11 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 			Return(&blockWithTxs, nil)
 
 		targetBlockHash := validator.BlockHash(*targetBlockHashFelt)
-		mockLogger.EXPECT().
-			Infow(
-				"Target block already exists, registered block hash to attest to it if still within attestation window",
-				"block hash", targetBlockHash.String(),
-			)
 
 		attestInfo := validator.AttestInfo{
 			TargetBlock: validator.BlockNumber(targetBlockNumber),
 		}
-		validator.SetTargetBlockHashIfExists(mockAccount, mockLogger, &attestInfo)
+		validator.SetTargetBlockHashIfExists(mockAccount, logger, &attestInfo)
 
 		require.Equal(t, targetBlockHash, attestInfo.TargetBlockHash)
 	})

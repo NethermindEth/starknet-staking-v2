@@ -14,8 +14,7 @@ func TestNewProvider(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger, err := utils.NewZapLogger(utils.DEBUG, true)
-	require.NoError(t, err)
+	logger := utils.NewNopZapLogger()
 
 	t.Run("Error creating provider", func(t *testing.T) {
 		providerUrl := "wrong url"
@@ -61,8 +60,7 @@ func TestBlockHeaderSubscription(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger, err := utils.NewZapLogger(utils.DEBUG, true)
-	require.NoError(t, err)
+	logger := utils.NewNopZapLogger()
 
 	t.Run("Error creating provider", func(t *testing.T) {
 		wsProviderUrl := "wrong url"

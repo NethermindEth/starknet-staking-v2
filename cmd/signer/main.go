@@ -50,7 +50,7 @@ func NewCommand() cobra.Command {
 
 	cmd := cobra.Command{
 		Use:     "signer",
-		Short:   "Program that signs transactions hashes recieved by http request",
+		Short:   "Program that signs transactions received by http request",
 		PreRunE: preRunE,
 		RunE:    runE,
 		Args:    cobra.NoArgs,

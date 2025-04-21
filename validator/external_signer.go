@@ -12,7 +12,6 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet.go/account"
-	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
 )
@@ -75,7 +74,6 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 		return nil, err
 	}
 	txnFee := estimateFee[0]
-	fillEmptyFeeEstimation(ctx, &txnFee, s.Provider) // temporary
 	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
 
 	// Signing the txn again with the estimated fee,
@@ -92,26 +90,22 @@ func (s *ExternalSigner) Address() *felt.Felt {
 }
 
 func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
-	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
-	if err != nil {
-		return err
-	}
-
-	signResp, err := SignTxHash(hash, externalSignerUrl)
+	signResp, err := HashAndSignTx(invokeTxnV3, chainId, externalSignerUrl)
 	if err != nil {
 		return err
 	}
 
 	invokeTxnV3.Signature = []*felt.Felt{
-		&signResp.Signature[0],
-		&signResp.Signature[1],
+		signResp.Signature[0],
+		signResp.Signature[1],
 	}
+
 	return nil
 }
 
-func SignTxHash(hash *felt.Felt, externalSignerUrl string) (signer.Response, error) {
+func HashAndSignTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) (signer.Response, error) {
 	// Create request body
-	reqBody := signer.Request{Hash: *hash}
+	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainId: chainId}
 	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
 		return signer.Response{}, err
