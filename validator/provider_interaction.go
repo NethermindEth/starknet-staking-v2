@@ -3,12 +3,13 @@ package validator
 import (
 	"context"
 
+	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
 )
 
 // Returns a new Starknet.Go RPC Provider
-func NewProvider[Log Logger](providerUrl string, logger Log) (*rpc.Provider, error) {
+func NewProvider[Logger utils.Logger](providerUrl string, logger Logger) (*rpc.Provider, error) {
 	provider, err := rpc.NewProvider(providerUrl)
 	if err != nil {
 		return nil, errors.Errorf("Error creating RPC provider at %s: %s", providerUrl, err)
@@ -25,7 +26,7 @@ func NewProvider[Log Logger](providerUrl string, logger Log) (*rpc.Provider, err
 }
 
 // Returns a Go channel where BlockHeaders are received
-func BlockHeaderSubscription[Log Logger](wsProviderUrl string, logger Log) (
+func BlockHeaderSubscription[Logger utils.Logger](wsProviderUrl string, logger Logger) (
 	*rpc.WsProvider, chan *rpc.BlockHeader, error,
 ) {
 	logger.Debugw("Initializing websocket connection", "wsProviderUrl", wsProviderUrl)

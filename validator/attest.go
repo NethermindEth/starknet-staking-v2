@@ -37,16 +37,17 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 
 	dispatcher := NewEventDispatcher[Accounter, *utils.ZapLogger]()
 	wg := conc.NewWaitGroup()
-	defer wg.Wait()
 	wg.Go(func() { dispatcher.Dispatch(signer, &logger) })
+	defer wg.Wait()
+	defer close(dispatcher.AttestRequired)
 
 	// Subscribe to the block headers
 	wsProvider, headersFeed, err := BlockHeaderSubscription(config.Provider.Ws, &logger)
 	if err != nil {
 		return err
 	}
-	defer wsProvider.Close()
 	defer close(headersFeed)
+	defer wsProvider.Close()
 
 	if err := ProcessBlockHeaders(headersFeed, signer, &logger, &dispatcher); err != nil {
 		return err
@@ -60,11 +61,11 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 	return nil
 }
 
-func ProcessBlockHeaders[Account Accounter, Log Logger](
+func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
 	headersFeed chan *rpc.BlockHeader,
 	account Account,
-	logger Log,
-	dispatcher *EventDispatcher[Account, Log],
+	logger Logger,
+	dispatcher *EventDispatcher[Account, Logger],
 ) error {
 	noEpochSwitch := func(*EpochInfo, *EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(account, logger, nil, noEpochSwitch, "at app startup")
@@ -83,7 +84,7 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 			prevEpochInfo := epochInfo
 
 			if epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
-				account, logger, &prevEpochInfo, isEpochSwitchCorrect, strconv.FormatUint(prevEpochInfo.EpochId+1, 10),
+				account, logger, &prevEpochInfo, IsEpochSwitchCorrect, strconv.FormatUint(prevEpochInfo.EpochId+1, 10),
 			); err != nil {
 				return err
 			}
@@ -110,9 +111,9 @@ func ProcessBlockHeaders[Account Accounter, Log Logger](
 	return nil
 }
 
-func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
+func SetTargetBlockHashIfExists[Account Accounter, Logger utils.Logger](
 	account Account,
-	logger Log,
+	logger Logger,
 	attestInfo *AttestInfo,
 ) {
 	targetBlockNumber := attestInfo.TargetBlock.Uint64()
@@ -131,9 +132,9 @@ func SetTargetBlockHashIfExists[Account Accounter, Log Logger](
 	}
 }
 
-func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
+func FetchEpochAndAttestInfoWithRetry[Account Accounter, Logger utils.Logger](
 	account Account,
-	logger Log,
+	logger Logger,
 	prevEpoch *EpochInfo,
 	isEpochSwitchCorrect func(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool,
 	newEpochId string,
@@ -142,9 +143,9 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 
 	for i := 0; (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && i < DEFAULT_MAX_RETRIES; i++ {
 		if err != nil {
-			logger.Errorw("Failed to fetch epoch info", "epoch id", newEpochId, "error", err)
+			logger.Debugw("Failed to fetch epoch info", "epoch id", newEpochId, "error", err.Error())
 		} else {
-			logger.Errorw("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", newEpoch)
+			logger.Debugw("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", &newEpoch)
 		}
 		logger.Debugw("Retrying to fetch epoch info...", "attempt", i+1)
 		Sleep(time.Second)
@@ -161,13 +162,13 @@ func FetchEpochAndAttestInfoWithRetry[Account Accounter, Log Logger](
 	} else if !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
 		return EpochInfo{},
 			AttestInfo{},
-			errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", prevEpoch, newEpoch)
+			errors.Errorf("Wrong epoch switch: from epoch %s to epoch %s", prevEpoch, &newEpoch)
 	}
 
 	return newEpoch, newAttestInfo, nil
 }
 
-func isEpochSwitchCorrect(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool {
+func IsEpochSwitchCorrect(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool {
 	return newEpoch.EpochId == prevEpoch.EpochId+1 &&
 		newEpoch.CurrentEpochStartingBlock.Uint64() == prevEpoch.CurrentEpochStartingBlock.Uint64()+prevEpoch.EpochLen
 }

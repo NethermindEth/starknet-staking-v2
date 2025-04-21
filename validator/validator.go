@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
+	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -35,8 +36,8 @@ type Accounter interface {
 // Represents an internal signer where we hold the private keys
 type InternalSigner account.Account
 
-func NewInternalSigner[Log Logger](
-	provider *rpc.Provider, logger Log, signer *Signer,
+func NewInternalSigner[Logger junoUtils.Logger](
+	provider *rpc.Provider, logger Logger, signer *Signer,
 ) (InternalSigner, error) {
 	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
@@ -83,25 +84,6 @@ func (v *InternalSigner) BlockWithTxHashes(ctx context.Context, blockID rpc.Bloc
 
 func (v *InternalSigner) Address() *felt.Felt {
 	return v.AccountAddress
-}
-
-// When there's no transaction in the pending block, the L1DataGasConsumed and L1DataGasPrice fields are comming empty.
-// This is causing the transaction to fail with the error:
-// "55 Account validation failed: Max L1DataGas amount (0) is lower than the minimal gas amount: 128"
-// This function fills the empty fields.
-//
-// TODO: remove this function once the issue is fixed in the RPC
-func fillEmptyFeeEstimation(ctx context.Context, feeEstimation *rpc.FeeEstimation, provider rpc.RpcProvider) {
-	if feeEstimation.L1DataGasConsumed.IsZero() {
-		// default value for L1DataGasConsumed in most cases
-		feeEstimation.L1DataGasConsumed = new(felt.Felt).SetUint64(224)
-	}
-	if feeEstimation.L1DataGasPrice.IsZero() {
-		// getting the L1DataGasPrice from the latest block as reference
-		result, _ := provider.BlockWithTxHashes(ctx, rpc.WithBlockTag("latest"))
-		block := result.(*rpc.BlockTxHashes)
-		feeEstimation.L1DataGasPrice = block.L1DataGasPrice.PriceInFRI
-	}
 }
 
 func makeResourceBoundsMapWithZeroValues() rpc.ResourceBoundsMapping {
@@ -193,7 +175,7 @@ func FetchValidatorBalance[Account Accounter](account Account) (Balance, error) 
 	return Balance(*result[0]), nil
 }
 
-func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, logger Log) (EpochInfo, AttestInfo, error) {
+func FetchEpochAndAttestInfo[Account Accounter, Logger junoUtils.Logger](account Account, logger Logger) (EpochInfo, AttestInfo, error) {
 	epochInfo, err := FetchEpochInfo(account)
 	if err != nil {
 		return EpochInfo{}, AttestInfo{}, err
@@ -210,7 +192,7 @@ func FetchEpochAndAttestInfo[Account Accounter, Log Logger](account Account, log
 		return EpochInfo{}, AttestInfo{}, windowErr
 	}
 
-	blockNum := ComputeBlockNumberToAttestTo(account, &epochInfo, attestWindow)
+	blockNum := ComputeBlockNumberToAttestTo(&epochInfo, attestWindow)
 
 	attestInfo := AttestInfo{
 		TargetBlock: blockNum,

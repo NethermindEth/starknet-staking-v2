@@ -137,14 +137,11 @@ func (c *Config) Check() error {
 	return nil
 }
 
-func ComputeBlockNumberToAttestTo[Account Accounter](
-	account Account, epochInfo *EpochInfo, attestWindow uint64,
-) BlockNumber {
-	accountAddress := account.Address()
+func ComputeBlockNumberToAttestTo(epochInfo *EpochInfo, attestWindow uint64) BlockNumber {
 	hash := crypto.PoseidonArray(
 		new(felt.Felt).SetBigInt(epochInfo.Stake.Big()),
 		new(felt.Felt).SetUint64(epochInfo.EpochId),
-		accountAddress,
+		epochInfo.StakerAddress.Felt(),
 	)
 
 	hashBigInt := new(big.Int)

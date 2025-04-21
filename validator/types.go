@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -57,26 +58,19 @@ func (b *BlockHash) String() string {
 	return (*felt.Felt)(b).String()
 }
 
-//go:generate mockgen -destination=./mocks/mock_logger.go -package=mocks github.com/NethermindEth/starknet-staking-v2 Logger
-type Logger interface {
-	// Coming from junoUtils.Logger.pebbleLogger
-	Debugw(msg string, keysAndValues ...any)
-	Infow(msg string, keysAndValues ...any)
-	Warnw(msg string, keysAndValues ...any)
-	Errorw(msg string, keysAndValues ...any)
-	Tracew(msg string, keysAndValues ...any)
-
-	// Coming from junoUtils.Logger.SimpleLogger
-	Infof(format string, args ...interface{})
-	Fatalf(format string, args ...interface{})
-}
-
 type EpochInfo struct {
 	StakerAddress             Address         `json:"staker_address"`
 	Stake                     uint128.Uint128 `json:"stake"`
 	EpochLen                  uint64          `json:"epoch_len"`
 	EpochId                   uint64          `json:"epoch_id"`
 	CurrentEpochStartingBlock BlockNumber     `json:"current_epoch_starting_block"`
+}
+
+func (e *EpochInfo) String() string {
+	return fmt.Sprintf(
+		"EpochInfo{StakerAddress: %s, Stake: %s, EpochId: %d, EpochLen: %d, CurrentEpochStartingBlock: %d}",
+		e.StakerAddress.Felt().String(), e.Stake, e.EpochId, e.EpochLen, e.CurrentEpochStartingBlock,
+	)
 }
 
 type AttestRequired struct {
