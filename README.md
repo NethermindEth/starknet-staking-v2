@@ -120,12 +120,12 @@ docker run \
         --signer-priv-key "0x456"
 ```
 
-### With configuration file and flags
+### Mixed configuration approach
 
-Using a combination of both approaches is also valid. In this case, the values provided by the flags override the values provided by the configuration file.
+Using a combination of both approaches is also valid. In this case, the values provided by the flags override the values by the enviroment vars which in turn override the values provided by the configuration file. 
 
 ```bash
-./build/validator \
+PROVIDER_HTTP_URL="1234" ./build/validator \
     --config <path_to_config_file> \
     --provider-http "http://localhost:6060/v0_8" \
     --provider-ws "ws://localhost:6061/v0_8" \
