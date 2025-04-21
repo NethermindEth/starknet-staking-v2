@@ -9,6 +9,10 @@ Validator software written in Go for Starknet staking v2 as specified in [SNIP 2
 
 ## Installation
 
+The tool can be either built from source or pulled from docker
+
+### Build from Source
+
 Requires having the [GO compiler](https://go.dev/doc/install) with version `1.24` or above. Once installed run:
 
 ```bash
@@ -17,9 +21,20 @@ make validator
 
 This will compile the project and place the binary in *./build/validator*.
 
-## Running
+### Using docker
 
-To run the validator it needs certain data specified such as the node to connect to and the operational address of the staker. This data can be provided in two ways, either through a configuration file or through flags directly in the app.
+Make sure you've [Docker] installed and run:
+```bash
+docker pull nethermind/starknet-staking-v2
+```
+
+## Configuration and exeuction
+
+To run the validator it needs certain data specified such as the Starknet node to connect to and the operational address of the staker.
+This data can be provided through several ways, in order of (decreasing) priority:
+1. Command line flags,
+2. Enviroment vars and
+3. Configuration file.
 
 ### With a configuration file
 
@@ -59,15 +74,34 @@ docker run \
   nethermind/starknet-staking-v2:latest --config /app/config/config.json 
 ```
 
+### With Enviroment Variables
+Similarly described as the previous section, the validator can be configured using enviroment vars. The following example using a `.env` file:
+
+```bash
+PROVIDER_HTTP_URL="http://localhost:6060/v8"
+PROVIDER_WS_URL="http://localhost:6061/v8"
+
+SIGNER_EXTERNAL_URL="http://localhost:8080"
+SIGNER_OPERATIONAL_ADDRESS="0x123"
+SIGNER_PRIVATE_KEY="0x456"
+```
+
+Then run
+```bash
+source ./env
+
+./build/validator
+```
+
 
 ### With flags
+The following command runs the validator and provides all the necessary information about provider and signer through the use of flags:
 
-The same basics apply as described in the previous section. The following command runs the validator and provides all the necessary information about provider and signer:
 ```bash
 ./build/validator \
     --provider-http "http://localhost:6060/v0_8" \
     --provider-ws "ws://localhost:6061/v0_8" \
-    --signer-url "http//localhost:8080" \
+    --signer-url "http://localhost:8080" \
     --signer-op-address "0x123" \
     --signer-priv-key "0x456"
 ```
