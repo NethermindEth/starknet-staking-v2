@@ -28,12 +28,12 @@ Make sure you've [Docker] installed and run:
 docker pull nethermind/starknet-staking-v2
 ```
 
-## Configuration and exeuction
+## Configuration and execution
 
 To run the validator it needs certain data specified such as the Starknet node to connect to and the operational address of the staker.
 This data can be provided through several ways, in order of (decreasing) priority:
 1. Command line flags,
-2. Enviroment vars and
+2. Environment vars and
 3. Configuration file.
 
 ### With a configuration file
@@ -74,12 +74,12 @@ docker run \
   nethermind/starknet-staking-v2:latest --config /app/config/config.json 
 ```
 
-### With Enviroment Variables
-Similarly described as the previous section, the validator can be configured using enviroment vars. The following example using a `.env` file:
+### With Environment Variables
+Similarly described as the previous section, the validator can be configured using environment vars. The following example using a `.env` file:
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v8"
-PROVIDER_WS_URL="http://localhost:6061/v8"
+PROVIDER_HTTP_URL="http://localhost:6060/v0_8"
+PROVIDER_WS_URL="http://localhost:6061/v0_8"
 
 SIGNER_EXTERNAL_URL="http://localhost:8080"
 SIGNER_OPERATIONAL_ADDRESS="0x123"
@@ -88,7 +88,7 @@ SIGNER_PRIVATE_KEY="0x456"
 
 Then run
 ```bash
-source ./env
+source path/to/env
 
 ./build/validator
 ```
@@ -122,12 +122,11 @@ docker run \
 
 ### Mixed configuration approach
 
-Using a combination of both approaches is also valid. In this case, the values provided by the flags override the values by the enviroment vars which in turn override the values provided by the configuration file. 
+Using a combination of both approaches is also valid. In this case, the values provided by the flags override the values by the environment vars which in turn override the values provided by the configuration file. 
 
 ```bash
-PROVIDER_HTTP_URL="1234" ./build/validator \
+PROVIDER_HTTP_URL="http://localhost:6060/v0_8" ./build/validator \
     --config <path_to_config_file> \
-    --provider-http "http://localhost:6060/v0_8" \
     --provider-ws "ws://localhost:6061/v0_8" \
     --signer-url "http//localhost:8080" \
     --signer-op-address "0x123" \
