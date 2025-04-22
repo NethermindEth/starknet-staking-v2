@@ -24,7 +24,7 @@ func TestDispatch(t *testing.T) {
 
 	t.Run("Simple scenario: only 1 attest that succeeds", func(t *testing.T) {
 		// Setup
-		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddr := validator.AttestContract.Felt()
@@ -80,7 +80,7 @@ func TestDispatch(t *testing.T) {
 			// - an AttestRequired event A is emitted and ignored (as 1st one finished & succeeded)
 
 			// Setup
-			dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+			dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 			blockHashFelt := new(felt.Felt).SetUint64(1)
 
 			contractAddr := validator.AttestContract.Felt()
@@ -156,7 +156,7 @@ func TestDispatch(t *testing.T) {
 		// - an AttestRequired event A is emitted and processed (as 1st one finished & failed)
 
 		// Setup
-		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
 		contractAddr := validator.AttestContract.Felt()
@@ -243,7 +243,7 @@ func TestDispatch(t *testing.T) {
 			// - an AttestRequired event A is emitted and ignored (as 2nd one succeeded)
 
 			// Setup
-			dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+			dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 			blockHashFelt := new(felt.Felt).SetUint64(1)
 
 			contractAddr := validator.AttestContract.Felt()
@@ -321,7 +321,7 @@ func TestDispatch(t *testing.T) {
 		// - an EndOfWindow event for B is emitted and processed
 
 		// Setup
-		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 
 		// For event A
 		blockHashFeltA := new(felt.Felt).SetUint64(1)

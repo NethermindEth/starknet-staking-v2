@@ -171,7 +171,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 	logger := utils.NewNopZapLogger()
 
 	t.Run("Simple scenario: 1 epoch", func(t *testing.T) {
-		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
 		attestWindow := uint64(16)
@@ -236,7 +236,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 	})
 
 	t.Run("Scenario: transition between 2 epochs", func(t *testing.T) {
-		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
 		stakerAddress := validator.AddressFromString("0x123")
@@ -329,7 +329,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 	})
 
 	t.Run("Scenario: error transitioning between 2 epochs (wrong epoch switch)", func(t *testing.T) {
-		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter, *utils.ZapLogger]()
+		dispatcher := validator.NewEventDispatcher[*mocks.MockAccounter]()
 		headersFeed := make(chan *rpc.BlockHeader)
 
 		stakerAddress := validator.AddressFromString("0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
@@ -429,9 +429,9 @@ func sendHeaders(t *testing.T, headersFeed chan *rpc.BlockHeader, blockHeaders [
 
 // Test helper function to register received events to assert on them
 // Note: to exit this function, close the AttestRequired channel
-func registerReceivedEvents[T validator.Accounter, Logger utils.Logger](
+func registerReceivedEvents[T validator.Accounter](
 	t *testing.T,
-	dispatcher *validator.EventDispatcher[T, Logger],
+	dispatcher *validator.EventDispatcher[T],
 	receivedAttestRequired map[validator.AttestRequired]uint,
 	receivedEndOfWindowCount *uint8,
 ) {
