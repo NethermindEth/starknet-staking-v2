@@ -76,17 +76,10 @@ func TestConfigFromFile(t *testing.T) {
 
 func TestConfigFromEnv(t *testing.T) {
 	// Test Provider
-	http := "hola"
-	ws := "ola"
-
-	require.NoError(t, os.Setenv("PROVIDER_HTTP_URL", http))
-	defer func() {
-		require.NoError(t, os.Unsetenv("PROVIDER_HTTP_URL"))
-	}()
-	require.NoError(t, os.Setenv("PROVIDER_WS_URL", ws))
-	defer func() {
-		require.NoError(t, os.Unsetenv("PROVIDER_WS_URL"))
-	}()
+	http, unset := setEnv(t, "PROVIDER_HTTP_URL", "hola")
+	defer unset()
+	ws, unset := setEnv(t, "PROVIDER_WS_URL", "ola")
+	defer unset()
 
 	provider := validator.ProviderFromEnv()
 	expectedProvider := validator.Provider{
@@ -100,22 +93,12 @@ func TestConfigFromEnv(t *testing.T) {
 	)
 
 	// Test Signer
-	url := "ciao"
-	privateKey := "bonjour"
-	operationalAddress := "hallo"
-
-	require.NoError(t, os.Setenv("SIGNER_EXTERNAL_URL", url))
-	defer func() {
-		require.NoError(t, os.Unsetenv("SIGNER_EXTERNAL_URL"))
-	}()
-	require.NoError(t, os.Setenv("SIGNER_PRIVATE_KEY", privateKey))
-	defer func() {
-		require.NoError(t, os.Unsetenv("SIGNER_PRIVATE_KEY"))
-	}()
-	require.NoError(t, os.Setenv("SIGNER_OPERATIONAL_ADDRESS", operationalAddress))
-	defer func() {
-		require.NoError(t, os.Unsetenv("SIGNER_OPERATIONAL_ADDRESS"))
-	}()
+	url, unset := setEnv(t, "SIGNER_EXTERNAL_URL", "ciao")
+	defer unset()
+	privateKey, unset := setEnv(t, "SIGNER_PRIVATE_KEY", "bonjour")
+	defer unset()
+	operationalAddress, unset := setEnv(t, "SIGNER_OPERATIONAL_ADDRESS", "hallo")
+	defer unset()
 
 	signer := validator.SignerFromEnv()
 	expectedSigner := validator.Signer{
@@ -337,4 +320,21 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 
 		require.Equal(t, validator.BlockNumber(639369), blockNumber)
 	})
+}
+
+// Set environment variable `varname` to `value` if it is unset. Returns the value of
+// the env var and a function that unsets it (if it wasn't already set)
+func setEnv(t *testing.T, varName, value string) (string, func()) {
+	t.Helper()
+
+	originalVal := os.Getenv(varName)
+	if originalVal != "" {
+		return originalVal, func() {}
+	}
+
+	err := os.Setenv(varName, value)
+	require.NoError(t, err)
+	unset := func() { require.NoError(t, os.Unsetenv(varName)) }
+
+	return value, unset
 }
