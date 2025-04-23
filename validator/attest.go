@@ -45,37 +45,60 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 		signer = &internalSigner
 	}
 
-	dispatcher := NewEventDispatcher[Accounter, *utils.ZapLogger]()
+	dispatcher := NewEventDispatcher[Accounter]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() { dispatcher.Dispatch(signer, &logger) })
 	defer wg.Wait()
 	defer close(dispatcher.AttestRequired)
 
-	// Subscribe to the block headers
-	wsProvider, headersFeed, err := BlockHeaderSubscription(config.Provider.Ws, &logger)
-	if err != nil {
-		return err
-	}
-	defer close(headersFeed)
-	defer wsProvider.Close()
-
-	if err := ProcessBlockHeaders(headersFeed, signer, &logger, &dispatcher); err != nil {
-		return err
-	}
-	// I'd also like to check the balance of the address from time to time to verify
-	// that they have enough money for the next 10 attestations (value modifiable by user)
-	// Once it goes below it, the console should start giving warnings
-	// This the least prio but we should implement nonetheless
-
-	// Should also track re-org and check if the re-org means we have to attest again or not
-	return nil
+	return RunBlockHeaderWatcher(config, &logger, signer, &dispatcher, wg)
 }
 
-func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
+func RunBlockHeaderWatcher[Account Accounter, Logger utils.Logger](
+	config *Config,
+	logger Logger,
+	signer Account,
+	dispatcher *EventDispatcher[Account, Logger],
+	wg *conc.WaitGroup,
+) error {
+	cleanUp := func(wsProvider *rpc.WsProvider, headersFeed chan *rpc.BlockHeader) {
+		wsProvider.Close()
+		close(headersFeed)
+	}
+
+	for {
+		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(config.Provider.Ws, logger)
+		if err != nil {
+			return err
+		}
+
+		stopProcessingHeaders := make(chan error)
+
+		wg.Go(func() {
+			// If err is nil, it means headersFeed channel has been closed due to clientSubscription.Err().
+			// In that case, we don't need to do anything. A ws connection retry will already have been triggered.
+			if err := ProcessBlockHeaders(headersFeed, signer, logger, dispatcher); err != nil {
+				stopProcessingHeaders <- err
+			}
+		})
+
+		select {
+		case err := <-clientSubscription.Err():
+			logger.Errorw("Error in block header subscription", "error", err)
+			logger.Debugw("Ending headers subscription, closing websocket connection, and retrying...")
+			cleanUp(wsProvider, headersFeed)
+		case err := <-stopProcessingHeaders:
+			cleanUp(wsProvider, headersFeed)
+			return err
+		}
+	}
+}
+
+func ProcessBlockHeaders[Account Accounter](
 	headersFeed chan *rpc.BlockHeader,
 	account Account,
-	logger Logger,
-	dispatcher *EventDispatcher[Account, Logger],
+	logger *utils.ZapLogger,
+	dispatcher *EventDispatcher[Account],
 ) error {
 	noEpochSwitch := func(*EpochInfo, *EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(account, logger, nil, noEpochSwitch, "at app startup")
@@ -121,9 +144,9 @@ func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
 	return nil
 }
 
-func SetTargetBlockHashIfExists[Account Accounter, Logger utils.Logger](
+func SetTargetBlockHashIfExists[Account Accounter](
 	account Account,
-	logger Logger,
+	logger *utils.ZapLogger,
 	attestInfo *AttestInfo,
 ) {
 	targetBlockNumber := attestInfo.TargetBlock.Uint64()
@@ -142,9 +165,9 @@ func SetTargetBlockHashIfExists[Account Accounter, Logger utils.Logger](
 	}
 }
 
-func FetchEpochAndAttestInfoWithRetry[Account Accounter, Logger utils.Logger](
+func FetchEpochAndAttestInfoWithRetry[Account Accounter](
 	account Account,
-	logger Logger,
+	logger *utils.ZapLogger,
 	prevEpoch *EpochInfo,
 	isEpochSwitchCorrect func(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool,
 	newEpochId string,

@@ -64,10 +64,11 @@ func TestBlockHeaderSubscription(t *testing.T) {
 
 	t.Run("Error creating provider", func(t *testing.T) {
 		wsProviderUrl := "wrong url"
-		wsProvider, headerFeed, err := main.BlockHeaderSubscription(wsProviderUrl, logger)
+		wsProvider, headerFeed, clientSubscription, err := main.SubscribeToBlockHeaders(wsProviderUrl, logger)
 
 		require.Nil(t, wsProvider)
 		require.Nil(t, headerFeed)
+		require.Nil(t, clientSubscription)
 		expectedErrorMsg := fmt.Sprintf(`Error dialing the WS provider at %s: no known transport for URL scheme ""`, wsProviderUrl)
 		require.Equal(t, expectedErrorMsg, err.Error())
 	})
@@ -77,10 +78,11 @@ func TestBlockHeaderSubscription(t *testing.T) {
 	envVars, err := loadEnv(t)
 	if loadedEnvVars := err == nil; loadedEnvVars {
 		t.Run("Successfully subscribing to new block headers", func(t *testing.T) {
-			wsProvider, headerChannel, err := main.BlockHeaderSubscription(envVars.wsProviderUrl, logger)
+			wsProvider, headerChannel, clientSubscription, err := main.SubscribeToBlockHeaders(envVars.wsProviderUrl, logger)
 
 			require.NotNil(t, wsProvider)
 			require.NotNil(t, headerChannel)
+			require.NotNil(t, clientSubscription)
 			require.Nil(t, err)
 
 			wsProvider.Close()

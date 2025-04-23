@@ -62,7 +62,7 @@ func (a *AttestTracker) resetTransactionHash() {
 	a.TransactionHash = felt.Zero
 }
 
-type EventDispatcher[Account Accounter, Logger utils.Logger] struct {
+type EventDispatcher[Account Accounter] struct {
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
 	// Event channels
@@ -70,17 +70,17 @@ type EventDispatcher[Account Accounter, Logger utils.Logger] struct {
 	EndOfWindow    chan struct{}
 }
 
-func NewEventDispatcher[Account Accounter, Logger utils.Logger]() EventDispatcher[Account, Logger] {
-	return EventDispatcher[Account, Logger]{
+func NewEventDispatcher[Account Accounter]() EventDispatcher[Account] {
+	return EventDispatcher[Account]{
 		CurrentAttest:  NewAttestTracker(),
 		AttestRequired: make(chan AttestRequired),
 		EndOfWindow:    make(chan struct{}),
 	}
 }
 
-func (d *EventDispatcher[Account, Logger]) Dispatch(
+func (d *EventDispatcher[Account]) Dispatch(
 	account Account,
-	logger Logger,
+	logger *utils.ZapLogger,
 ) {
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
@@ -140,9 +140,9 @@ func (d *EventDispatcher[Account, Logger]) Dispatch(
 	}
 }
 
-func setAttestStatusOnTracking[Account Accounter, Logger utils.Logger](
+func setAttestStatusOnTracking[Account Accounter](
 	account Account,
-	logger Logger,
+	logger *utils.ZapLogger,
 	attestToTrack *AttestTracker,
 ) {
 	status := TrackAttest(account, logger, &attestToTrack.Event, &attestToTrack.TransactionHash)
@@ -158,9 +158,9 @@ func setAttestStatusOnTracking[Account Accounter, Logger utils.Logger](
 	}
 }
 
-func TrackAttest[Account Accounter, Logger utils.Logger](
+func TrackAttest[Account Accounter](
 	account Account,
-	logger Logger,
+	logger *utils.ZapLogger,
 	event *AttestRequired,
 	txHash *felt.Felt,
 ) AttestStatus {
