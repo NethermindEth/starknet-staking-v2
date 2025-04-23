@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/starknet.go/client"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
 )
@@ -27,13 +28,13 @@ func NewProvider[Logger utils.Logger](providerUrl string, logger Logger) (*rpc.P
 
 // Returns a Go channel where BlockHeaders are received
 func BlockHeaderSubscription[Logger utils.Logger](wsProviderUrl string, logger Logger) (
-	*rpc.WsProvider, chan *rpc.BlockHeader, error,
+	*rpc.WsProvider, chan *rpc.BlockHeader, *client.ClientSubscription, error,
 ) {
 	logger.Debugw("Initializing websocket connection", "wsProviderUrl", wsProviderUrl)
 	// This needs a timeout or something
 	wsProvider, err := rpc.NewWebsocketProvider(wsProviderUrl)
 	if err != nil {
-		return nil, nil, errors.Errorf("Error dialing the WS provider at %s: %s", wsProviderUrl, err)
+		return nil, nil, nil, errors.Errorf("Error dialing the WS provider at %s: %s", wsProviderUrl, err)
 	}
 
 	logger.Debugw("Subscribing to new block headers")
@@ -42,9 +43,9 @@ func BlockHeaderSubscription[Logger utils.Logger](wsProviderUrl string, logger L
 		context.Background(), headersFeed, rpc.BlockID{Tag: "latest"},
 	)
 	if err != nil {
-		return nil, nil, errors.Errorf("Error subscribing to new block headers: %s", err)
+		return nil, nil, nil, errors.Errorf("Error subscribing to new block headers: %s", err)
 	}
 
 	logger.Infof("Subscribed to new block headers", "Subscription ID", clientSubscription.ID())
-	return wsProvider, headersFeed, nil
+	return wsProvider, headersFeed, clientSubscription, nil
 }
