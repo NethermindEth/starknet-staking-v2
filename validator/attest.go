@@ -19,6 +19,16 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 		return err
 	}
 
+	go func() {
+		for {
+			err := providerSynced(provider, &logger)
+			if err != nil {
+				logger.Errorf("%s. Retry in 10 seconds.", err)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	var signer Accounter
 	if config.Signer.External() {
 		externalSigner, err := NewExternalSigner(provider, &config.Signer)

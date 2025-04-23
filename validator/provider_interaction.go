@@ -2,6 +2,8 @@ package validator
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -47,4 +49,47 @@ func BlockHeaderSubscription[Logger utils.Logger](wsProviderUrl string, logger L
 
 	logger.Infof("Subscribed to new block headers", "Subscription ID", clientSubscription.ID())
 	return wsProvider, headersFeed, nil
+}
+
+func providerSynced(provider *rpc.Provider, logger utils.Logger) error {
+	syncStatus, err := provider.Syncing(context.Background())
+	if err != nil {
+		return err
+	}
+	// not checking for false condition since if it exists it can only be false
+	if syncStatus.SyncStatus != nil {
+		return errors.New("provider is not syncing")
+	}
+
+	println("aaaaaaaa")
+	println(*syncStatus.SyncStatus)
+	println(syncStatus.CurrentBlockNum)
+	println(syncStatus.HighestBlockNum)
+
+	currentBlockNum := strings.TrimPrefix(string(syncStatus.CurrentBlockNum), "0x")
+	currentBlock, err := strconv.ParseUint(currentBlockNum, 16, 64)
+	if err != nil {
+		return err
+	}
+
+	highestBlockNum := strings.TrimPrefix(string(syncStatus.HighestBlockNum), "0x")
+	highestBlock, err := strconv.ParseUint(highestBlockNum, 16, 64)
+	if err != nil {
+		return err
+	}
+
+	difference := highestBlock - currentBlock
+
+	if difference > 3 {
+		logger.Warnw(
+			"provider node is behind the network",
+			"blocks behind", difference,
+			"highest block", highestBlock,
+			"current block", currentBlock,
+		)
+	} else {
+		logger.Infof("provider is in sync")
+	}
+
+	return nil
 }
