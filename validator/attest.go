@@ -44,11 +44,11 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 	return RunBlockHeaderWatcher(config, &logger, signer, &dispatcher, wg)
 }
 
-func RunBlockHeaderWatcher[Account Accounter, Logger utils.Logger](
+func RunBlockHeaderWatcher[Account Accounter](
 	config *Config,
-	logger Logger,
+	logger *utils.ZapLogger,
 	signer Account,
-	dispatcher *EventDispatcher[Account, Logger],
+	dispatcher *EventDispatcher[Account],
 	wg *conc.WaitGroup,
 ) error {
 	cleanUp := func(wsProvider *rpc.WsProvider, headersFeed chan *rpc.BlockHeader) {
