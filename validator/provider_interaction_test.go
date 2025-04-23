@@ -64,7 +64,7 @@ func TestBlockHeaderSubscription(t *testing.T) {
 
 	t.Run("Error creating provider", func(t *testing.T) {
 		wsProviderUrl := "wrong url"
-		wsProvider, headerFeed, clientSubscription, err := main.BlockHeaderSubscription(wsProviderUrl, logger)
+		wsProvider, headerFeed, clientSubscription, err := main.SubscribeToBlockHeaders(wsProviderUrl, logger)
 
 		require.Nil(t, wsProvider)
 		require.Nil(t, headerFeed)
@@ -78,7 +78,7 @@ func TestBlockHeaderSubscription(t *testing.T) {
 	envVars, err := loadEnv(t)
 	if loadedEnvVars := err == nil; loadedEnvVars {
 		t.Run("Successfully subscribing to new block headers", func(t *testing.T) {
-			wsProvider, headerChannel, clientSubscription, err := main.BlockHeaderSubscription(envVars.wsProviderUrl, logger)
+			wsProvider, headerChannel, clientSubscription, err := main.SubscribeToBlockHeaders(envVars.wsProviderUrl, logger)
 
 			require.NotNil(t, wsProvider)
 			require.NotNil(t, headerChannel)

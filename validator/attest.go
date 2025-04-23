@@ -41,13 +41,6 @@ func Attest(config *Config, logger utils.ZapLogger) error {
 	defer wg.Wait()
 	defer close(dispatcher.AttestRequired)
 
-	// I'd also like to check the balance of the address from time to time to verify
-	// that they have enough money for the next 10 attestations (value modifiable by user)
-	// Once it goes below it, the console should start giving warnings
-	// This the least prio but we should implement nonetheless
-	//
-	// Should also track re-org and check if the re-org means we have to attest again or not
-
 	return RunBlockHeaderWatcher(config, &logger, signer, &dispatcher, wg)
 }
 
@@ -58,12 +51,15 @@ func RunBlockHeaderWatcher[Account Accounter, Logger utils.Logger](
 	dispatcher *EventDispatcher[Account, Logger],
 	wg *conc.WaitGroup,
 ) error {
-	// TODO: Should we give a default retry here ? by reusing DEFAULT_MAX_RETRIES (10) for example
+	cleanUp := func(wsProvider *rpc.WsProvider, headersFeed chan *rpc.BlockHeader) {
+		wsProvider.Close()
+		close(headersFeed)
+	}
+
 	for {
-		// Subscribe to block headers
-		wsProvider, headersFeed, clientSubscription, err := BlockHeaderSubscription(config.Provider.Ws, logger)
+		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(config.Provider.Ws, logger)
 		if err != nil {
-			return err // TODO: Should we retry here instead of returning ?
+			return err
 		}
 
 		stopProcessingHeaders := make(chan error)
@@ -86,14 +82,6 @@ func RunBlockHeaderWatcher[Account Accounter, Logger utils.Logger](
 			return err
 		}
 	}
-}
-
-func cleanUp(
-	wsProvider *rpc.WsProvider,
-	headersFeed chan *rpc.BlockHeader,
-) {
-	wsProvider.Close()
-	close(headersFeed)
 }
 
 func ProcessBlockHeaders[Account Accounter, Logger utils.Logger](
