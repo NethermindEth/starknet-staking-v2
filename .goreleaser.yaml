@@ -43,34 +43,18 @@ changelog:
       - "^test:"
       - "^ci:"
 
-dockers:
-  - image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Tag }}-amd64"
-    use: buildx
-    dockerfile: goreleaser.dockerfile
-    build_flag_templates:
-      - "--pull"
-      - "--platform=linux/amd64"
-
-  - image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Tag }}-arm64"
-    use: buildx
-    dockerfile: goreleaser.dockerfile
-    build_flag_templates:
-      - "--pull"
-      - "--platform=linux/arm64"
-    goarch: arm64
-
-docker_manifests:
-  - name_template: "nethermind/starknet-staking-v2:{{ .Tag }}"
-    image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Tag }}-amd64"
-      - "nethermind/starknet-staking-v2:{{ .Tag }}-arm64"
-
-  - name_template: "nethermind/starknet-staking-v2:latest"
-    image_templates:
-      - "nethermind/starknet-staking-v2:{{ .Tag }}-amd64"
-      - "nethermind/starknet-staking-v2:{{ .Tag }}-arm64"
+kos:
+  - id: validator-image
+    build: validator
+    bare: true
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    repositories:
+      - docker.io/nethermind/starknet-staking-v2
+    tags:
+      - "{{ .Tag }}"
+      - latest
 
 release:
   github:
