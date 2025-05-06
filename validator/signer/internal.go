@@ -17,7 +17,7 @@ import (
 var _ Signer = (*InternalSigner)(nil)
 
 type InternalSigner struct {
-	account.Account
+	Account             account.Account
 	validationContracts ValidationContracts
 }
 
@@ -30,7 +30,7 @@ func NewInternalSigner(
 	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
 		return InternalSigner{},
-			errors.Errorf("Cannot turn private key %s into a big int", privateKey)
+			errors.Errorf("cannot turn private key %s into a big int", privateKey)
 	}
 
 	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
@@ -44,7 +44,7 @@ func NewInternalSigner(
 	accountAddr := types.AddressFromString(signer.OperationalAddress)
 	account, err := account.NewAccount(provider, accountAddr.Felt(), publicKeyStr, ks, 2)
 	if err != nil {
-		return InternalSigner{}, errors.Errorf("Cannot create validator account: %s", err)
+		return InternalSigner{}, errors.Errorf("cannot create validator account: %s", err)
 	}
 
 	chainIdStr, err := provider.ChainID(context.Background())
@@ -54,9 +54,9 @@ func NewInternalSigner(
 	validationContracts := types.ValidationContractsFromAddresses(
 		addresses.SetDefaults(chainIdStr),
 	)
-	logger.Infof("validation contracts: %s", validationContracts.String())
+	logger.Infof("Validation contracts: %s", validationContracts.String())
 
-	logger.Debugw("Validator account has been set up", "address", accountAddr.String())
+	logger.Debugw("validator account has been set up", "address", accountAddr.String())
 	return InternalSigner{
 		Account:             *account,
 		validationContracts: validationContracts,
