@@ -68,7 +68,7 @@ A full configuration file looks like this:
 }
 ```
 
-Note that because both `url` and `privateKey` are set the tool will prioritize remote signing through the `url` than internally signing with the `privateKey`.
+Note that because both `url` and `privateKey` fields are set in the previous example the tool will prioritize remote signing through the `url` than internally signing with the `privateKey`. Be sure to  be explicit on your configuration file and leave just one of them.
 
 #### Example with Docker
 
@@ -116,7 +116,7 @@ Finally, as a third alternative, you can specify the necessary validation config
 
 ### Mixed configuration approach
 
-Using a combination of both approaches is also valid. Values set by flags will override values set by enviroment flags and the latter ones will override values set in a configuration file.
+Using a combination of both approaches is also valid. Values set by flags will override values set by enviroment flags and values set by enviroment flags will override values set in a configuration file.
 
 ```bash
 PROVIDER_HTTP_URL="http://localhost:6060/v0_8" ./build/validator \
@@ -129,7 +129,7 @@ PROVIDER_HTTP_URL="http://localhost:6060/v0_8" ./build/validator \
 
 ## Additional configurations
 
-Additionally to the required configuration described above, the tool allows for other non-essential modifications. See them all using the `--help` flag:
+In addition to the configuration described above, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag:
 
 1. Using specific staking and attestation contract addresses through the `--staking-contract-address` and `--attest-contract-address` flags respectively. If no values are provided, sensible defaults are provided based on the network id.
 
@@ -139,7 +139,7 @@ Additionally to the required configuration described above, the tool allows for 
 
 ## Example with Juno
 
-Once you have your own Juno node set either built from source or through docker. [See how](https://github.com/NethermindEth/juno?tab=readme-ov-file#run-with-docker).
+Once you have your own [Juno](https://github.com/NethermindEth/juno) node set either built from source or through docker. 
 
 Run it and be sure to specify both `http` and `ws` flags set. These prepare your node to receive both *http* and *websocket* requests, required by the validator for full communication with the node.
 One example using a Juno binary built from source:
