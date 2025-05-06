@@ -52,7 +52,7 @@ func TestNewInternalSigner(t *testing.T) {
 
 		require.Equal(t, signer.InternalSigner{}, validatorAccount)
 		expectedErrorMsg := fmt.Sprintf(
-			"Cannot turn private key %s into a big int", (*big.Int)(nil),
+			"cannot turn private key %s into a big int", (*big.Int)(nil),
 		)
 		require.Equal(t, expectedErrorMsg, err.Error())
 	})
@@ -111,7 +111,7 @@ func TestNewInternalSigner(t *testing.T) {
 		)
 
 		require.Equal(t, signer.InternalSigner{}, validatorAccount)
-		require.ErrorContains(t, err, "Cannot create validator account:")
+		require.ErrorContains(t, err, "cannot create validator account:")
 	})
 }
 
