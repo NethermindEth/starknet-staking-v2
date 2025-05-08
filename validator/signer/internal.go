@@ -74,7 +74,7 @@ func (v *InternalSigner) BuildAndSendInvokeTxn(
 	functionCalls []rpc.InvokeFunctionCall,
 	multiplier float64,
 ) (*rpc.AddInvokeTransactionResponse, error) {
-	return v.Account.BuildAndSendInvokeTxn(ctx, functionCalls, multiplier, true)
+	return v.Account.BuildAndSendInvokeTxn(ctx, functionCalls, multiplier, false)
 }
 
 func (v *InternalSigner) Call(

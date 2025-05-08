@@ -42,7 +42,7 @@ func SubscribeToBlockHeaders[Logger utils.Logger](wsProviderUrl string, logger L
 		return nil, nil, nil, errors.Errorf("dialling WS provider at %s: %s", wsProviderUrl, err)
 	}
 
-	logger.Debugw("Subscribing to new block headers")
+	logger.Debugw("Subscribing to new block headers...")
 	headersFeed := make(chan *rpc.BlockHeader)
 	clientSubscription, err := wsProvider.SubscribeNewHeads(
 		context.Background(), headersFeed, rpc.BlockID{Tag: "latest"},
