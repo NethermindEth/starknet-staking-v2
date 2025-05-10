@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -120,6 +121,17 @@ func (d *EventDispatcher[S]) Dispatch(
 				logger.Errorw(
 					"Failed to attest", "block hash", event.BlockHash.String(), "error", err,
 				)
+
+				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
+					metricsServer.RecordAttestationConfirmed(ChainID)
+					logger.Infow(
+						"Attestation is done for this epoch",
+						"block hash", event.BlockHash.String(),
+					)
+					d.CurrentAttest.setSuccessful()
+					return
+				}
+
 				d.CurrentAttest.setFailed()
 				d.CurrentAttest.resetTransactionHash()
 
