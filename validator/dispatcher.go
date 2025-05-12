@@ -83,15 +83,9 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	}
 }
 
-func (d *EventDispatcher[S]) Dispatch(
-	signer S,
-	logger *utils.ZapLogger,
-	metricsServer *metrics.Metrics,
-) {
+func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer metrics.Tracer) {
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
-
-	// var failedAttests uint64 = 0
 
 	for {
 		select {
@@ -123,7 +117,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				)
 
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
-					metricsServer.RecordAttestationConfirmed(ChainID)
+					tracer.RecordAttestationConfirmed()
 					logger.Infow(
 						"Attestation is done for this epoch",
 						"block hash", event.BlockHash.String(),
@@ -136,13 +130,13 @@ func (d *EventDispatcher[S]) Dispatch(
 				d.CurrentAttest.resetTransactionHash()
 
 				// Record attestation failure in metrics
-				metricsServer.RecordAttestationFailure(ChainID)
+				tracer.RecordAttestationFailure()
 
 				continue
 			}
 
 			// Record attestation submission in metrics
-			metricsServer.RecordAttestationSubmitted(ChainID)
+			tracer.RecordAttestationSubmitted()
 
 			logger.Debugw("Attest transaction sent", "hash", resp.TransactionHash)
 			d.CurrentAttest.setTransactionHash(resp.TransactionHash)
@@ -160,7 +154,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				)
 
 				// Record attestation confirmation in metrics
-				metricsServer.RecordAttestationConfirmed(ChainID)
+				tracer.RecordAttestationConfirmed()
 			} else {
 				logger.Warnw(
 					"Failed to attest to target block",

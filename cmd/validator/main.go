@@ -30,7 +30,9 @@ func NewCommand() cobra.Command {
 	var configPath string
 	var logLevelF string
 	var maxRetriesF string
-	var metricsAddressF string
+	var metricsF bool
+	var metricsHostF string
+	var metricsPortF string
 
 	var config configP.Config
 	var maxRetries types.Retries
@@ -78,29 +80,53 @@ func NewCommand() cobra.Command {
 	}
 
 	run := func(cmd *cobra.Command, args []string) {
+		v, err := validator.New(&config, &snConfig, logger)
+		if err != nil {
+			logger.Errorf("cannot start validator: %s", err.Error())
+			return
+		}
+
 		fmt.Printf(greeting, validator.Version)
 
-		// Create metrics server
-		metricsServer := metrics.NewMetrics(&logger, metricsAddressF)
+		globalCtx := context.Background()
+		var tracer metrics.Tracer = metrics.NewNoOpMetrics()
+		if metricsF {
+			// Create metrics server
+			address := fmt.Sprintf("%s:%s", metricsHostF, metricsPortF)
+			metrics := metrics.NewMetrics(address, v.ChainID(), &logger)
+			tracer = metrics
 
-		// Setup signal handling for graceful shutdown
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+			// Setup signal handling for graceful shutdown
+			ctx, cancel := context.WithCancel(context.Background())
+			globalCtx = ctx
+			defer cancel()
+
+			// Start metrics server in a goroutine
+			go func() {
+				if err := metrics.Start(); err != nil && err.Error() != "http: Server closed" {
+					logger.Errorw("Failed to start metrics server", "error", err)
+				}
+			}()
+			// Graceful shutdown at the end
+			defer func() {
+				shutdownCtx, shutdownCancel := context.WithTimeout(
+					context.Background(), 5*time.Second,
+				)
+				defer shutdownCancel()
+				if err := metrics.Stop(shutdownCtx); err != nil {
+					logger.Errorw("Failed to stop metrics server", "error", err)
+				}
+			}()
+		}
 
 		signalCh := make(chan os.Signal, 1)
 		signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 
-		// Start metrics server in a goroutine
-		go func() {
-			if err := metricsServer.Start(); err != nil {
-				logger.Errorw("Failed to start metrics server", "error", err)
-			}
-		}()
-
 		// Start validator in a goroutine
 		errCh := make(chan error, 1)
 		go func() {
-			if err := validator.Attest(ctx, &config, &snConfig, maxRetries, logger, metricsServer); err != nil {
+			err := v.Attest(globalCtx, maxRetries, tracer)
+			if err != nil {
 				logger.Error(err)
 				errCh <- err
 			}
@@ -114,18 +140,11 @@ func NewCommand() cobra.Command {
 			logger.Errorw("Validator stopped with error", "error", err)
 		}
 
-		// Graceful shutdown
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-
-		if err := metricsServer.Stop(shutdownCtx); err != nil {
-			logger.Errorw("Failed to stop metrics server", "error", err)
-		}
 	}
 
 	cmd := cobra.Command{
 		Use:     "validator",
-		Short:   "Program for Starknet validators to attest to epochs with respect to Staking v2",
+		Short:   "Validator program for Starknet stakers created by Nethermind",
 		Version: validator.Version,
 		PreRunE: preRunE,
 		Run:     run,
@@ -169,16 +188,12 @@ func NewCommand() cobra.Command {
 		"",
 		"Staking contract address. Defaults values are provided for Sepolia and Mainnet",
 	)
-	// Disabled for now
-	// cmd.Flags().StringVar(
-	// 	&snConfig.AttestOptions,
-	// 	"attest-fee",
-	// 	"once",
-	// 	"This flag determines the fee to pay for each attest transaction."+
-	// 		" It can be either a positive number or one of the follwing options:\n"+
-	// 		" - \"once\": attest fee is estimated once and successive calls use that value.\n"+
-	// 		" - \"always\": an estimate fee call is done before submitting each attestation.",
-	// )
+
+	// Metrick trackng flags
+	cmd.Flags().BoolVar(&metricsF, "metrics", false, "Enable metric tracking via Prometheus")
+	cmd.Flags().StringVar(&metricsHostF, "metrics-host", "localhost", "Host for the metric server")
+	cmd.Flags().StringVar(&metricsPortF, "metrics-port", "9090", "Port for the metric server")
+
 	// Other flags
 	cmd.Flags().StringVar(
 		&maxRetriesF,
@@ -189,9 +204,6 @@ func NewCommand() cobra.Command {
 	)
 	cmd.Flags().StringVar(
 		&logLevelF, "log-level", utils.INFO.String(), "Options: trace, debug, info, warn, error.",
-	)
-	cmd.Flags().StringVar(
-		&metricsAddressF, "metrics-address", ":9090", "Address and port for the metrics server (e.g., :9090)",
 	)
 
 	return cmd

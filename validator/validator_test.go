@@ -62,7 +62,10 @@ func TestAttest(t *testing.T) {
 		logger := utils.NewNopZapLogger()
 		ctx := context.Background()
 		metricsServer := mockMetricsServer()
-		err = validator.Attest(ctx, config, sepoliaConfig, defaultRetries(t), *logger, metricsServer)
+
+		v, err := validator.New(config, sepoliaConfig, *logger)
+		require.NoError(t, err)
+		err = v.Attest(ctx, defaultRetries(t), metricsServer)
 
 		expectedErrorMsg := fmt.Sprintf(
 			"Error when calling entrypoint `get_attestation_info_by_operational_address`: -32603 The error is not a valid RPC error: %d Internal Server Error: %s",
@@ -104,7 +107,10 @@ func TestAttest(t *testing.T) {
 		logger := utils.NewNopZapLogger()
 		ctx := context.Background()
 		metricsServer := mockMetricsServer()
-		err = validator.Attest(ctx, config, sepoliaConfig, defaultRetries(t), *logger, metricsServer)
+
+		v, err := validator.New(config, sepoliaConfig, *logger)
+		require.NoError(t, err)
+		err = v.Attest(ctx, defaultRetries(t), metricsServer)
 
 		expectedErrorMsg := fmt.Sprintf(
 			"Error when calling entrypoint `get_attestation_info_by_operational_address`: -32603 The error is not a valid RPC error: %d Internal Server Error: %s",
@@ -836,5 +842,5 @@ func defaultRetries(t *testing.T) types.Retries {
 func mockMetricsServer() *metrics.Metrics {
 	// Create a mock metrics server for testing
 	logger := utils.NewNopZapLogger()
-	return metrics.NewMetrics(logger, ":9090")
+	return metrics.NewMetrics("localhost:9090", "SN_SEPOLIA", logger)
 }

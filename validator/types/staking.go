@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"lukechampine.com/uint128"
@@ -35,63 +34,6 @@ func (e *EpochInfo) String() string {
 	}
 
 	return string(jsonData)
-}
-
-type recalculate int
-
-const (
-	once recalculate = iota
-	always
-	never
-)
-
-type AttestFee struct {
-	recalculate recalculate
-	value       uint64
-}
-
-func AttestFeeFromString(attestOption string) (AttestFee, error) {
-	if attestOption == "always" {
-		return AttestFee{
-			recalculate: always,
-			value:       0,
-		}, nil
-	}
-	if attestOption == "once" {
-		return AttestFee{
-			recalculate: once,
-			value:       0,
-		}, nil
-	}
-	val, err := strconv.ParseUint(attestOption, 10, 64)
-	if err != nil {
-		return AttestFee{},
-			fmt.Errorf(
-				"cannot parse attest options :"+
-					" `%s` is not a valid number nor a valid option",
-				attestOption,
-			)
-	}
-	return AttestFee{
-		recalculate: never,
-		value:       val,
-	}, nil
-}
-
-func (a *AttestFee) Get() uint64 {
-	switch a.recalculate {
-	case always:
-		// do the recalculation
-		return 1000
-	case once:
-		// do the recalculation
-		a.recalculate = never
-		return a.value
-	case never:
-		return a.value
-	default:
-		panic("Unknown recalculate option for AttestFee")
-	}
 }
 
 type ValidationContracts struct {
