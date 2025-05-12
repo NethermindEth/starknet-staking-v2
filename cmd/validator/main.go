@@ -80,13 +80,13 @@ func NewCommand() cobra.Command {
 	}
 
 	run := func(cmd *cobra.Command, args []string) {
+		fmt.Printf(greeting, validator.Version)
+
 		v, err := validator.New(&config, &snConfig, logger)
 		if err != nil {
 			logger.Errorf("cannot start validator: %s", err.Error())
 			return
 		}
-
-		fmt.Printf(greeting, validator.Version)
 
 		globalCtx := context.Background()
 		var tracer metrics.Tracer = metrics.NewNoOpMetrics()

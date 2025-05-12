@@ -149,29 +149,36 @@ func (m *Metrics) Stop(ctx context.Context) error {
 
 // UpdateLatestBlockNumber updates the latest block number metric
 func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
+	m.logger.Debugw("metrics.UpdateLatestBlockNumber", "blockNumber", blockNumber)
 	m.latestBlockNumber.WithLabelValues(m.network).Set(float64(blockNumber))
 }
 
 // UpdateEpochInfo updates the epoch-related metrics
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
+	m.logger.Debugw("metrics.UpdateEpochInfo", "epochInfo", epochInfo, "targetBlock", targetBlock)
 	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochId))
 	m.currentEpochLength.WithLabelValues(m.network).Set(float64(epochInfo.EpochLen))
-	m.currentEpochStartingBlockNumber.WithLabelValues(m.network).Set(float64(epochInfo.CurrentEpochStartingBlock.Uint64()))
+	m.currentEpochStartingBlockNumber.
+		WithLabelValues(m.network).
+		Set(float64(epochInfo.CurrentEpochStartingBlock.Uint64()))
 	m.currentEpochAssignedBlockNumber.WithLabelValues(m.network).Set(float64(targetBlock))
 }
 
 // RecordAttestationSubmitted increments the attestation submitted counter
 func (m *Metrics) RecordAttestationSubmitted() {
-	m.attestationSubmittedCount.WithLabelValues().Inc()
+	m.logger.Debugw("metrics.RecordAttestationSubmitted")
+	m.attestationSubmittedCount.WithLabelValues(m.network).Inc()
 	m.lastAttestationTimestamp.WithLabelValues(m.network).Set(float64(time.Now().Unix()))
 }
 
 // RecordAttestationFailure increments the attestation failure counter
 func (m *Metrics) RecordAttestationFailure() {
+	m.logger.Debugw("metrics.RecordAttestationFailure")
 	m.attestationFailureCount.WithLabelValues(m.network).Inc()
 }
 
 // RecordAttestationConfirmed increments the attestation confirmed counter
 func (m *Metrics) RecordAttestationConfirmed() {
+	m.logger.Debugw("metrics.RecordAttestationConfirmed")
 	m.attestationConfirmedCount.WithLabelValues(m.network).Inc()
 }
