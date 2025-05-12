@@ -103,7 +103,7 @@ func NewCommand() cobra.Command {
 
 			// Start metrics server in a goroutine
 			go func() {
-				if err := metrics.Start(); err != nil {
+				if err := metrics.Start(); err != nil && err.Error() != "http: Server closed" {
 					logger.Errorw("Failed to start metrics server", "error", err)
 				}
 			}()
@@ -144,7 +144,7 @@ func NewCommand() cobra.Command {
 
 	cmd := cobra.Command{
 		Use:     "validator",
-		Short:   "Program for Starknet validators to attest to epochs with respect to Staking v2",
+		Short:   "Validator program for Starknet stakers created by Nethermind",
 		Version: validator.Version,
 		PreRunE: preRunE,
 		Run:     run,
