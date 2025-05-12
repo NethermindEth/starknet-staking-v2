@@ -90,7 +90,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 	for {
 		select {
 		case event, ok := <-d.AttestRequired:
-			println("b0")
 			if !ok {
 				return
 			}
@@ -111,10 +110,8 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 
 			logger.Infow("Invoking attest", "block hash", event.BlockHash.String())
 
-			println("b1")
 			resp, err := signerP.InvokeAttest(signer, &event)
 			if err != nil {
-				println("b1e")
 				logger.Errorw(
 					"Failed to attest", "block hash", event.BlockHash.String(), "error", err,
 				)
@@ -138,17 +135,12 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 				continue
 			}
 
-			println("b2")
-
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
-			println("b3")
 
 			logger.Debugw("Attest transaction sent", "hash", resp.TransactionHash)
 			d.CurrentAttest.setTransactionHash(resp.TransactionHash)
-			println("b4")
 		case <-d.EndOfWindow:
-			println("c1")
 			logger.Info("End of window reached")
 
 			if d.CurrentAttest.Status != Successful {
