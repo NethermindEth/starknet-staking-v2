@@ -25,15 +25,18 @@ func TestDispatch(t *testing.T) {
 
 	mockAccount := mocks.NewMockSigner(mockCtrl)
 	logger := utils.NewNopZapLogger()
+	tracer := metrics.NewNoOpMetrics()
 
 	contractAddresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
 	validationContracts := types.ValidationContractsFromAddresses(contractAddresses)
 
 	t.Run("Simple scenario: only 1 attest that succeeds", func(t *testing.T) {
+		println("a0")
 		// Setup
 		dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 		blockHashFelt := new(felt.Felt).SetUint64(1)
 
+		println("a1")
 		attestAddr := validationContracts.Attest.Felt()
 		calls := []rpc.InvokeFunctionCall{{
 			ContractAddress: attestAddr,
@@ -51,17 +54,19 @@ func TestDispatch(t *testing.T) {
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
+		println("a2")
 		// Create a mock metrics server
-		metricsServer := metrics.NewMockMetricsForTest(logger)
 
 		// Start routine
 		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, metricsServer) })
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
 
+		println("a3")
 		// Send event
 		blockHash := validator.BlockHash(*blockHashFelt)
 		dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
+		println("a3.1")
 		// Preparation for EndOfWindow event
 		mockAccount.EXPECT().
 			GetTransactionStatus(context.Background(), addTxHash).
@@ -70,12 +75,15 @@ func TestDispatch(t *testing.T) {
 				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
 			}, nil)
 
+		println("a3.2")
 		// Send EndOfWindow
 		dispatcher.EndOfWindow <- struct{}{}
+		println("a4")
 
 		close(dispatcher.AttestRequired)
 		// Wait for dispatch routine to finish
 		wg.Wait()
+		println("a5")
 
 		// Assert
 		expectedAttest := validator.AttestTracker{
@@ -83,6 +91,7 @@ func TestDispatch(t *testing.T) {
 			TransactionHash: *addTxHash,
 			Status:          validator.Successful,
 		}
+		println("a6")
 		require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
 	})
 
@@ -117,12 +126,9 @@ func TestDispatch(t *testing.T) {
 				validator.SepoliaValidationContracts(t),
 			).Times(1)
 
-			// Create a mock metrics server
-			metricsServer := metrics.NewMockMetricsForTest(logger)
-
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, metricsServer) })
+			wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
 
 			// Send the same event x3
 			blockHash := validator.BlockHash(*blockHashFelt)
@@ -201,12 +207,9 @@ func TestDispatch(t *testing.T) {
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		// Create a mock metrics server
-		metricsServer := metrics.NewMockMetricsForTest(logger)
-
 		// Start routine
 		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, metricsServer) })
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
 
 		// Send the same event x3
 		blockHash := validator.BlockHash(*blockHashFelt)
@@ -298,12 +301,9 @@ func TestDispatch(t *testing.T) {
 				validator.SepoliaValidationContracts(t),
 			).Times(1)
 
-			// Create a mock metrics server
-			metricsServer := metrics.NewMockMetricsForTest(logger)
-
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, metricsServer) })
+			wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
 
 			// Send the same event x2
 			blockHash := validator.BlockHash(*blockHashFelt)
@@ -422,12 +422,9 @@ func TestDispatch(t *testing.T) {
 			validator.SepoliaValidationContracts(t),
 		).Times(2)
 
-		// Create a mock metrics server
-		metricsServer := metrics.NewMockMetricsForTest(logger)
-
 		// Start routine
 		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, metricsServer) })
+		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
 
 		// Send event A
 		blockHashA := validator.BlockHash(*blockHashFeltA)

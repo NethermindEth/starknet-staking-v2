@@ -17,27 +17,22 @@ import (
 
 const Version = "0.2.0"
 
-// Main execution loop of the program. Listens to the blockchain and sends
-// attest invoke when it's the right time
-func Attest(
-	ctx context.Context,
-	config *config.Config,
-	snConfig *config.StarknetConfig,
-	maxRetries types.Retries,
-	logger utils.ZapLogger,
-	metricsServer *metrics.Metrics,
-) error {
+type Validator struct {
+	provider *rpc.Provider
+	signer   signerP.Signer
+	logger   utils.ZapLogger
+
+	// Used to initiate a websocket connection later on
+	wsProvider string
+}
+
+func New(
+	config *config.Config, snConfig *config.StarknetConfig, logger utils.ZapLogger,
+) (Validator, error) {
 	provider, err := NewProvider(config.Provider.Http, &logger)
 	if err != nil {
-		return err
+		return Validator{}, err
 	}
-
-	// Ignoring from now, until Starknet.go allow us to have a fixed Starknet option
-	_, _ = types.AttestFeeFromString(snConfig.AttestOptions)
-	// if err != nil {
-	// 	// do nothing for now
-	// 	// return err
-	// }
 
 	var signer signerP.Signer
 	if config.Signer.External() {
@@ -45,7 +40,7 @@ func Attest(
 			provider, &logger, &config.Signer, &snConfig.ContractAddresses,
 		)
 		if err != nil {
-			return err
+			return Validator{}, err
 		}
 		signer = &externalSigner
 	} else {
@@ -53,29 +48,56 @@ func Attest(
 			provider, &logger, &config.Signer, &snConfig.ContractAddresses,
 		)
 		if err != nil {
-			return err
+			return Validator{}, err
 		}
 		signer = &internalSigner
 	}
 
+	return Validator{
+		provider:   provider,
+		signer:     signer,
+		logger:     logger,
+		wsProvider: config.Provider.Ws,
+	}, nil
+}
+
+func (v *Validator) ChainID() string {
+	chainID, err := v.provider.ChainID(context.Background())
+	// This shouldn't ever happened because the chainID query is done during the validator
+	// initialization with `New`. After that the value is cached, so we are just accessing
+	// a property at this point
+	if err != nil {
+		panic(err)
+	}
+	return chainID
+}
+
+// Main execution loop of the program. Listens to the blockchain and sends
+// attest invoke when it's the right time
+func (v *Validator) Attest(
+	ctx context.Context, maxRetries types.Retries, tracer metrics.Tracer,
+) error {
+	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
-	wg.Go(func() { dispatcher.Dispatch(signer, &logger, metricsServer) })
+	wg.Go(func() { dispatcher.Dispatch(v.signer, &v.logger, tracer) })
 	defer wg.Wait()
 	defer close(dispatcher.AttestRequired)
 
-	return RunBlockHeaderWatcher(ctx, config, &logger, signer, &dispatcher, maxRetries, wg, metricsServer)
+	return RunBlockHeaderWatcher(
+		ctx, v.wsProvider, &v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
+	)
 }
 
-func RunBlockHeaderWatcher[Account signerP.Signer](
+func RunBlockHeaderWatcher[S signerP.Signer](
 	ctx context.Context,
-	config *config.Config,
+	wsProviderURL string,
 	logger *utils.ZapLogger,
-	signer Account,
-	dispatcher *EventDispatcher[Account],
+	signer S,
+	dispatcher *EventDispatcher[S],
 	maxRetries types.Retries,
 	wg *conc.WaitGroup,
-	metricsServer *metrics.Metrics,
+	tracer metrics.Tracer,
 ) error {
 	cleanUp := func(wsProvider *rpc.WsProvider, headersFeed chan *rpc.BlockHeader) {
 		wsProvider.Close()
@@ -84,7 +106,7 @@ func RunBlockHeaderWatcher[Account signerP.Signer](
 
 	for {
 		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(
-			config.Provider.Ws, logger,
+			wsProviderURL, logger,
 		)
 		if err != nil {
 			return err
@@ -93,7 +115,7 @@ func RunBlockHeaderWatcher[Account signerP.Signer](
 		stopProcessingHeaders := make(chan error)
 
 		wg.Go(func() {
-			err := ProcessBlockHeaders(headersFeed, signer, logger, dispatcher, maxRetries, metricsServer)
+			err := ProcessBlockHeaders(headersFeed, signer, logger, dispatcher, maxRetries, tracer)
 			if err != nil {
 				stopProcessingHeaders <- err
 			}
@@ -117,7 +139,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	logger *utils.ZapLogger,
 	dispatcher *EventDispatcher[Account],
 	maxRetries types.Retries,
-	metricsServer *metrics.Metrics,
+	tracer metrics.Tracer,
 ) error {
 	noEpochSwitch := func(*EpochInfo, *EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(
@@ -128,7 +150,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	}
 
 	// Update initial epoch info metrics
-	metricsServer.UpdateEpochInfo(ChainID, &epochInfo, attestInfo.TargetBlock.Uint64())
+	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	SetTargetBlockHashIfExists(account, logger, &attestInfo)
 
@@ -137,7 +159,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 		logger.Debugw("Block header information", "block header", blockHeader)
 
 		// Update latest block number metric
-		metricsServer.UpdateLatestBlockNumber(ChainID, blockHeader.Number)
+		tracer.UpdateLatestBlockNumber(blockHeader.Number)
 
 		if blockHeader.Number == epochInfo.CurrentEpochStartingBlock.Uint64()+epochInfo.EpochLen {
 			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
@@ -155,7 +177,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			}
 
 			// Update epoch info metrics
-			metricsServer.UpdateEpochInfo(ChainID, &epochInfo, attestInfo.TargetBlock.Uint64())
+			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 		}
 
 		if BlockNumber(blockHeader.Number) == attestInfo.TargetBlock {
