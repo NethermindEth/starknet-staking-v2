@@ -117,7 +117,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 				)
 
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
-					metricsServer.RecordAttestationConfirmed(ChainID)
+					tracer.RecordAttestationConfirmed()
 					logger.Infow(
 						"Attestation is done for this epoch",
 						"block hash", event.BlockHash.String(),
