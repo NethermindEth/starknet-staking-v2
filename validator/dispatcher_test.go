@@ -24,6 +24,10 @@ func TestDispatch(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockAccount := mocks.NewMockSigner(mockCtrl)
+	mockAccount.EXPECT().ValidationContracts().Return(
+		validator.SepoliaValidationContracts(t),
+	).AnyTimes()
+
 	logger := utils.NewNopZapLogger()
 	tracer := metrics.NewNoOpMetrics()
 
@@ -48,11 +52,6 @@ func TestDispatch(t *testing.T) {
 				context.Background(), calls, constants.FEE_ESTIMATION_MULTIPLIER,
 			).
 			Return(&mockedAddTxResp, nil)
-		mockAccount.EXPECT().ValidationContracts().Return(
-			validator.SepoliaValidationContracts(t),
-		).Times(1)
-
-		// Create a mock metrics server
 
 		// Start routine
 		wg := &conc.WaitGroup{}
@@ -113,9 +112,6 @@ func TestDispatch(t *testing.T) {
 				).
 				Return(&mockedAddTxResp, nil).
 				Times(1)
-			mockAccount.EXPECT().ValidationContracts().Return(
-				validator.SepoliaValidationContracts(t),
-			).Times(1)
 
 			// Start routine
 			wg := &conc.WaitGroup{}
@@ -194,9 +190,6 @@ func TestDispatch(t *testing.T) {
 			).
 			Return(&mockedAddTxResp1, nil).
 			Times(1)
-		mockAccount.EXPECT().ValidationContracts().Return(
-			validator.SepoliaValidationContracts(t),
-		).Times(1)
 
 		// Start routine
 		wg := &conc.WaitGroup{}
@@ -242,9 +235,6 @@ func TestDispatch(t *testing.T) {
 			).
 			Return(&mockedAddTxResp2, nil).
 			Times(1)
-		mockAccount.EXPECT().ValidationContracts().Return(
-			validator.SepoliaValidationContracts(t),
-		).Times(1)
 
 		// This 3rd event does not get ignored as invoke attestation has failed
 		// Proof: a 2nd call to BuildAndSendInvokeTxn is asserted
@@ -288,9 +278,6 @@ func TestDispatch(t *testing.T) {
 				).
 				Return(nil, errors.New("sending invoke tx failed for some reason")).
 				Times(1)
-			mockAccount.EXPECT().ValidationContracts().Return(
-				validator.SepoliaValidationContracts(t),
-			).Times(1)
 
 			// Start routine
 			wg := &conc.WaitGroup{}
@@ -328,9 +315,6 @@ func TestDispatch(t *testing.T) {
 					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
 				}, nil).
 				Times(1)
-			mockAccount.EXPECT().ValidationContracts().Return(
-				validator.SepoliaValidationContracts(t),
-			).Times(1)
 
 			dispatcher.AttestRequired <- validator.AttestRequired{BlockHash: blockHash}
 
@@ -408,10 +392,6 @@ func TestDispatch(t *testing.T) {
 				FinalityStatus: rpc.TxnStatus_Rejected,
 			}, nil).
 			Times(1)
-
-		mockAccount.EXPECT().ValidationContracts().Return(
-			validator.SepoliaValidationContracts(t),
-		).Times(2)
 
 		// Start routine
 		wg := &conc.WaitGroup{}
