@@ -143,11 +143,10 @@ The validator includes a built-in metrics server that exposes various metrics ab
 
 ### Configuration
 
-By default, the metrics server listens on all interfaces on port 9090. You can customize the address and port using the `--metrics-address` flag:
+By default, metrics are disabled. You can enable metrics tracking and customize the host and port with the following flags:
 
 ```bash
-./build/validator --metrics-address ":8080"  # Listen on all interfaces, port 8080
-./build/validator --metrics-address "127.0.0.1:9090"  # Listen only on localhost, port 9090
+./build/validator --metrics --metrics-host "0.0.0.0" --metrics-port "9090"  # Listen on all interfaces, port 9090
 ```
 
 ### Endpoints
