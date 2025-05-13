@@ -33,6 +33,7 @@ func NewCommand() cobra.Command {
 	var metricsF bool
 	var metricsHostF string
 	var metricsPortF string
+	var braavosAccount bool
 
 	var config configP.Config
 	var maxRetries types.Retries
@@ -82,7 +83,7 @@ func NewCommand() cobra.Command {
 	run := func(cmd *cobra.Command, args []string) {
 		fmt.Printf(greeting, validator.Version)
 
-		v, err := validator.New(&config, &snConfig, logger)
+		v, err := validator.New(&config, &snConfig, logger, braavosAccount)
 		if err != nil {
 			logger.Errorf("cannot start validator: %s", err.Error())
 			return
@@ -201,6 +202,13 @@ func NewCommand() cobra.Command {
 		"10",
 		"How many times to retry to get information required for attestation."+
 			" It can be either a positive integer or the key word 'infinite'",
+	)
+	cmd.Flags().BoolVar(
+		&braavosAccount,
+		"braavos-account",
+		false,
+		"Changes the the transaction version format from 0x3 to 1<<128 + 0x3, required by"+
+			" Braavos accounts. Only applies for internal signing.",
 	)
 	cmd.Flags().StringVar(
 		&logLevelF, "log-level", utils.INFO.String(), "Options: trace, debug, info, warn, error.",

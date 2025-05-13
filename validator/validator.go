@@ -27,7 +27,7 @@ type Validator struct {
 }
 
 func New(
-	config *config.Config, snConfig *config.StarknetConfig, logger utils.ZapLogger,
+	config *config.Config, snConfig *config.StarknetConfig, logger utils.ZapLogger, braavos bool,
 ) (Validator, error) {
 	provider, err := NewProvider(config.Provider.Http, &logger)
 	if err != nil {
@@ -45,7 +45,7 @@ func New(
 		signer = &externalSigner
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
-			provider, &logger, &config.Signer, &snConfig.ContractAddresses,
+			provider, &logger, &config.Signer, &snConfig.ContractAddresses, braavos,
 		)
 		if err != nil {
 			return Validator{}, err
@@ -80,7 +80,10 @@ func (v *Validator) Attest(
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
-	wg.Go(func() { dispatcher.Dispatch(v.signer, &v.logger, tracer) })
+	wg.Go(func() {
+		dispatcher.Dispatch(v.signer, &v.logger, tracer)
+		v.logger.Debug("Dispatch method finished")
+	})
 	defer wg.Wait()
 	defer close(dispatcher.AttestRequired)
 
@@ -124,7 +127,9 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		select {
 		case err := <-clientSubscription.Err():
 			logger.Errorw("Block header subscription", "error", err)
-			logger.Debugw("Ending headers subscription, closing websocket connection, and retrying...")
+			logger.Debugw(
+				"Ending headers subscription, closing websocket connection and retrying...",
+			)
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
 			cleanUp(wsProvider, headersFeed)
