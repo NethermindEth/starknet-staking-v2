@@ -137,6 +137,8 @@ In addition to the configuration described above, the tool allows for other non-
 
 3. `--log-level` set's the tool logging level. Default to `info`.
 
+4. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_.
+
 ## Metrics
 
 The validator includes a built-in metrics server that exposes various metrics about the validator's operation. These metrics can be used to monitor the validator's performance and health.
