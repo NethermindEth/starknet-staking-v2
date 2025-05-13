@@ -17,7 +17,9 @@ import (
 var _ Signer = (*InternalSigner)(nil)
 
 type InternalSigner struct {
-	Account             account.Account
+	Account account.Account
+	// If the account used represents a braavos account
+	braavos             bool
 	validationContracts ValidationContracts
 }
 
@@ -26,6 +28,7 @@ func NewInternalSigner(
 	logger *junoUtils.ZapLogger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
+	braavos bool,
 ) (InternalSigner, error) {
 	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
@@ -59,40 +62,41 @@ func NewInternalSigner(
 	logger.Debugw("validator account has been set up", "address", accountAddr.String())
 	return InternalSigner{
 		Account:             *account,
+		braavos:             braavos,
 		validationContracts: validationContracts,
 	}, nil
 }
 
-func (v *InternalSigner) GetTransactionStatus(
+func (s *InternalSigner) GetTransactionStatus(
 	ctx context.Context, transactionHash *felt.Felt,
 ) (*rpc.TxnStatusResult, error) {
-	return v.Account.Provider.GetTransactionStatus(ctx, transactionHash)
+	return s.Account.Provider.GetTransactionStatus(ctx, transactionHash)
 }
 
-func (v *InternalSigner) BuildAndSendInvokeTxn(
+func (s *InternalSigner) BuildAndSendInvokeTxn(
 	ctx context.Context,
 	functionCalls []rpc.InvokeFunctionCall,
 	multiplier float64,
 ) (*rpc.AddInvokeTransactionResponse, error) {
-	return v.Account.BuildAndSendInvokeTxn(ctx, functionCalls, multiplier, false)
+	return s.Account.BuildAndSendInvokeTxn(ctx, functionCalls, multiplier, s.braavos)
 }
 
-func (v *InternalSigner) Call(
+func (s *InternalSigner) Call(
 	ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID,
 ) ([]*felt.Felt, error) {
-	return v.Account.Provider.Call(ctx, call, blockId)
+	return s.Account.Provider.Call(ctx, call, blockId)
 }
 
-func (v *InternalSigner) BlockWithTxHashes(
+func (s *InternalSigner) BlockWithTxHashes(
 	ctx context.Context, blockID rpc.BlockID,
 ) (interface{}, error) {
-	return v.Account.Provider.BlockWithTxHashes(ctx, blockID)
+	return s.Account.Provider.BlockWithTxHashes(ctx, blockID)
 }
 
-func (v *InternalSigner) Address() *Address {
-	return (*Address)(v.Account.Address)
+func (s *InternalSigner) Address() *Address {
+	return (*Address)(s.Account.Address)
 }
 
-func (v *InternalSigner) ValidationContracts() *ValidationContracts {
-	return &v.validationContracts
+func (s *InternalSigner) ValidationContracts() *ValidationContracts {
+	return &s.validationContracts
 }

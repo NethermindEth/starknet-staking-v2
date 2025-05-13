@@ -63,7 +63,7 @@ func TestAttest(t *testing.T) {
 		ctx := context.Background()
 		metricsServer := mockMetricsServer()
 
-		v, err := validator.New(config, sepoliaConfig, *logger)
+		v, err := validator.New(config, sepoliaConfig, *logger, false)
 		require.NoError(t, err)
 		err = v.Attest(ctx, defaultRetries(t), metricsServer)
 
@@ -108,7 +108,7 @@ func TestAttest(t *testing.T) {
 		ctx := context.Background()
 		metricsServer := mockMetricsServer()
 
-		v, err := validator.New(config, sepoliaConfig, *logger)
+		v, err := validator.New(config, sepoliaConfig, *logger, false)
 		require.NoError(t, err)
 		err = v.Attest(ctx, defaultRetries(t), metricsServer)
 

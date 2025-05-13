@@ -37,6 +37,7 @@ func TestNewInternalSigner(t *testing.T) {
 	loadedEnvVars := envVarsErr == nil
 
 	contractAddresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
+	braavosAccount := false
 
 	t.Run("Error: private key conversion", func(t *testing.T) {
 		if !loadedEnvVars {
@@ -47,7 +48,7 @@ func TestNewInternalSigner(t *testing.T) {
 		require.NoError(t, providerErr)
 
 		validatorAccount, err := signer.NewInternalSigner(
-			provider, logger, &config.Signer{}, contractAddresses,
+			provider, logger, &config.Signer{}, contractAddresses, braavosAccount,
 		)
 
 		require.Equal(t, signer.InternalSigner{}, validatorAccount)
@@ -72,7 +73,7 @@ func TestNewInternalSigner(t *testing.T) {
 		// Test
 		logger := utils.NewNopZapLogger()
 		internalSigner, err := signer.NewInternalSigner(
-			provider, logger, &configSigner, contractAddresses,
+			provider, logger, &configSigner, contractAddresses, braavosAccount,
 		)
 		require.NoError(t, err)
 
@@ -108,6 +109,7 @@ func TestNewInternalSigner(t *testing.T) {
 				OperationalAddress: "0x456",
 			},
 			contractAddresses,
+			braavosAccount,
 		)
 
 		require.Equal(t, signer.InternalSigner{}, validatorAccount)
