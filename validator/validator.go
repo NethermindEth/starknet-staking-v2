@@ -80,7 +80,10 @@ func (v *Validator) Attest(
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
-	wg.Go(func() { dispatcher.Dispatch(v.signer, &v.logger, tracer) })
+	wg.Go(func() {
+		dispatcher.Dispatch(v.signer, &v.logger, tracer)
+		v.logger.Debug("Dispatch method finished")
+	})
 	defer wg.Wait()
 	defer close(dispatcher.AttestRequired)
 

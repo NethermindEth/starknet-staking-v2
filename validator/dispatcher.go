@@ -119,7 +119,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 						"block hash", event.BlockHash.String(),
 					)
 					d.CurrentAttest.setSuccessful()
-					return
+					continue
 				}
 
 				logger.Errorw(
@@ -130,7 +130,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 
 				// Record attestation failure in metrics
 				tracer.RecordAttestationFailure()
-
 				continue
 			}
 
@@ -193,13 +192,13 @@ func TrackAttest[S signerP.Signer](
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Infow(
-				"Transaction status was not found.",
+				"Attest transaction status was not found. Will wait.",
 				"hash", txHash,
 			)
 			return Ongoing
 		} else {
 			logger.Errorw(
-				"Attest transaction failed",
+				"Attest transaction FAILED. Will retry.",
 				"target block hash", event.BlockHash.String(),
 				"transaction hash", txHash,
 				"error", err,
@@ -210,7 +209,7 @@ func TrackAttest[S signerP.Signer](
 
 	if txStatus.FinalityStatus == rpc.TxnStatus_Received {
 		logger.Infow(
-			"Transaction status is RECEIVED.",
+			"Attest transaction RECEIVED.",
 			"hash", txHash,
 		)
 		return Ongoing
@@ -237,7 +236,7 @@ func TrackAttest[S signerP.Signer](
 	}
 
 	logger.Infow(
-		"Attest transaction successful",
+		"Attest transaction SUCCESFULL",
 		"block hash", event.BlockHash.String(),
 		"transaction hash", txHash,
 		"finality status", txStatus.FinalityStatus,
