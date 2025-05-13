@@ -112,20 +112,19 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 
 			resp, err := signerP.InvokeAttest(signer, &event)
 			if err != nil {
-				logger.Errorw(
-					"Failed to attest", "block hash", event.BlockHash.String(), "error", err,
-				)
-
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
 					tracer.RecordAttestationConfirmed()
 					logger.Infow(
-						"Attestation is done for this epoch",
+						"Attestation is already done for this epoch",
 						"block hash", event.BlockHash.String(),
 					)
 					d.CurrentAttest.setSuccessful()
 					return
 				}
 
+				logger.Errorw(
+					"Failed to attest", "block hash", event.BlockHash.String(), "error", err,
+				)
 				d.CurrentAttest.setFailed()
 				d.CurrentAttest.resetTransactionHash()
 
