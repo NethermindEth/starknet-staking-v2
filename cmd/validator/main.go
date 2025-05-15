@@ -33,7 +33,7 @@ func NewCommand() cobra.Command {
 	var metricsF bool
 	var metricsHostF string
 	var metricsPortF string
-	var braavosAccount bool // TODO: rename to a more correct name (e.g. useQueryBitVersion)
+	var braavosAccount bool
 
 	var config configP.Config
 	var maxRetries types.Retries
