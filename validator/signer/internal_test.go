@@ -182,7 +182,7 @@ func TestSignInvokeTx(t *testing.T) {
 			Version:       rpc.TransactionV3,
 			Signature:     []*felt.Felt{},
 			Nonce:         utils.HexToFelt(t, "0x1"),
-			ResourceBounds: rpc.ResourceBoundsMapping{
+			ResourceBounds: &rpc.ResourceBoundsMapping{
 				L1Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
 				L2Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
 				L1DataGas: rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
@@ -223,7 +223,7 @@ func TestSignInvokeTx(t *testing.T) {
 			Version:   rpc.TransactionV3,
 			Signature: []*felt.Felt{},
 			Nonce:     utils.HexToFelt(t, "0x1"),
-			ResourceBounds: rpc.ResourceBoundsMapping{
+			ResourceBounds: &rpc.ResourceBoundsMapping{
 				L1Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
 				L2Gas:     rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
 				L1DataGas: rpc.ResourceBounds{MaxAmount: "0x1", MaxPricePerUnit: "0x1"},
@@ -751,7 +751,7 @@ func TestInvokeAttest(t *testing.T) {
 		}}
 
 		response := rpc.AddInvokeTransactionResponse{
-			TransactionHash: utils.HexToFelt(t, "0x123"),
+			Hash: utils.HexToFelt(t, "0x123"),
 		}
 		mockSigner.
 			EXPECT().

@@ -46,7 +46,7 @@ func TestDispatch(t *testing.T) {
 			CallData:        []*felt.Felt{blockHashFelt},
 		}}
 		addTxHash := utils.HexToFelt(t, "0x123")
-		mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
+		mockedAddTxResp := rpc.AddInvokeTransactionResponse{Hash: addTxHash}
 		mockAccount.EXPECT().
 			BuildAndSendInvokeTxn(
 				context.Background(), calls, constants.FEE_ESTIMATION_MULTIPLIER,
@@ -104,7 +104,7 @@ func TestDispatch(t *testing.T) {
 				CallData:        []*felt.Felt{blockHashFelt},
 			}}
 			addTxHash := utils.HexToFelt(t, "0x123")
-			mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
+			mockedAddTxResp := rpc.AddInvokeTransactionResponse{Hash: addTxHash}
 			// We expect BuildAndSendInvokeTxn to be called only once (even though 3 events are sent)
 			mockAccount.EXPECT().
 				BuildAndSendInvokeTxn(
@@ -181,7 +181,7 @@ func TestDispatch(t *testing.T) {
 			CallData:        []*felt.Felt{blockHashFelt},
 		}}
 		addTxHash1 := utils.HexToFelt(t, "0x123")
-		mockedAddTxResp1 := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash1}
+		mockedAddTxResp1 := rpc.AddInvokeTransactionResponse{Hash: addTxHash1}
 
 		// We expect BuildAndSendInvokeTxn to be called only once (for the 2 first events)
 		mockAccount.EXPECT().
@@ -226,7 +226,7 @@ func TestDispatch(t *testing.T) {
 			Times(1)
 
 		addTxHash2 := utils.HexToFelt(t, "0x456")
-		mockedAddTxResp2 := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash2}
+		mockedAddTxResp2 := rpc.AddInvokeTransactionResponse{Hash: addTxHash2}
 
 		// We expect a 2nd call to BuildAndSendInvokeTxn
 		mockAccount.EXPECT().
@@ -294,7 +294,7 @@ func TestDispatch(t *testing.T) {
 
 			// Next call to BuildAndSendInvokeTxn succeeds
 			addTxHash := utils.HexToFelt(t, "0x123")
-			mockedAddTxResp := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHash}
+			mockedAddTxResp := rpc.AddInvokeTransactionResponse{Hash: addTxHash}
 			mockAccount.EXPECT().
 				BuildAndSendInvokeTxn(
 					context.Background(), calls, constants.FEE_ESTIMATION_MULTIPLIER,
@@ -350,7 +350,7 @@ func TestDispatch(t *testing.T) {
 			CallData:        []*felt.Felt{blockHashFeltA},
 		}}
 		addTxHashA := utils.HexToFelt(t, "0x123")
-		mockedAddTxRespA := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHashA}
+		mockedAddTxRespA := rpc.AddInvokeTransactionResponse{Hash: addTxHashA}
 
 		// We expect BuildAndSendInvokeTxn to be called once for event A
 		mockAccount.EXPECT().
@@ -375,7 +375,7 @@ func TestDispatch(t *testing.T) {
 			CallData:        []*felt.Felt{blockHashFeltB},
 		}}
 		addTxHashB := utils.HexToFelt(t, "0x456")
-		mockedAddTxRespB := rpc.AddInvokeTransactionResponse{TransactionHash: addTxHashB}
+		mockedAddTxRespB := rpc.AddInvokeTransactionResponse{Hash: addTxHashB}
 
 		// We expect BuildAndSendInvokeTxn to be called once for event B
 		mockAccount.EXPECT().

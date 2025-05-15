@@ -338,7 +338,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 			constants.FEE_ESTIMATION_MULTIPLIER,
 		)
 
-		require.Equal(t, &rpc.AddInvokeTransactionResponse{TransactionHash: utils.HexToFelt(t, expectedInvokeTxHash)}, addInvokeTxRes)
+		require.Equal(t, &rpc.AddInvokeTransactionResponse{Hash: utils.HexToFelt(t, expectedInvokeTxHash)}, addInvokeTxRes)
 		require.Nil(t, err)
 	})
 }
@@ -351,10 +351,10 @@ func TestHashAndSignTx(t *testing.T) {
 			utils.HexToFelt(t, "0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
-			rpc.ResourceBoundsMapping{},
+			&rpc.ResourceBoundsMapping{},
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainID, externalSignerURL)
+		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "connection refused")
@@ -378,10 +378,10 @@ func TestHashAndSignTx(t *testing.T) {
 			utils.HexToFelt(t, "0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
-			rpc.ResourceBoundsMapping{},
+			&rpc.ResourceBoundsMapping{},
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		expectedErrorMsg := fmt.Sprintf("server error %d: %s", http.StatusInternalServerError, serverError)
@@ -404,10 +404,10 @@ func TestHashAndSignTx(t *testing.T) {
 			utils.HexToFelt(t, "0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
-			rpc.ResourceBoundsMapping{},
+			&rpc.ResourceBoundsMapping{},
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
@@ -429,10 +429,10 @@ func TestHashAndSignTx(t *testing.T) {
 			utils.HexToFelt(t, "0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
-			rpc.ResourceBoundsMapping{},
+			&rpc.ResourceBoundsMapping{},
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(&invokeTxnV3.InvokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
 
 		expectedResult := s.Response{
 			Signature: [2]*felt.Felt{
