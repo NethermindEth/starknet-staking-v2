@@ -37,7 +37,7 @@ func New(
 	var signer signerP.Signer
 	if config.Signer.External() {
 		externalSigner, err := signerP.NewExternalSigner(
-			provider, &logger, &config.Signer, &snConfig.ContractAddresses,
+			provider, &logger, &config.Signer, &snConfig.ContractAddresses, braavos,
 		)
 		if err != nil {
 			return Validator{}, err

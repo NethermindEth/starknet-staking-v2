@@ -37,6 +37,7 @@ func TestNewExternalSigner(t *testing.T) {
 				OperationalAddress: "0x123",
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
 		)
 
 		require.Zero(t, externalSigner)
@@ -67,6 +68,7 @@ func TestExternalSignerAddress(t *testing.T) {
 				OperationalAddress: "0x123",
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
 		)
 		require.NoError(t, err)
 
@@ -97,6 +99,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 				OperationalAddress: "0x123",
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
 		)
 		require.NoError(t, err)
 
@@ -136,6 +139,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 				OperationalAddress: "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
 		)
 		require.NoError(t, err)
 
@@ -177,6 +181,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 				OperationalAddress: "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
 		)
 		require.NoError(t, err)
 
@@ -225,6 +230,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 					OperationalAddress: "0xabc",
 				},
 				new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+				false,
 			)
 			require.NoError(t, err)
 
@@ -273,6 +279,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 				OperationalAddress: "0xabc",
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
 		)
 		require.NoError(t, err)
 
@@ -329,6 +336,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 				OperationalAddress: "0xabc",
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
 		)
 		require.NoError(t, err)
 
