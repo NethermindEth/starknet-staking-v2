@@ -4,9 +4,10 @@ go 1.24.1
 
 require (
 	github.com/NethermindEth/juno v0.14.0
-	github.com/NethermindEth/starknet.go v0.10.0
+	github.com/NethermindEth/starknet.go v0.11.1
 	github.com/cockroachdb/errors v1.11.3
 	github.com/joho/godotenv v1.5.1
+	github.com/prometheus/client_golang v1.21.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
@@ -152,7 +153,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polyfloyd/go-errorlint v1.7.1 // indirect
-	github.com/prometheus/client_golang v1.21.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect

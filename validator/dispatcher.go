@@ -136,8 +136,8 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *utils.ZapLogger, tracer 
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
-			logger.Debugw("Attest transaction sent", "hash", resp.TransactionHash)
-			d.CurrentAttest.setTransactionHash(resp.TransactionHash)
+			logger.Debugw("Attest transaction sent", "hash", resp.Hash)
+			d.CurrentAttest.setTransactionHash(resp.Hash)
 		case <-d.EndOfWindow:
 			logger.Info("End of window reached")
 

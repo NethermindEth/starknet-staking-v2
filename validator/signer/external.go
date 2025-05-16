@@ -28,6 +28,8 @@ type ExternalSigner struct {
 	chainId             felt.Felt
 	url                 string
 	validationContracts ValidationContracts
+	// If the account used represents a braavos account
+	braavos bool
 }
 
 func NewExternalSigner(
@@ -35,6 +37,7 @@ func NewExternalSigner(
 	logger *junoUtils.ZapLogger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
+	braavos bool,
 ) (ExternalSigner, error) {
 	chainIdStr, err := provider.ChainID(context.Background())
 	if err != nil {
@@ -51,6 +54,7 @@ func NewExternalSigner(
 		url:                 signer.ExternalURL,
 		chainId:             *chainId,
 		validationContracts: validationContracts,
+		braavos:             braavos,
 	}, nil
 }
 
@@ -74,7 +78,14 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 		formattedCallData,
 		makeResourceBoundsMapWithZeroValues(),
 	)
-	if err := SignInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId, s.url); err != nil {
+
+	if s.braavos {
+		// Braavos require the use of the query bit txn version for fee estimation.
+		// The query bit txn version is used for custom validation logic from wallets/accounts when estimating fee/simulating txns
+		broadcastInvokeTxnV3.Version = rpc.TransactionV3WithQueryBit
+	}
+
+	if err := SignInvokeTx(broadcastInvokeTxnV3, &s.chainId, s.url); err != nil {
 		return nil, err
 	}
 
@@ -91,9 +102,12 @@ func (s *ExternalSigner) BuildAndSendInvokeTxn(
 	txnFee := estimateFee[0]
 	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
 
+	// assuring the signed txn version will be rpc.TransactionV3, since queryBit txn version is only used for estimation/simulation
+	broadcastInvokeTxnV3.Version = rpc.TransactionV3
+
 	// Signing the txn again with the estimated fee,
 	// as the fee value is used in the txn hash calculation
-	if err := SignInvokeTx(&broadcastInvokeTxnV3.InvokeTxnV3, &s.chainId, s.url); err != nil {
+	if err := SignInvokeTx(broadcastInvokeTxnV3, &s.chainId, s.url); err != nil {
 		return nil, err
 	}
 
@@ -108,7 +122,7 @@ func (s *ExternalSigner) ValidationContracts() *ValidationContracts {
 	return &s.validationContracts
 }
 
-func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
+func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
 	signResp, err := HashAndSignTx(invokeTxnV3, chainId, externalSignerUrl)
 	if err != nil {
 		return err
@@ -122,7 +136,7 @@ func SignInvokeTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSign
 	return nil
 }
 
-func HashAndSignTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) (signer.Response, error) {
+func HashAndSignTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) (signer.Response, error) {
 	// Create request body
 	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainId: chainId}
 	jsonData, err := json.Marshal(&reqBody)
@@ -153,8 +167,8 @@ func HashAndSignTx(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt, externalSig
 	return signResp, json.Unmarshal(body, &signResp)
 }
 
-func makeResourceBoundsMapWithZeroValues() rpc.ResourceBoundsMapping {
-	return rpc.ResourceBoundsMapping{
+func makeResourceBoundsMapWithZeroValues() *rpc.ResourceBoundsMapping {
+	return &rpc.ResourceBoundsMapping{
 		L1Gas: rpc.ResourceBounds{
 			MaxAmount:       "0x0",
 			MaxPricePerUnit: "0x0",
