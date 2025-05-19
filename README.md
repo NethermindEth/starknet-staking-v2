@@ -85,7 +85,7 @@ Alternatively, similarly as described as the previous section, the validator can
 
 ```bash
 PROVIDER_HTTP_URL="http://localhost:6060/v0_8"
-PROVIDER_WS_URL="http://localhost:6061/v0_8"
+PROVIDER_WS_URL="ws://localhost:6061/v0_8"
 
 SIGNER_EXTERNAL_URL="http://localhost:8080"
 SIGNER_OPERATIONAL_ADDRESS="0x123"
