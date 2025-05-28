@@ -38,7 +38,7 @@ func NewInternalSigner(
 
 	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
 	if err != nil {
-		return InternalSigner{}, errors.New("Cannot derive public key from private key")
+		return InternalSigner{}, errors.New("cannot derive public key from private key")
 	}
 
 	publicKeyStr := publicKey.String()
@@ -47,7 +47,7 @@ func NewInternalSigner(
 	accountAddr := types.AddressFromString(signer.OperationalAddress)
 	account, err := account.NewAccount(provider, accountAddr.Felt(), publicKeyStr, ks, 2)
 	if err != nil {
-		return InternalSigner{}, errors.Errorf("cannot create validator account: %s", err)
+		return InternalSigner{}, errors.Errorf("cannot create internal signer: %s", err)
 	}
 
 	chainIdStr, err := provider.ChainID(context.Background())
@@ -59,7 +59,7 @@ func NewInternalSigner(
 	)
 	logger.Infof("Validation contracts: %s", validationContracts.String())
 
-	logger.Debugw("validator account has been set up", "address", accountAddr.String())
+	logger.Debugw("internal signer has been set up", "address", accountAddr.String())
 	return InternalSigner{
 		Account:             *account,
 		braavos:             braavos,
@@ -89,7 +89,7 @@ func (s *InternalSigner) Call(
 
 func (s *InternalSigner) BlockWithTxHashes(
 	ctx context.Context, blockID rpc.BlockID,
-) (interface{}, error) {
+) (any, error) {
 	return s.Account.Provider.BlockWithTxHashes(ctx, blockID)
 }
 

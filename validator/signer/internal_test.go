@@ -113,7 +113,7 @@ func TestNewInternalSigner(t *testing.T) {
 		)
 
 		require.Equal(t, signer.InternalSigner{}, validatorAccount)
-		require.ErrorContains(t, err, "cannot create validator account:")
+		require.ErrorContains(t, err, "connection refused")
 	})
 }
 

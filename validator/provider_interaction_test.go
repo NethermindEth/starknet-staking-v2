@@ -47,9 +47,8 @@ func TestNewProvider(t *testing.T) {
 
 			provider, err := validator.NewProvider(envVars.HttpProviderUrl, logger)
 
-			// Cannot deeply compare 2 providers (comparing channels does not works)
+			require.NoError(t, err)
 			require.NotNil(t, provider)
-			require.Nil(t, err)
 		})
 	} else {
 		t.Logf("Ignoring tests that require env variables: %s", err)
