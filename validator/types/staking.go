@@ -8,10 +8,15 @@ import (
 	"lukechampine.com/uint128"
 )
 
-type AttestRequired struct {
+// Represents an event for the dispatcher to prepare for the next attest
+type PrepareAttest struct {
 	BlockHash BlockHash
 }
 
+// Represents an event for the dispatcher to invoke an attest transaction
+type DoAttest struct{}
+
+// Used by the validator to keep track of the starknet attestation window
 type AttestInfo struct {
 	TargetBlock     BlockNumber
 	TargetBlockHash BlockHash
@@ -19,6 +24,7 @@ type AttestInfo struct {
 	WindowEnd       BlockNumber
 }
 
+// Used by the validator to keep track of the current epoch info
 type EpochInfo struct {
 	StakerAddress             Address         `json:"staker_address"`
 	Stake                     uint128.Uint128 `json:"stake"`

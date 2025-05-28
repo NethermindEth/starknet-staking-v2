@@ -115,7 +115,7 @@ func MockRPCServer(
 	return mockRpc
 }
 
-func SepoliaValidationContracts(t *testing.T) *ValidationContracts {
+func SepoliaValidationContracts(t *testing.T) *types.ValidationContracts {
 	t.Helper()
 
 	addresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")

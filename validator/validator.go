@@ -37,20 +37,32 @@ func New(
 	var signer signerP.Signer
 	if config.Signer.External() {
 		externalSigner, err := signerP.NewExternalSigner(
-			provider, &logger, &config.Signer, &snConfig.ContractAddresses, braavos,
+			context.Background(),
+			provider,
+			&logger,
+			&config.Signer,
+			&snConfig.ContractAddresses,
+			braavos,
 		)
 		if err != nil {
 			return Validator{}, err
 		}
 		signer = &externalSigner
+		logger.Info("Using external signer at %s", config.Signer.ExternalURL)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
-			provider, &logger, &config.Signer, &snConfig.ContractAddresses, braavos,
+			context.Background(),
+			provider,
+			&logger,
+			&config.Signer,
+			&snConfig.ContractAddresses,
+			braavos,
 		)
 		if err != nil {
 			return Validator{}, err
 		}
 		signer = &internalSigner
+		logger.Info("Using internal signer")
 	}
 
 	return Validator{
@@ -85,7 +97,7 @@ func (v *Validator) Attest(
 		v.logger.Debug("Dispatch method finished")
 	})
 	defer wg.Wait()
-	defer close(dispatcher.AttestRequired)
+	defer close(dispatcher.PrepareAttest)
 
 	return RunBlockHeaderWatcher(
 		ctx, v.wsProvider, &v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
@@ -154,7 +166,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	maxRetries types.Retries,
 	tracer metrics.Tracer,
 ) error {
-	noEpochSwitch := func(*EpochInfo, *EpochInfo) bool { return true }
+	noEpochSwitch := func(*types.EpochInfo, *types.EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(
 		account, logger, nil, noEpochSwitch, maxRetries, "at app startup",
 	)
@@ -193,8 +205,8 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 		}
 
-		if BlockNumber(blockHeader.Number) == attestInfo.TargetBlock {
-			attestInfo.TargetBlockHash = BlockHash(*blockHeader.Hash)
+		if types.BlockNumber(blockHeader.Number) == attestInfo.TargetBlock {
+			attestInfo.TargetBlockHash = types.BlockHash(*blockHeader.Hash)
 			logger.Infow(
 				"Target block reached",
 				"block number", blockHeader.Number,
@@ -204,16 +216,22 @@ func ProcessBlockHeaders[Account signerP.Signer](
 				"start", attestInfo.WindowStart,
 				"end", attestInfo.WindowEnd,
 			)
-		}
-
-		if BlockNumber(blockHeader.Number) >= attestInfo.WindowStart-1 &&
-			BlockNumber(blockHeader.Number) < attestInfo.WindowEnd {
-			dispatcher.AttestRequired <- AttestRequired{
+			dispatcher.PrepareAttest <- types.PrepareAttest{
 				BlockHash: attestInfo.TargetBlockHash,
 			}
 		}
 
-		if BlockNumber(blockHeader.Number) == attestInfo.WindowEnd {
+		if types.BlockNumber(blockHeader.Number) >= attestInfo.TargetBlock &&
+			// From [target block, window start), make sure to prepare the transaction
+			types.BlockNumber(blockHeader.Number) < attestInfo.WindowStart-1 {
+			dispatcher.PrepareAttest <- types.PrepareAttest{
+				BlockHash: attestInfo.TargetBlockHash,
+			}
+		} else if types.BlockNumber(blockHeader.Number) >= attestInfo.WindowStart-1 &&
+			// from [window start, window end), make sure the attestation is done
+			types.BlockNumber(blockHeader.Number) < attestInfo.WindowEnd {
+			dispatcher.DoAttest <- types.DoAttest{}
+		} else if types.BlockNumber(blockHeader.Number) == attestInfo.WindowEnd {
 			dispatcher.EndOfWindow <- struct{}{}
 		}
 	}
@@ -224,17 +242,15 @@ func ProcessBlockHeaders[Account signerP.Signer](
 func SetTargetBlockHashIfExists[Account signerP.Signer](
 	account Account,
 	logger *utils.ZapLogger,
-	attestInfo *AttestInfo,
+	attestInfo *types.AttestInfo,
 ) {
 	targetBlockNumber := attestInfo.TargetBlock.Uint64()
-	res, err := account.BlockWithTxHashes(
-		context.Background(), rpc.BlockID{Number: &targetBlockNumber},
-	)
+	res, err := account.BlockWithTxHashes(rpc.BlockID{Number: &targetBlockNumber})
 
 	// If no error, then target block already exists
 	if err == nil {
 		if block, ok := res.(*rpc.BlockTxHashes); ok {
-			attestInfo.TargetBlockHash = BlockHash(*block.Hash)
+			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Infow(
 				"Target block already exists. Registering block hash.",
 				"target block", attestInfo.TargetBlock.Uint64(),
@@ -249,11 +265,11 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
 	account Account,
 	logger *utils.ZapLogger,
-	prevEpoch *EpochInfo,
-	isEpochSwitchCorrect func(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool,
+	prevEpoch *types.EpochInfo,
+	isEpochSwitchCorrect func(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool,
 	maxRetries types.Retries,
 	newEpochId string,
-) (EpochInfo, AttestInfo, error) {
+) (types.EpochInfo, types.AttestInfo, error) {
 	// storing the initial value for error reporting
 	totalRetryAmount := maxRetries.String()
 
@@ -274,8 +290,8 @@ func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
 	}
 
 	if err != nil {
-		return EpochInfo{},
-			AttestInfo{},
+		return types.EpochInfo{},
+			types.AttestInfo{},
 			errors.Errorf(
 				"Failed to fetch epoch info after %s retries. Epoch id: %s. Error: %s",
 				totalRetryAmount,
@@ -284,8 +300,8 @@ func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
 			)
 	}
 	if !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
-		return EpochInfo{},
-			AttestInfo{},
+		return types.EpochInfo{},
+			types.AttestInfo{},
 			errors.Errorf("Wrong epoch switch after %s retries from epoch:\n%s\nTo epoch:\n%s",
 				totalRetryAmount,
 				prevEpoch.String(),
@@ -296,7 +312,7 @@ func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
 	return newEpoch, newAttestInfo, nil
 }
 
-func CorrectEpochSwitch(prevEpoch *EpochInfo, newEpoch *EpochInfo) bool {
+func CorrectEpochSwitch(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool {
 	return newEpoch.EpochId == prevEpoch.EpochId+1 &&
 		newEpoch.CurrentEpochStartingBlock.Uint64() == prevEpoch.CurrentEpochStartingBlock.Uint64()+prevEpoch.EpochLen
 }

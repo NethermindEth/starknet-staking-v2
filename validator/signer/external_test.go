@@ -30,6 +30,7 @@ func TestNewExternalSigner(t *testing.T) {
 		require.NoError(t, providerErr)
 
 		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
 			provider,
 			utils.NewNopZapLogger(),
 			&config.Signer{
@@ -61,6 +62,7 @@ func TestExternalSignerAddress(t *testing.T) {
 		require.NoError(t, err)
 
 		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
 			provider,
 			logger,
 			&config.Signer{
@@ -92,6 +94,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, providerErr)
 
 		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
 			provider,
 			logger,
 			&config.Signer{
@@ -104,7 +107,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(
-			t.Context(), []rpc.InvokeFunctionCall{}, constants.FEE_ESTIMATION_MULTIPLIER,
+			[]rpc.InvokeFunctionCall{}, constants.FEE_ESTIMATION_MULTIPLIER,
 		)
 
 		require.Nil(t, addInvokeTxRes)
@@ -132,6 +135,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		defer mockServer.Close()
 
 		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
 			provider,
 			logger,
 			&config.Signer{
@@ -144,7 +148,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(
-			t.Context(), []rpc.InvokeFunctionCall{}, constants.FEE_ESTIMATION_MULTIPLIER,
+			[]rpc.InvokeFunctionCall{}, constants.FEE_ESTIMATION_MULTIPLIER,
 		)
 
 		require.Nil(t, addInvokeTxRes)
@@ -174,6 +178,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		defer mockServer.Close()
 
 		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
 			provider,
 			logger,
 			&config.Signer{
@@ -186,7 +191,6 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(
-			t.Context(),
 			[]rpc.InvokeFunctionCall{},
 			constants.FEE_ESTIMATION_MULTIPLIER,
 		)
@@ -223,6 +227,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 			require.NoError(t, providerErr)
 
 			externalSigner, err := signer.NewExternalSigner(
+				t.Context(),
 				provider,
 				logger,
 				&config.Signer{
@@ -235,7 +240,6 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 			require.NoError(t, err)
 
 			addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(
-				t.Context(),
 				[]rpc.InvokeFunctionCall{},
 				constants.FEE_ESTIMATION_MULTIPLIER,
 			)
@@ -272,6 +276,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, providerErr)
 
 		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
 			provider,
 			logger,
 			&config.Signer{
@@ -284,7 +289,6 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(
-			t.Context(),
 			[]rpc.InvokeFunctionCall{},
 			constants.FEE_ESTIMATION_MULTIPLIER,
 		)
@@ -329,6 +333,7 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, providerErr)
 
 		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
 			provider,
 			logger,
 			&config.Signer{
@@ -341,7 +346,6 @@ func TestBuildAndSendInvokeTxn(t *testing.T) {
 		require.NoError(t, err)
 
 		addInvokeTxRes, err := externalSigner.BuildAndSendInvokeTxn(
-			t.Context(),
 			[]rpc.InvokeFunctionCall{},
 			constants.FEE_ESTIMATION_MULTIPLIER,
 		)
