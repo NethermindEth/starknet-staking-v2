@@ -107,16 +107,25 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		close(headersFeed)
 	}
 
+	// copy to reset it after a success
+	localRetries := maxRetries
 	for {
 		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(
 			wsProviderURL, logger,
 		)
 		if err != nil {
-			return err
+			if localRetries.IsZero() {
+				return err
+			}
+			logger.Errorf("cannot connect to ws provider, %s retries left.", &localRetries)
+			logger.Debug(err.Error())
+			localRetries.Sub()
+			Sleep(5 * time.Second)
+			continue
 		}
+		localRetries = maxRetries
 
 		stopProcessingHeaders := make(chan error)
-
 		wg.Go(func() {
 			err := ProcessBlockHeaders(headersFeed, signer, logger, dispatcher, maxRetries, tracer)
 			if err != nil {
@@ -126,12 +135,11 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 
 		select {
 		case err := <-clientSubscription.Err():
-			logger.Errorw("Block header subscription", "error", err)
-			logger.Debugw(
-				"Ending headers subscription, closing websocket connection and retrying...",
-			)
+			logger.Errorw("client subscription error", "error", err.Error())
+			logger.Debug("Ending headers subscription, closing websocket connection and retrying...")
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
+			logger.Errorw("processing block headers", "error", err.Error())
 			cleanUp(wsProvider, headersFeed)
 			return err
 		}
