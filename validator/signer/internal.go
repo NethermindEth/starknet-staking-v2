@@ -11,19 +11,22 @@ import (
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/NethermindEth/starknet.go/rpc"
+	"github.com/NethermindEth/starknet.go/utils"
 	"github.com/cockroachdb/errors"
 )
 
 var _ Signer = (*InternalSigner)(nil)
 
 type InternalSigner struct {
+	ctx     context.Context
 	Account account.Account
 	// If the account used represents a braavos account
 	braavos             bool
-	validationContracts ValidationContracts
+	validationContracts types.ValidationContracts
 }
 
 func NewInternalSigner(
+	ctx context.Context,
 	provider *rpc.Provider,
 	logger *junoUtils.ZapLogger,
 	signer *config.Signer,
@@ -50,7 +53,7 @@ func NewInternalSigner(
 		return InternalSigner{}, errors.Errorf("cannot create internal signer: %s", err)
 	}
 
-	chainIdStr, err := provider.ChainID(context.Background())
+	chainIdStr, err := provider.ChainID(ctx)
 	if err != nil {
 		return InternalSigner{}, err
 	}
@@ -61,42 +64,110 @@ func NewInternalSigner(
 
 	logger.Debugw("internal signer has been set up", "address", accountAddr.String())
 	return InternalSigner{
+		ctx:                 ctx,
 		Account:             *account,
 		braavos:             braavos,
 		validationContracts: validationContracts,
 	}, nil
 }
 
-func (s *InternalSigner) GetTransactionStatus(
-	ctx context.Context, transactionHash *felt.Felt,
-) (*rpc.TxnStatusResult, error) {
-	return s.Account.Provider.GetTransactionStatus(ctx, transactionHash)
+func (s *InternalSigner) GetTransactionStatus(transactionHash *felt.Felt) (
+	*rpc.TxnStatusResult, error,
+) {
+	return s.Account.Provider.GetTransactionStatus(s.ctx, transactionHash)
 }
 
 func (s *InternalSigner) BuildAndSendInvokeTxn(
-	ctx context.Context,
 	functionCalls []rpc.InvokeFunctionCall,
 	multiplier float64,
 ) (*rpc.AddInvokeTransactionResponse, error) {
-	return s.Account.BuildAndSendInvokeTxn(ctx, functionCalls, multiplier, s.braavos)
+	return s.Account.BuildAndSendInvokeTxn(s.ctx, functionCalls, multiplier, s.braavos)
+}
+
+func (s *InternalSigner) BuildAttestTransaction(
+	attest *types.BlockHash,
+) (rpc.BroadcastInvokeTxnV3, error) {
+	calls := []rpc.InvokeFunctionCall{{
+		ContractAddress: s.ValidationContracts().Attest.Felt(),
+		FunctionName:    "attest",
+		CallData:        []*felt.Felt{attest.Felt()},
+	}}
+	calldata, err := s.Account.FmtCalldata(utils.InvokeFuncCallsToFunctionCalls(calls))
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
+
+	nonce, err := s.Account.Nonce(context.Background())
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
+
+	defaultResources := makeResourceBoundsMapWithZeroValues()
+	//	attestTransaction := utils.BuildInvokeTxn(
+	//		s.Account.Address, nonce, callData, &defaultResources,
+	//	)
+
+	// Taken from starknet.go `utils.BuildInvokeTxn`
+	attestTransaction := rpc.BroadcastInvokeTxnV3{
+		Type:                  rpc.TransactionType_Invoke,
+		SenderAddress:         s.Account.Address,
+		Calldata:              calldata,
+		Version:               rpc.TransactionV3,
+		Signature:             []*felt.Felt{},
+		Nonce:                 nonce,
+		ResourceBounds:        &defaultResources,
+		Tip:                   "0x0",
+		PayMasterData:         []*felt.Felt{},
+		AccountDeploymentData: []*felt.Felt{},
+		NonceDataMode:         rpc.DAModeL1,
+		FeeMode:               rpc.DAModeL1,
+	}
+	return attestTransaction, nil
+}
+
+func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error) {
+	estimateFee, err := s.Account.Provider.EstimateFee(
+		context.Background(),
+		[]rpc.BroadcastTxn{txn},
+		[]rpc.SimulationFlag{},
+		rpc.WithBlockTag("pending"),
+	)
+	if err != nil {
+		return rpc.FeeEstimation{}, err
+	}
+	return estimateFee[0], nil
+}
+
+func (s *InternalSigner) SignTransaction(
+	txn *rpc.BroadcastInvokeTxnV3,
+) (*rpc.BroadcastInvokeTxnV3, error) {
+	return txn, s.Account.SignInvokeTransaction(s.ctx, txn)
+}
+
+func (s *InternalSigner) InvokeTransaction(
+	txn *rpc.BroadcastInvokeTxnV3,
+) (*rpc.AddInvokeTransactionResponse, error) {
+	return s.Account.Provider.AddInvokeTransaction(s.ctx, txn)
 }
 
 func (s *InternalSigner) Call(
-	ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID,
+	call rpc.FunctionCall, blockId rpc.BlockID,
 ) ([]*felt.Felt, error) {
-	return s.Account.Provider.Call(ctx, call, blockId)
+	return s.Account.Provider.Call(s.ctx, call, blockId)
 }
 
-func (s *InternalSigner) BlockWithTxHashes(
-	ctx context.Context, blockID rpc.BlockID,
-) (any, error) {
-	return s.Account.Provider.BlockWithTxHashes(ctx, blockID)
+func (s *InternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
+	return s.Account.Provider.BlockWithTxHashes(s.ctx, blockID)
 }
 
-func (s *InternalSigner) Address() *Address {
-	return (*Address)(s.Account.Address)
+func (s *InternalSigner) Address() *types.Address {
+	return (*types.Address)(s.Account.Address)
 }
 
-func (s *InternalSigner) ValidationContracts() *ValidationContracts {
+func (s *InternalSigner) ValidationContracts() *types.ValidationContracts {
 	return &s.validationContracts
+}
+
+func (s *InternalSigner) Nonce() (*felt.Felt, error) {
+	return s.Account.Nonce(s.ctx)
 }
