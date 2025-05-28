@@ -15,7 +15,7 @@ import (
 	"github.com/sourcegraph/conc"
 )
 
-const Version = "0.2.0"
+const Version = "0.2.2"
 
 type Validator struct {
 	provider *rpc.Provider

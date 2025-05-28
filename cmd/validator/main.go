@@ -133,6 +133,9 @@ func NewCommand() cobra.Command {
 			}
 		}()
 
+		// run upgrader tracker
+		go trackLatestRelease(globalCtx, &logger)
+
 		// Wait for signal or error
 		select {
 		case <-signalCh:

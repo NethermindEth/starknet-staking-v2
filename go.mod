@@ -3,6 +3,7 @@ module github.com/NethermindEth/starknet-staking-v2
 go 1.24.1
 
 require (
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/NethermindEth/juno v0.14.0
 	github.com/NethermindEth/starknet.go v0.11.1
 	github.com/cockroachdb/errors v1.11.3
@@ -29,7 +30,6 @@ require (
 	github.com/DataDog/zstd v1.5.6-0.20230824185856-869dae002e5e // indirect
 	github.com/Djarvur/go-err113 v0.0.0-20210108212216-aea10b59be24 // indirect
 	github.com/GaijinEntertainment/go-exhaustruct/v3 v3.3.1 // indirect
-	github.com/Masterminds/semver/v3 v3.3.1 // indirect
 	github.com/OpenPeeDeeP/depguard/v2 v2.2.1 // indirect
 	github.com/alecthomas/go-check-sumtype v0.3.1 // indirect
 	github.com/alexkohler/nakedret/v2 v2.0.5 // indirect
