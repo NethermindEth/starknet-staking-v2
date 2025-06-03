@@ -382,11 +382,11 @@ func TestFetchEpochInfo(t *testing.T) {
 		epochInfo, err := signer.FetchEpochInfo(mockSigner)
 
 		require.Equal(t, types.EpochInfo{
-			StakerAddress:             types.Address(*stakerAddress),
-			Stake:                     uint128.New(0, 1), // the 1st 64 bits are all 0 as it's MaxUint64 + 1
-			EpochLen:                  40,
-			EpochId:                   1516,
-			CurrentEpochStartingBlock: types.BlockNumber(639270),
+			StakerAddress: types.Address(*stakerAddress),
+			Stake:         uint128.New(0, 1), // the 1st 64 bits are all 0 as it's MaxUint64 + 1
+			EpochLen:      40,
+			EpochId:       1516,
+			StartingBlock: types.BlockNumber(639270),
 		}, epochInfo)
 
 		require.Nil(t, err)
@@ -693,11 +693,11 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		// Assert
 		expectedEpochInfo := types.EpochInfo{
-			StakerAddress:             types.Address(*stakerAddress),
-			Stake:                     uint128.From64(stake),
-			EpochLen:                  epochLen,
-			EpochId:                   epochID,
-			CurrentEpochStartingBlock: types.BlockNumber(epochStartingBlock),
+			StakerAddress: types.Address(*stakerAddress),
+			Stake:         uint128.From64(stake),
+			EpochLen:      epochLen,
+			EpochId:       epochID,
+			StartingBlock: types.BlockNumber(epochStartingBlock),
 		}
 		require.Equal(t, expectedEpochInfo, epochInfo)
 
@@ -720,12 +720,12 @@ func TestInvokeAttest(t *testing.T) {
 	mockSigner := mocks.NewMockSigner(mockCtrl)
 
 	t.Run("Return error", func(t *testing.T) {
-		blockHash := new(felt.Felt).SetUint64(123)
+		blockhash := new(felt.Felt).SetUint64(123)
 
 		expectedFnCall := []rpc.InvokeFunctionCall{{
 			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
 			FunctionName:    "attest",
-			CallData:        []*felt.Felt{blockHash},
+			CallData:        []*felt.Felt{blockhash},
 		}}
 
 		mockSigner.
@@ -739,8 +739,7 @@ func TestInvokeAttest(t *testing.T) {
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		attestRequired := types.PrepareAttest{BlockHash: types.BlockHash(*blockHash)}
-		invokeRes, err := signer.InvokeAttest(mockSigner, &attestRequired)
+		invokeRes, err := signer.InvokeAttest(mockSigner, (*types.BlockHash)(blockhash))
 
 		require.Nil(t, invokeRes)
 		require.EqualError(t, err, "some sending error")
@@ -770,8 +769,7 @@ func TestInvokeAttest(t *testing.T) {
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		attestRequired := types.PrepareAttest{BlockHash: types.BlockHash(*blockHash)}
-		invokeRes, err := signer.InvokeAttest(mockSigner, &attestRequired)
+		invokeRes, err := signer.InvokeAttest(mockSigner, (*types.BlockHash)(blockHash))
 
 		require.Equal(t, &response, invokeRes)
 		require.Nil(t, err)
@@ -785,11 +783,11 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	t.Run("Correct target block number computation - example 1", func(t *testing.T) {
 		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		epochInfo := types.EpochInfo{
-			StakerAddress:             types.Address(*stakerAddress),
-			Stake:                     uint128.From64(1000000000000000000),
-			EpochLen:                  40,
-			EpochId:                   1516,
-			CurrentEpochStartingBlock: types.BlockNumber(639270),
+			StakerAddress: types.Address(*stakerAddress),
+			Stake:         uint128.From64(1000000000000000000),
+			EpochLen:      40,
+			EpochId:       1516,
+			StartingBlock: types.BlockNumber(639270),
 		}
 		attestationWindow := uint64(16)
 
@@ -801,11 +799,11 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	t.Run("Correct target block number computation - example 2", func(t *testing.T) {
 		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		epochInfo := types.EpochInfo{
-			StakerAddress:             types.Address(*stakerAddress),
-			Stake:                     uint128.From64(1000000000000000000),
-			EpochLen:                  40,
-			EpochId:                   1517,
-			CurrentEpochStartingBlock: types.BlockNumber(639310),
+			StakerAddress: types.Address(*stakerAddress),
+			Stake:         uint128.From64(1000000000000000000),
+			EpochLen:      40,
+			EpochId:       1517,
+			StartingBlock: types.BlockNumber(639310),
 		}
 		attestationWindow := uint64(16)
 
@@ -816,11 +814,11 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	t.Run("Correct target block number computation - example 3", func(t *testing.T) {
 		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
 		epochInfo := types.EpochInfo{
-			StakerAddress:             types.Address(*stakerAddress),
-			Stake:                     uint128.From64(1000000000000000000),
-			EpochLen:                  40,
-			EpochId:                   1518,
-			CurrentEpochStartingBlock: types.BlockNumber(639350),
+			StakerAddress: types.Address(*stakerAddress),
+			Stake:         uint128.From64(1000000000000000000),
+			EpochLen:      40,
+			EpochId:       1518,
+			StartingBlock: types.BlockNumber(639350),
 		}
 		attestationWindow := uint64(16)
 

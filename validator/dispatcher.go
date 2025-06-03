@@ -31,9 +31,8 @@ const (
 )
 
 type AttestTransaction struct {
-	txn         rpc.BroadcastInvokeTxnV3
-	valid       bool
-	verifyNonce bool
+	txn   rpc.BroadcastInvokeTxnV3
+	valid bool
 }
 
 func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockHash) error {
@@ -80,6 +79,9 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 }
 
 func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
+	if !t.valid {
+		return errors.New("updating transaction nonce before building it")
+	}
 	newNonce, err := signer.Nonce()
 	if err != nil {
 		return err
@@ -161,7 +163,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 	defer wg.Wait()
 
 	// Block hash to attest to
-	var targetBlockHash types.BlockHash
+	var targetBlockHash *types.BlockHash
 
 	for {
 		select {
@@ -177,14 +179,15 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			}
 
 			targetBlockHash = attest.BlockHash
-			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+			logger.Debugf("preparing attest transaction for blockhash: %s", targetBlockHash.String())
+			err := d.CurrentAttest.Transaction.Build(signer, targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 				continue
 			}
 			logger.Debug("built attest transaction succesfully")
 
-		case _, ok := <-d.DoAttest:
+		case attest, ok := <-d.DoAttest:
 			if !ok {
 				return
 			}
@@ -198,7 +201,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 						tracer.RecordAttestationConfirmed()
 					}
 				}
-				// If status is status is already succesful or undefined, do nothing.
+				// If status is status is already succesful or ongoing, do nothing.
 				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
 					continue
 				}
@@ -208,8 +211,9 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
 			if !d.CurrentAttest.Transaction.Valid() {
+				targetBlockHash = attest.BlockHash
 				logger.Debug("building attest transaction in `do` stage (and not `prepare`)")
-				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+				err := d.CurrentAttest.Transaction.Build(signer, targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 					continue
@@ -217,7 +221,12 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			} else {
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
-				d.CurrentAttest.Transaction.UpdateNonce(signer)
+				logger.Debug("updating attest transaction nonce")
+				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
+				if err != nil {
+					logger.Errorf("failed to update transaction nonce: %s", err.Error())
+					continue
+				}
 			}
 
 			logger.Infow("Invoking attest", "block hash", targetBlockHash.String())
@@ -270,6 +279,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			}
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
+			targetBlockHash = nil
 		}
 	}
 }

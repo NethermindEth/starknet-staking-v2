@@ -60,11 +60,11 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 
 	stake := result[1].Bits()
 	return types.EpochInfo{
-		StakerAddress:             types.Address(*result[0]),
-		Stake:                     uint128.New(stake[0], stake[1]),
-		EpochLen:                  result[2].Uint64(),
-		EpochId:                   result[3].Uint64(),
-		CurrentEpochStartingBlock: types.BlockNumber(result[4].Uint64()),
+		StakerAddress: types.Address(*result[0]),
+		Stake:         uint128.New(stake[0], stake[1]),
+		EpochLen:      result[2].Uint64(),
+		EpochId:       result[3].Uint64(),
+		StartingBlock: types.BlockNumber(result[4].Uint64()),
 	}, nil
 }
 
@@ -120,8 +120,8 @@ func FetchEpochAndAttestInfo[S Signer](
 	logger.Debugw(
 		"Fetched epoch info",
 		"epoch ID", epochInfo.EpochId,
-		"epoch starting block", epochInfo.CurrentEpochStartingBlock,
-		"epoch ending block", epochInfo.CurrentEpochStartingBlock+
+		"epoch starting block", epochInfo.StartingBlock,
+		"epoch ending block", epochInfo.StartingBlock+
 			types.BlockNumber(epochInfo.EpochLen),
 	)
 
@@ -182,13 +182,13 @@ func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier floa
 	return txn, nil
 }
 
-func InvokeAttest[S Signer](signer S, attest *types.PrepareAttest) (
+func InvokeAttest[S Signer](signer S, blockhash *types.BlockHash) (
 	*rpc.AddInvokeTransactionResponse, error,
 ) {
 	calls := []rpc.InvokeFunctionCall{{
 		ContractAddress: signer.ValidationContracts().Attest.Felt(),
 		FunctionName:    "attest",
-		CallData:        []*felt.Felt{attest.BlockHash.Felt()},
+		CallData:        []*felt.Felt{blockhash.Felt()},
 	}}
 
 	return signer.BuildAndSendInvokeTxn(
@@ -209,5 +209,5 @@ func ComputeBlockNumberToAttestTo(epochInfo *types.EpochInfo, attestWindow uint6
 	blockOffset := new(big.Int)
 	blockOffset = blockOffset.Mod(hashBigInt, big.NewInt(int64(epochInfo.EpochLen-attestWindow)))
 
-	return types.BlockNumber(epochInfo.CurrentEpochStartingBlock.Uint64() + blockOffset.Uint64())
+	return types.BlockNumber(epochInfo.StartingBlock.Uint64() + blockOffset.Uint64())
 }

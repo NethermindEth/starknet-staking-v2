@@ -22,8 +22,8 @@ func TestDispatch(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	mockAccount := mocks.NewMockSigner(mockCtrl)
-	mockAccount.EXPECT().ValidationContracts().Return(
+	mockSigner := mocks.NewMockSigner(mockCtrl)
+	mockSigner.EXPECT().ValidationContracts().Return(
 		validator.SepoliaValidationContracts(t),
 	).AnyTimes()
 
@@ -46,7 +46,7 @@ func TestDispatch(t *testing.T) {
 		}}
 		addTxHash := utils.HexToFelt(t, "0x123")
 		mockedAddTxResp := rpc.AddInvokeTransactionResponse{Hash: addTxHash}
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			BuildAndSendInvokeTxn(
 				calls, constants.FEE_ESTIMATION_MULTIPLIER,
 			).
@@ -54,14 +54,14 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
+		wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
 
 		// Send event
-		blockHash := types.BlockHash(*blockHashFelt)
-		dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+		blockhash := (*types.BlockHash)(blockHashFelt)
+		dispatcher.DoAttest <- types.DoAttest{BlockHash: blockhash}
 
 		// Preparation for EndOfWindow event
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			GetTransactionStatus(addTxHash).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
@@ -71,7 +71,7 @@ func TestDispatch(t *testing.T) {
 		// Send EndOfWindow
 		dispatcher.EndOfWindow <- struct{}{}
 
-		close(dispatcher.PrepareAttest)
+		close(dispatcher.DoAttest)
 		// Wait for dispatch routine to finish
 		wg.Wait()
 
@@ -105,7 +105,7 @@ func TestDispatch(t *testing.T) {
 			addTxHash := utils.HexToFelt(t, "0x123")
 			mockedAddTxResp := rpc.AddInvokeTransactionResponse{Hash: addTxHash}
 			// We expect BuildAndSendInvokeTxn to be called only once (even though 3 events are sent)
-			mockAccount.EXPECT().
+			mockSigner.EXPECT().
 				BuildAndSendInvokeTxn(
 					calls, constants.FEE_ESTIMATION_MULTIPLIER,
 				).
@@ -114,16 +114,16 @@ func TestDispatch(t *testing.T) {
 
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
+			wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
 
 			// Send the same event x3
-			blockHash := types.BlockHash(*blockHashFelt)
-			dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+			blockHash := (*types.BlockHash)(blockHashFelt)
+			dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
 
 			// Preparation for 2nd event
 
 			// Invoke tx is RECEIVED
-			mockAccount.EXPECT().
+			mockSigner.EXPECT().
 				GetTransactionStatus(addTxHash).
 				Return(&rpc.TxnStatusResult{
 					FinalityStatus: rpc.TxnStatus_Received,
@@ -132,12 +132,12 @@ func TestDispatch(t *testing.T) {
 
 			// This 2nd event gets ignored when status is ongoing
 			// Proof: only 1 call to BuildAndSendInvokeTxn is asserted
-			dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+			dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
 
 			// Preparation for 3rd event
 
 			// Invoke tx ended up ACCEPTED
-			mockAccount.EXPECT().
+			mockSigner.EXPECT().
 				GetTransactionStatus(addTxHash).
 				Return(&rpc.TxnStatusResult{
 					FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
@@ -147,8 +147,8 @@ func TestDispatch(t *testing.T) {
 
 			// This 3rd event gets ignored also when status is successful
 			// Proof: only 1 call to BuildAndSendInvokeTxn is asserted
-			dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
-			close(dispatcher.PrepareAttest)
+			dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
+			close(dispatcher.DoAttest)
 
 			// Wait for dispatch routine (and consequently its spawned subroutines) to finish
 			wg.Wait()
@@ -183,7 +183,7 @@ func TestDispatch(t *testing.T) {
 		mockedAddTxResp1 := rpc.AddInvokeTransactionResponse{Hash: addTxHash1}
 
 		// We expect BuildAndSendInvokeTxn to be called only once (for the 2 first events)
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			BuildAndSendInvokeTxn(
 				calls, constants.FEE_ESTIMATION_MULTIPLIER,
 			).
@@ -192,16 +192,16 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
+		wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
 
 		// Send the same event x3
-		blockHash := types.BlockHash(*blockHashFelt)
-		dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+		blockHash := (*types.BlockHash)(blockHashFelt)
+		dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
 
 		// Preparation for 2nd event
 
 		// Invoke tx status is RECEIVED
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			GetTransactionStatus(addTxHash1).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus: rpc.TxnStatus_Received,
@@ -210,12 +210,12 @@ func TestDispatch(t *testing.T) {
 
 		// This 2nd event gets ignored when status is ongoing
 		// Proof: only 1 call to BuildAndSendInvokeTxn is asserted so far
-		dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+		dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
 
 		// Preparation for 3rd event
 
 		// Invoke tx fails, will make a new invoke tx
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			GetTransactionStatus(addTxHash1).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
@@ -228,7 +228,7 @@ func TestDispatch(t *testing.T) {
 		mockedAddTxResp2 := rpc.AddInvokeTransactionResponse{Hash: addTxHash2}
 
 		// We expect a 2nd call to BuildAndSendInvokeTxn
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			BuildAndSendInvokeTxn(
 				calls, constants.FEE_ESTIMATION_MULTIPLIER,
 			).
@@ -237,8 +237,8 @@ func TestDispatch(t *testing.T) {
 
 		// This 3rd event does not get ignored as invoke attestation has failed
 		// Proof: a 2nd call to BuildAndSendInvokeTxn is asserted
-		dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
-		close(dispatcher.PrepareAttest)
+		dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
+		close(dispatcher.DoAttest)
 
 		// Wait for dispatch routine (and consequently its spawned subroutines) to finish
 		wg.Wait()
@@ -271,7 +271,7 @@ func TestDispatch(t *testing.T) {
 			}}
 
 			// We expect BuildAndSendInvokeTxn to fail once
-			mockAccount.EXPECT().
+			mockSigner.EXPECT().
 				BuildAndSendInvokeTxn(
 					calls, constants.FEE_ESTIMATION_MULTIPLIER,
 				).
@@ -280,11 +280,11 @@ func TestDispatch(t *testing.T) {
 
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
+			wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
 
 			// Send the same event x2
-			blockHash := types.BlockHash(*blockHashFelt)
-			dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+			blockHash := (*types.BlockHash)(blockHashFelt)
+			dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
 
 			// Preparation for 2nd event
 
@@ -294,7 +294,7 @@ func TestDispatch(t *testing.T) {
 			// Next call to BuildAndSendInvokeTxn succeeds
 			addTxHash := utils.HexToFelt(t, "0x123")
 			mockedAddTxResp := rpc.AddInvokeTransactionResponse{Hash: addTxHash}
-			mockAccount.EXPECT().
+			mockSigner.EXPECT().
 				BuildAndSendInvokeTxn(
 					calls, constants.FEE_ESTIMATION_MULTIPLIER,
 				).
@@ -302,12 +302,12 @@ func TestDispatch(t *testing.T) {
 				Times(1)
 
 			// This 2nd event gets considered as previous one failed
-			dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+			dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
 
 			// Preparation for 3rd event
 
 			// We expect GetTransactionStatus to be called only once
-			mockAccount.EXPECT().
+			mockSigner.EXPECT().
 				GetTransactionStatus(addTxHash).
 				Return(&rpc.TxnStatusResult{
 					FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
@@ -315,9 +315,9 @@ func TestDispatch(t *testing.T) {
 				}, nil).
 				Times(1)
 
-			dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHash}
+			dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHash}
 
-			close(dispatcher.PrepareAttest)
+			close(dispatcher.DoAttest)
 			// Wait for dispatch routine (and consequently its spawned subroutines) to finish
 			wg.Wait()
 
@@ -352,13 +352,13 @@ func TestDispatch(t *testing.T) {
 		mockedAddTxRespA := rpc.AddInvokeTransactionResponse{Hash: addTxHashA}
 
 		// We expect BuildAndSendInvokeTxn to be called once for event A
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			BuildAndSendInvokeTxn(callsA, constants.FEE_ESTIMATION_MULTIPLIER).
 			Return(&mockedAddTxRespA, nil).
 			Times(1)
 
 		// We expect GetTransactionStatus to be called for event A (triggered by EndOfWindow)
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			GetTransactionStatus(addTxHashA).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
@@ -377,7 +377,7 @@ func TestDispatch(t *testing.T) {
 		mockedAddTxRespB := rpc.AddInvokeTransactionResponse{Hash: addTxHashB}
 
 		// We expect BuildAndSendInvokeTxn to be called once for event B
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			BuildAndSendInvokeTxn(
 				callsB, constants.FEE_ESTIMATION_MULTIPLIER,
 			).
@@ -385,7 +385,7 @@ func TestDispatch(t *testing.T) {
 			Times(1)
 
 		// We expect GetTransactionStatus to be called once for event B (triggered by EndOfWindow)
-		mockAccount.EXPECT().
+		mockSigner.EXPECT().
 			GetTransactionStatus(addTxHashB).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus: rpc.TxnStatus_Rejected,
@@ -394,23 +394,23 @@ func TestDispatch(t *testing.T) {
 
 		// Start routine
 		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockAccount, logger, tracer) })
+		wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
 
 		// Send event A
-		blockHashA := types.BlockHash(*blockHashFeltA)
-		dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHashA}
+		blockHashA := (*types.BlockHash)(blockHashFeltA)
+		dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHashA}
 
 		// Send EndOfWindow event for event A
 		dispatcher.EndOfWindow <- struct{}{}
 
 		// Send event B
-		blockHashB := types.BlockHash(*blockHashFeltB)
-		dispatcher.PrepareAttest <- types.PrepareAttest{BlockHash: blockHashB}
+		blockHashB := (*types.BlockHash)(blockHashFeltB)
+		dispatcher.DoAttest <- types.DoAttest{BlockHash: blockHashB}
 
 		// Send EndOfWindow event for event B
 		dispatcher.EndOfWindow <- struct{}{}
 
-		close(dispatcher.PrepareAttest)
+		close(dispatcher.DoAttest)
 		// Wait for dispatch routine to finish executing
 		wg.Wait()
 

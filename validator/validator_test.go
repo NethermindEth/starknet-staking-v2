@@ -138,11 +138,11 @@ func TestProcessBlockHeaders(t *testing.T) {
 		headersFeed := make(chan *rpc.BlockHeader)
 
 		epoch := types.EpochInfo{
-			StakerAddress:             types.AddressFromString("0x123"),
-			Stake:                     uint128.New(1000000000000000000, 0),
-			EpochId:                   1516,
-			CurrentEpochStartingBlock: 639270,
-			EpochLen:                  40,
+			StakerAddress: types.AddressFromString("0x123"),
+			Stake:         uint128.New(1000000000000000000, 0),
+			EpochId:       1516,
+			StartingBlock: 639270,
+			EpochLen:      40,
 		}
 		attestWindow := uint64(16)
 		mockSuccessfullyFetchedEpochAndAttestInfo(
@@ -161,7 +161,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		)
 		blockHeaders := mockHeaderFeed(
 			t,
-			epoch.CurrentEpochStartingBlock,
+			epoch.StartingBlock,
 			expectedTargetBlock,
 			&targetBlockHash,
 			epoch.EpochLen,
@@ -204,7 +204,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		wgFeed.Wait()
 
 		// Will terminate the registerReceivedEvents routine
-		close(dispatcher.PrepareAttest)
+		close(dispatcher.DoAttest)
 		wgDispatcher.Wait()
 
 		// Assert
@@ -229,22 +229,22 @@ func TestProcessBlockHeaders(t *testing.T) {
 		attestWindow := uint64(16)
 
 		epoch1 := types.EpochInfo{
-			StakerAddress:             stakerAddress,
-			Stake:                     stake,
-			EpochId:                   1516,
-			CurrentEpochStartingBlock: 639270,
-			EpochLen:                  epochLength,
+			StakerAddress: stakerAddress,
+			Stake:         stake,
+			EpochId:       1516,
+			StartingBlock: 639270,
+			EpochLen:      epochLength,
 		}
 		// calculated by fetch epoch & attest info call
 		expectedTargetBlock1 := types.BlockNumber(639276)
 		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockSigner, &epoch1, attestWindow, 1)
 
 		epoch2 := types.EpochInfo{
-			StakerAddress:             stakerAddress,
-			Stake:                     stake,
-			EpochId:                   1517,
-			CurrentEpochStartingBlock: 639310,
-			EpochLen:                  epochLength,
+			StakerAddress: stakerAddress,
+			Stake:         stake,
+			EpochId:       1517,
+			StartingBlock: 639310,
+			EpochLen:      epochLength,
 		}
 		// calculated by fetch epoch & attest info call
 		expectedTargetBlock2 := types.BlockNumber(639315)
@@ -255,7 +255,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		)
 		blockHeaders1 := mockHeaderFeed(
 			t,
-			epoch1.CurrentEpochStartingBlock,
+			epoch1.StartingBlock,
 			expectedTargetBlock1,
 			&targetBlockHashEpoch1,
 			epoch1.EpochLen,
@@ -266,7 +266,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 		)
 		blockHeaders2 := mockHeaderFeed(
 			t,
-			epoch2.CurrentEpochStartingBlock,
+			epoch2.StartingBlock,
 			expectedTargetBlock2,
 			&targetBlockHashEpoch2,
 			epoch2.EpochLen,
@@ -288,8 +288,16 @@ func TestProcessBlockHeaders(t *testing.T) {
 		})
 
 		// Events receiver routine
+		receivedAttestEvents := make(map[types.DoAttest]uint)
 		receivedEndOfWindowEvents := uint8(0)
 		wgDispatcher := conc.NewWaitGroup()
+		wgDispatcher.Go(
+			func() {
+				registerReceivedEvents(
+					t, &dispatcher, receivedAttestEvents, &receivedEndOfWindowEvents,
+				)
+			},
+		)
 		metricsServer := mockMetricsServer()
 		err := validator.ProcessBlockHeaders(
 			headersFeed,
@@ -306,17 +314,17 @@ func TestProcessBlockHeaders(t *testing.T) {
 		wgFeed.Wait()
 
 		// Will terminate the registerReceivedEvents routine
-		close(dispatcher.PrepareAttest)
+		close(dispatcher.DoAttest)
 		wgDispatcher.Wait()
 
 		// Assert
-		require.Equal(t, 2, len(receivedAttestEvents))
+		require.Len(t, receivedAttestEvents, 2)
 
-		countEpoch1, exists := receivedAttestEvents[types.AttestRequired{BlockHash: targetBlockHashEpoch1}]
+		countEpoch1, exists := receivedAttestEvents[types.DoAttest{BlockHash: &targetBlockHashEpoch1}]
 		require.True(t, exists)
 		require.Equal(t, uint(16-constants.MIN_ATTESTATION_WINDOW+1), countEpoch1)
 
-		countEpoch2, exists := receivedAttestEvents[types.AttestRequired{BlockHash: targetBlockHashEpoch2}]
+		countEpoch2, exists := receivedAttestEvents[types.DoAttest{BlockHash: &targetBlockHashEpoch2}]
 		require.True(t, exists)
 		require.Equal(t, uint(16-constants.MIN_ATTESTATION_WINDOW+1), countEpoch2)
 
@@ -338,22 +346,22 @@ func TestProcessBlockHeaders(t *testing.T) {
 			attestWindow := uint64(16)
 
 			epoch1 := types.EpochInfo{
-				StakerAddress:             stakerAddress,
-				Stake:                     stake,
-				EpochId:                   1516,
-				CurrentEpochStartingBlock: 639270,
-				EpochLen:                  epochLength,
+				StakerAddress: stakerAddress,
+				Stake:         stake,
+				EpochId:       1516,
+				StartingBlock: 639270,
+				EpochLen:      epochLength,
 			}
 			// calculated by fetch epoch & attest info call
-			expectedTargetBlock1 := validator.BlockNumber(639291)
+			expectedTargetBlock1 := types.BlockNumber(639291)
 			mockSuccessfullyFetchedEpochAndAttestInfo(t, mockSigner, &epoch1, attestWindow, 1)
 
 			epoch2 := types.EpochInfo{
-				StakerAddress:             stakerAddress,
-				Stake:                     stake,
-				EpochId:                   1517,
-				CurrentEpochStartingBlock: 639311, // Wrong new epoch start (1 block after expected one)
-				EpochLen:                  epochLength,
+				StakerAddress: stakerAddress,
+				Stake:         stake,
+				EpochId:       1517,
+				StartingBlock: 639311, // Wrong new epoch start (1 block after expected one)
+				EpochLen:      epochLength,
 			}
 			// calculated by fetch epoch & attest info call
 			expectedTargetBlock2 := types.BlockNumber(639316)
@@ -362,17 +370,17 @@ func TestProcessBlockHeaders(t *testing.T) {
 				t, mockSigner, &epoch2, attestWindow, constants.DEFAULT_MAX_RETRIES+1,
 			)
 
-			targetBlockHashEpoch1 := types.BlockHash(
-				*utils.HexToFelt(
+			targetBlockHashEpoch1 := (*types.BlockHash)(
+				utils.HexToFelt(
 					t,
 					"0x6d8dc0a8bdf98854b6bc146cb7cab6cddda85619c6ae2948ee65da25815e045",
 				),
 			)
 			blockHeaders1 := mockHeaderFeed(
 				t,
-				epoch1.CurrentEpochStartingBlock,
+				epoch1.StartingBlock,
 				expectedTargetBlock1,
-				&targetBlockHashEpoch1,
+				targetBlockHashEpoch1,
 				epoch1.EpochLen,
 			)
 
@@ -385,7 +393,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 			// Have the feeder routine feed the next epoch's correct starting block
 			blockHeaders2 := mockHeaderFeed(
 				t,
-				epoch2.CurrentEpochStartingBlock-1,
+				epoch2.StartingBlock-1,
 				expectedTargetBlock2,
 				&targetBlockHashEpoch2,
 				epoch2.EpochLen,
@@ -395,7 +403,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 			targetBlockUint64 := expectedTargetBlock1.Uint64()
 			mockSigner.
 				EXPECT().
-				BlockWithTxHashes(context.Background(), rpc.BlockID{Number: &targetBlockUint64}).
+				BlockWithTxHashes(rpc.BlockID{Number: &targetBlockUint64}).
 				Return(nil, errors.New("Block not found")) // Let's say block does not exist yet
 
 			// Headers feeder routine
@@ -407,7 +415,7 @@ func TestProcessBlockHeaders(t *testing.T) {
 			})
 
 			// Events receiver routine
-			receivedAttestEvents := make(map[types.AttestRequired]uint)
+			receivedAttestEvents := make(map[types.DoAttest]uint)
 			receivedEndOfWindowEvents := uint8(0)
 			wgDispatcher := conc.NewWaitGroup()
 			wgDispatcher.Go(
@@ -438,13 +446,13 @@ func TestProcessBlockHeaders(t *testing.T) {
 			require.Contains(t, panicRecovered.Value, "send on closed channel")
 
 			// Will terminate the registerReceivedEvents routine
-			close(dispatcher.PrepareAttest)
+			close(dispatcher.DoAttest)
 			wgDispatcher.Wait()
 
 			// Assert
 			require.Equal(t, 1, len(receivedAttestEvents))
 
-			countEpoch1, exists := receivedAttestEvents[types.AttestRequired{BlockHash: targetBlockHashEpoch1}]
+			countEpoch1, exists := receivedAttestEvents[types.DoAttest{BlockHash: targetBlockHashEpoch1}]
 			require.True(t, exists)
 			require.Equal(t, uint(attestWindow-constants.MIN_ATTESTATION_WINDOW+1), countEpoch1)
 
@@ -469,14 +477,14 @@ func sendHeaders(t *testing.T, headersFeed chan *rpc.BlockHeader, blockHeaders [
 func registerReceivedEvents[S signerP.Signer](
 	t *testing.T,
 	dispatcher *validator.EventDispatcher[S],
-	receivedAttestRequired map[types.AttestRequired]uint,
+	receivedAttestRequired map[types.DoAttest]uint,
 	receivedEndOfWindowCount *uint8,
 ) {
 	t.Helper()
 
 	for {
 		select {
-		case attestRequired, isOpen := <-dispatcher.PrepareAttest:
+		case attestRequired, isOpen := <-dispatcher.DoAttest:
 			if !isOpen {
 				return
 			}
@@ -522,7 +530,7 @@ func mockSuccessfullyFetchedEpochAndAttestInfo(
 				new(felt.Felt).SetBigInt(epoch.Stake.Big()),
 				new(felt.Felt).SetUint64(epoch.EpochLen),
 				new(felt.Felt).SetUint64(epoch.EpochId),
-				new(felt.Felt).SetUint64(epoch.CurrentEpochStartingBlock.Uint64()),
+				new(felt.Felt).SetUint64(epoch.StartingBlock.Uint64()),
 			},
 			nil,
 		).
@@ -553,7 +561,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 		targetBlockNumber := uint64(1)
 		mockAccount.
 			EXPECT().
-			BlockWithTxHashes(context.Background(), rpc.BlockID{Number: &targetBlockNumber}).
+			BlockWithTxHashes(rpc.BlockID{Number: &targetBlockNumber}).
 			Return(nil, errors.New("Block not found"))
 
 		attestInfo := types.AttestInfo{
@@ -572,7 +580,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 			Return(&rpc.PendingBlockTxHashes{}, nil)
 
 		attestInfo := types.AttestInfo{
-			TargetBlock: validator.BlockNumber(targetBlockNumber),
+			TargetBlock: types.BlockNumber(targetBlockNumber),
 		}
 		validator.SetTargetBlockHashIfExists(mockAccount, logger, &attestInfo)
 
@@ -589,7 +597,7 @@ func TestSetTargetBlockHashIfExists(t *testing.T) {
 		targetBlockNumber := uint64(1)
 		mockAccount.
 			EXPECT().
-			BlockWithTxHashes(context.Background(), rpc.BlockID{Number: &targetBlockNumber}).
+			BlockWithTxHashes(rpc.BlockID{Number: &targetBlockNumber}).
 			Return(&blockWithTxs, nil)
 
 		targetBlockHash := types.BlockHash(*targetBlockHashFelt)
@@ -671,20 +679,20 @@ func TestFetchEpochAndAttestInfoWithRetry(t *testing.T) {
 			var epochLength uint64 = 40
 
 			epoch1 := types.EpochInfo{
-				StakerAddress:             stakerAddress,
-				Stake:                     uint128.New(stake, 0),
-				EpochLen:                  epochLength,
-				EpochId:                   1515,
-				CurrentEpochStartingBlock: 639230,
+				StakerAddress: stakerAddress,
+				Stake:         uint128.New(stake, 0),
+				EpochLen:      epochLength,
+				EpochId:       1515,
+				StartingBlock: 639230,
 			}
 
 			// Mock FetchEpochAndAttestInfo: returns a wrong next epoch (10 times)
 			epoch2 := types.EpochInfo{
-				StakerAddress:             stakerAddress,
-				Stake:                     uint128.New(stake, 0),
-				EpochLen:                  epochLength,
-				EpochId:                   1516,
-				CurrentEpochStartingBlock: 639271, // wrong new epoch start (1 block after correct block)
+				StakerAddress: stakerAddress,
+				Stake:         uint128.New(stake, 0),
+				EpochLen:      epochLength,
+				EpochId:       1516,
+				StartingBlock: 639271, // wrong new epoch start (1 block after correct block)
 			}
 			var attestWindow uint64 = 16
 			mockSuccessfullyFetchedEpochAndAttestInfo(
@@ -736,20 +744,20 @@ func TestFetchEpochAndAttestInfoWithRetry(t *testing.T) {
 		var epochLength uint64 = 40
 
 		epoch1 := types.EpochInfo{
-			StakerAddress:             stakerAddress,
-			Stake:                     uint128.New(stake, 0),
-			EpochLen:                  epochLength,
-			EpochId:                   1515,
-			CurrentEpochStartingBlock: 639230,
+			StakerAddress: stakerAddress,
+			Stake:         uint128.New(stake, 0),
+			EpochLen:      epochLength,
+			EpochId:       1515,
+			StartingBlock: 639230,
 		}
 
 		// Mock 2nd FetchEpochAndAttestInfo: returns a correct next epoch
-		epoch2 := validator.EpochInfo{
-			StakerAddress:             stakerAddress,
-			Stake:                     uint128.New(stake, 0),
-			EpochLen:                  epochLength,
-			EpochId:                   1516,
-			CurrentEpochStartingBlock: 639270,
+		epoch2 := types.EpochInfo{
+			StakerAddress: stakerAddress,
+			Stake:         uint128.New(stake, 0),
+			EpochLen:      epochLength,
+			EpochId:       1516,
+			StartingBlock: 639270,
 		}
 		attestWindow := uint64(16)
 		mockSuccessfullyFetchedEpochAndAttestInfo(t, mockSigner, &epoch2, attestWindow, 1)

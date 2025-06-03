@@ -10,11 +10,13 @@ import (
 
 // Represents an event for the dispatcher to prepare for the next attest
 type PrepareAttest struct {
-	BlockHash BlockHash
+	BlockHash *BlockHash
 }
 
 // Represents an event for the dispatcher to invoke an attest transaction
-type DoAttest struct{}
+type DoAttest struct {
+	BlockHash *BlockHash
+}
 
 // Used by the validator to keep track of the starknet attestation window
 type AttestInfo struct {
@@ -26,11 +28,11 @@ type AttestInfo struct {
 
 // Used by the validator to keep track of the current epoch info
 type EpochInfo struct {
-	StakerAddress             Address         `json:"staker_address"`
-	Stake                     uint128.Uint128 `json:"stake"`
-	EpochLen                  uint64          `json:"epoch_len"`
-	EpochId                   uint64          `json:"epoch_id"`
-	CurrentEpochStartingBlock BlockNumber     `json:"current_epoch_starting_block"`
+	StakerAddress Address         `json:"staker_address"`
+	Stake         uint128.Uint128 `json:"stake"`
+	EpochLen      uint64          `json:"epoch_len"`
+	EpochId       uint64          `json:"epoch_id"`
+	StartingBlock BlockNumber     `json:"current_epoch_starting_block"`
 }
 
 func (e *EpochInfo) String() string {

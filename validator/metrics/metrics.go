@@ -160,7 +160,7 @@ func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64
 	m.currentEpochLength.WithLabelValues(m.network).Set(float64(epochInfo.EpochLen))
 	m.currentEpochStartingBlockNumber.
 		WithLabelValues(m.network).
-		Set(float64(epochInfo.CurrentEpochStartingBlock.Uint64()))
+		Set(float64(epochInfo.StartingBlock.Uint64()))
 	m.currentEpochAssignedBlockNumber.WithLabelValues(m.network).Set(float64(targetBlock))
 }
 

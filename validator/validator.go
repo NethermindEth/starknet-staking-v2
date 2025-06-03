@@ -119,7 +119,6 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		close(headersFeed)
 	}
 
-	// copy to reset it after a success
 	localRetries := maxRetries
 	for {
 		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(
@@ -174,19 +173,16 @@ func ProcessBlockHeaders[Account signerP.Signer](
 		return err
 	}
 
-	// Update initial epoch info metrics
+	SetTargetBlockHashIfExists(account, logger, &attestInfo)
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
-	SetTargetBlockHashIfExists(account, logger, &attestInfo)
+	for block := range headersFeed {
+		logger.Infof("Block %d received", block.Number)
+		logger.Debugw("Block header information", "block header", block)
+		tracer.UpdateLatestBlockNumber(block.Number)
 
-	for blockHeader := range headersFeed {
-		logger.Infof("Block %d received", blockHeader.Number)
-		logger.Debugw("Block header information", "block header", blockHeader)
-
-		// Update latest block number metric
-		tracer.UpdateLatestBlockNumber(blockHeader.Number)
-
-		if blockHeader.Number == epochInfo.CurrentEpochStartingBlock.Uint64()+epochInfo.EpochLen {
+		// todo(rdr): look for some nice way of refactoring this if/else blocks
+		if block.Number >= uint64(epochInfo.StartingBlock)+epochInfo.EpochLen {
 			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
 			prevEpochInfo := epochInfo
 			epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
@@ -200,38 +196,37 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			if err != nil {
 				return err
 			}
-
 			// Update epoch info metrics
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
-		}
-
-		if types.BlockNumber(blockHeader.Number) == attestInfo.TargetBlock {
-			attestInfo.TargetBlockHash = types.BlockHash(*blockHeader.Hash)
+		} else if uint64(attestInfo.TargetBlock) == block.Number {
+			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Infow(
 				"Target block reached",
-				"block number", blockHeader.Number,
-				"block hash", blockHeader.Hash,
+				"block number", block.Number,
+				"block hash", block.Hash,
 			)
 			logger.Infow("Window to attest to",
 				"start", attestInfo.WindowStart,
 				"end", attestInfo.WindowEnd,
 			)
 			dispatcher.PrepareAttest <- types.PrepareAttest{
-				BlockHash: attestInfo.TargetBlockHash,
+				BlockHash: &attestInfo.TargetBlockHash,
 			}
 		}
 
-		if types.BlockNumber(blockHeader.Number) >= attestInfo.TargetBlock &&
+		if types.BlockNumber(block.Number) >= attestInfo.TargetBlock &&
 			// From [target block, window start), make sure to prepare the transaction
-			types.BlockNumber(blockHeader.Number) < attestInfo.WindowStart-1 {
+			types.BlockNumber(block.Number) < attestInfo.WindowStart-1 {
 			dispatcher.PrepareAttest <- types.PrepareAttest{
-				BlockHash: attestInfo.TargetBlockHash,
+				BlockHash: &attestInfo.TargetBlockHash,
 			}
-		} else if types.BlockNumber(blockHeader.Number) >= attestInfo.WindowStart-1 &&
+		} else if types.BlockNumber(block.Number) >= attestInfo.WindowStart-1 &&
 			// from [window start, window end), make sure the attestation is done
-			types.BlockNumber(blockHeader.Number) < attestInfo.WindowEnd {
-			dispatcher.DoAttest <- types.DoAttest{}
-		} else if types.BlockNumber(blockHeader.Number) == attestInfo.WindowEnd {
+			types.BlockNumber(block.Number) < attestInfo.WindowEnd {
+			dispatcher.DoAttest <- types.DoAttest{
+				BlockHash: &attestInfo.TargetBlockHash,
+			}
+		} else if types.BlockNumber(block.Number) == attestInfo.WindowEnd {
 			dispatcher.EndOfWindow <- struct{}{}
 		}
 	}
@@ -314,5 +309,5 @@ func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
 
 func CorrectEpochSwitch(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool {
 	return newEpoch.EpochId == prevEpoch.EpochId+1 &&
-		newEpoch.CurrentEpochStartingBlock.Uint64() == prevEpoch.CurrentEpochStartingBlock.Uint64()+prevEpoch.EpochLen
+		newEpoch.StartingBlock.Uint64() == prevEpoch.StartingBlock.Uint64()+prevEpoch.EpochLen
 }
