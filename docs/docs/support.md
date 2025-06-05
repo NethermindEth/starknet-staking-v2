@@ -8,4 +8,4 @@ We are the team behind the Juno client. Please don't hesitate to contact us if y
 
 - [Telegram](https://t.me/StarknetJuno)
 - [Discord](https://discord.com/invite/TcHbSZ9ATd)
-- [X(Formerly Twitter)](https://x.com/NethermindStark) 
+- [X(Formerly Twitter)](https://x.com/NethermindStark)
