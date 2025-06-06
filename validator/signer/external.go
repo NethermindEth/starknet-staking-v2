@@ -60,84 +60,83 @@ func NewExternalSigner(
 	}, nil
 }
 
-func (s *ExternalSigner) BuildAndSendInvokeTxn(
-	functionCalls []rpc.InvokeFunctionCall,
-	multiplier float64,
-) (*rpc.AddInvokeTransactionResponse, error) {
+func (s *ExternalSigner) BuildAttestTransaction(
+	blockhash *types.BlockHash,
+) (rpc.BroadcastInvokeTxnV3, error) {
+	invokeCall := []rpc.InvokeFunctionCall{{
+		ContractAddress: s.ValidationContracts().Attest.Felt(),
+		FunctionName:    "attest",
+		CallData:        []*felt.Felt{blockhash.Felt()},
+	}}
+	call := utils.InvokeFuncCallsToFunctionCalls(invokeCall)
+	calldata := account.FmtCallDataCairo2(call)
+	defaultResources := makeDefaultResources()
+
 	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
 	if err != nil {
-		return nil, err
+		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	fnCallData := utils.InvokeFuncCallsToFunctionCalls(functionCalls)
-	formattedCallData := account.FmtCallDataCairo2(fnCallData)
-
-	defaultResources := makeResourceBoundsMapWithZeroValues()
-	// Building and signing the txn, as it needs a signature to estimate the fee
-	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(
-		s.Address().Felt(),
-		nonce,
-		formattedCallData,
-		&defaultResources,
-	)
-
-	if s.braavos {
-		// Braavos require the use of the query bit txn version for fee estimation.
-		// The query bit txn version is used for custom validation logic from wallets/accounts when estimating fee/simulating txns
-		broadcastInvokeTxnV3.Version = rpc.TransactionV3WithQueryBit
+	// Taken from starknet.go `utils.BuildInvokeTxn`
+	attestTransaction := rpc.BroadcastInvokeTxnV3{
+		Type:                  rpc.TransactionType_Invoke,
+		SenderAddress:         s.Address().Felt(),
+		Calldata:              calldata,
+		Version:               rpc.TransactionV3,
+		Signature:             []*felt.Felt{},
+		Nonce:                 nonce,
+		ResourceBounds:        &defaultResources,
+		Tip:                   "0x0",
+		PayMasterData:         []*felt.Felt{},
+		AccountDeploymentData: []*felt.Felt{},
+		NonceDataMode:         rpc.DAModeL1,
+		FeeMode:               rpc.DAModeL1,
 	}
+	return attestTransaction, nil
 
-	if err := SignInvokeTx(broadcastInvokeTxnV3, &s.chainId, s.url); err != nil {
-		return nil, err
-	}
-
-	// Estimate txn fee
-	estimateFee, err := s.Provider.EstimateFee(
-		s.ctx,
-		[]rpc.BroadcastTxn{broadcastInvokeTxnV3},
-		[]rpc.SimulationFlag{},
-		rpc.WithBlockTag("pending"),
-	)
-	if err != nil {
-		return nil, err
-	}
-	txnFee := estimateFee[0]
-	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
-
-	// assuring the signed txn version will be rpc.TransactionV3, since queryBit txn version is only used for estimation/simulation
-	broadcastInvokeTxnV3.Version = rpc.TransactionV3
-
-	// Signing the txn again with the estimated fee,
-	// as the fee value is used in the txn hash calculation
-	if err := SignInvokeTx(broadcastInvokeTxnV3, &s.chainId, s.url); err != nil {
-		return nil, err
-	}
-
-	return s.Provider.AddInvokeTransaction(s.ctx, broadcastInvokeTxnV3)
-}
-
-func (s *ExternalSigner) BuildAttestTransaction(
-	attest *types.BlockHash,
-) (rpc.BroadcastInvokeTxnV3, error) {
-	panic("not implemented")
 }
 
 func (s *ExternalSigner) EstimateFee(
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (rpc.FeeEstimation, error) {
-	panic("not implemented")
+	if s.braavos {
+		// Braavos require the use of the query bit txn version for fee estimation.
+		// The query bit txn version is used for custom validation logic from wallets/accounts
+		// when estimating fee/simulating txns
+		txn.Version = rpc.TransactionV3WithQueryBit
+		_, err := s.SignTransaction(txn)
+		if err != nil {
+			return rpc.FeeEstimation{}, nil
+		}
+	}
+
+	estimateFee, err := s.Provider.EstimateFee(
+		s.ctx,
+		[]rpc.BroadcastTxn{txn},
+		[]rpc.SimulationFlag{},
+		rpc.WithBlockTag("pending"),
+	)
+	if s.braavos {
+		// Revert the transaction version back.
+		// No need to re-sign
+		txn.Version = rpc.TransactionV3
+	}
+	if err != nil {
+		return rpc.FeeEstimation{}, err
+	}
+	return estimateFee[0], nil
 }
 
 func (s *ExternalSigner) SignTransaction(
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (*rpc.BroadcastInvokeTxnV3, error) {
-	panic("not implemented")
+	return txn, SignInvokeTx(txn, &s.chainId, s.url)
 }
 
 func (s *ExternalSigner) InvokeTransaction(
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (*rpc.AddInvokeTransactionResponse, error) {
-	panic("not implemented")
+	return s.Provider.AddInvokeTransaction(s.ctx, txn)
 }
 
 func (s *ExternalSigner) GetTransactionStatus(transactionHash *felt.Felt) (
@@ -213,7 +212,7 @@ func HashAndSignTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, ex
 	return signResp, json.Unmarshal(body, &signResp)
 }
 
-func makeResourceBoundsMapWithZeroValues() rpc.ResourceBoundsMapping {
+func makeDefaultResources() rpc.ResourceBoundsMapping {
 	return rpc.ResourceBoundsMapping{
 		L1Gas: rpc.ResourceBounds{
 			MaxAmount:       "0x0",
