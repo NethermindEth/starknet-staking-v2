@@ -122,61 +122,61 @@ func TestNewInternalSigner(t *testing.T) {
 	})
 }
 
-func createMockRPCServer(
-	t *testing.T, addInvoke func(w http.ResponseWriter, r *http.Request),
-) *httptest.Server {
-	t.Helper()
-
-	mockRpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Read and decode JSON body
-		bodyBytes, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		defer func() { require.NoError(t, r.Body.Close()) }()
-
-		var req validator.Method
-		err = json.Unmarshal(bodyBytes, &req)
-		require.NoError(t, err)
-
-		switch req.Name {
-		case "starknet_chainId":
-			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x1", "id": 1}`))
-			require.NoError(t, err)
-		case "starknet_getNonce":
-			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x2", "id": 1}`))
-			require.NoError(t, err)
-		case "starknet_estimateFee":
-			mockFeeEstimate := []rpc.FeeEstimation{{
-				L1GasConsumed:     utils.HexToFelt(t, "0x123"),
-				L1GasPrice:        utils.HexToFelt(t, "0x456"),
-				L2GasConsumed:     utils.HexToFelt(t, "0x123"),
-				L2GasPrice:        utils.HexToFelt(t, "0x456"),
-				L1DataGasConsumed: utils.HexToFelt(t, "0x123"),
-				L1DataGasPrice:    utils.HexToFelt(t, "0x456"),
-				OverallFee:        utils.HexToFelt(t, "0x123"),
-				FeeUnit:           rpc.UnitStrk,
-			}}
-			feeEstBytes, err := json.Marshal(mockFeeEstimate)
-			require.NoError(t, err)
-			w.WriteHeader(http.StatusOK)
-			_, err = fmt.Fprintf(
-				w,
-				`{"jsonrpc": "2.0", "result": %s, "id": 1}`,
-				string(feeEstBytes),
-			)
-			require.NoError(t, err)
-		case "starknet_addInvokeTransaction":
-			addInvoke(w, r)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, err := w.Write([]byte(`Should not get here`))
-			require.NoError(t, err)
-		}
-	}))
-
-	return mockRpc
-}
+// func createMockRPCServer(
+// 	t *testing.T, addInvoke func(w http.ResponseWriter, r *http.Request),
+// ) *httptest.Server {
+// 	t.Helper()
+//
+// 	mockRpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		// Read and decode JSON body
+// 		bodyBytes, err := io.ReadAll(r.Body)
+// 		require.NoError(t, err)
+// 		defer func() { require.NoError(t, r.Body.Close()) }()
+//
+// 		var req validator.Method
+// 		err = json.Unmarshal(bodyBytes, &req)
+// 		require.NoError(t, err)
+//
+// 		switch req.Name {
+// 		case "starknet_chainId":
+// 			w.WriteHeader(http.StatusOK)
+// 			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x1", "id": 1}`))
+// 			require.NoError(t, err)
+// 		case "starknet_getNonce":
+// 			w.WriteHeader(http.StatusOK)
+// 			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "0x2", "id": 1}`))
+// 			require.NoError(t, err)
+// 		case "starknet_estimateFee":
+// 			mockFeeEstimate := []rpc.FeeEstimation{{
+// 				L1GasConsumed:     utils.HexToFelt(t, "0x123"),
+// 				L1GasPrice:        utils.HexToFelt(t, "0x456"),
+// 				L2GasConsumed:     utils.HexToFelt(t, "0x123"),
+// 				L2GasPrice:        utils.HexToFelt(t, "0x456"),
+// 				L1DataGasConsumed: utils.HexToFelt(t, "0x123"),
+// 				L1DataGasPrice:    utils.HexToFelt(t, "0x456"),
+// 				OverallFee:        utils.HexToFelt(t, "0x123"),
+// 				FeeUnit:           rpc.UnitStrk,
+// 			}}
+// 			feeEstBytes, err := json.Marshal(mockFeeEstimate)
+// 			require.NoError(t, err)
+// 			w.WriteHeader(http.StatusOK)
+// 			_, err = fmt.Fprintf(
+// 				w,
+// 				`{"jsonrpc": "2.0", "result": %s, "id": 1}`,
+// 				string(feeEstBytes),
+// 			)
+// 			require.NoError(t, err)
+// 		case "starknet_addInvokeTransaction":
+// 			addInvoke(w, r)
+// 		default:
+// 			w.WriteHeader(http.StatusMethodNotAllowed)
+// 			_, err := w.Write([]byte(`Should not get here`))
+// 			require.NoError(t, err)
+// 		}
+// 	}))
+//
+// 	return mockRpc
+// }
 
 func TestSignInvokeTx(t *testing.T) {
 	t.Run("Error signing tx", func(t *testing.T) {
