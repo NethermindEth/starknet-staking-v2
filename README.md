@@ -64,15 +64,6 @@ A full configuration file looks like this:
 
 Note that because both `url` and `privateKey` fields are set in the previous example the tool will prioritize remote signing through the `url` than internally signing with the `privateKey`. Be sure to  be explicit on your configuration file and leave just one of them.
 
-#### Example with Docker
-
-To run the validator using Docker, prepare a valid config file locally and mount it into the container:
-
-```bash
-docker run \
-  -v <path_to_config_file>:/app/config/config.json \
-  nethermind/starknet-staking-v2:latest --config /app/config/config.json 
-```
 
 ### With Environment Variables
 Alternatively, similarly as described as the previous section, the validator can be configured using environment vars. The following example using a `.env` file with the following content:
@@ -125,19 +116,19 @@ PROVIDER_HTTP_URL="http://localhost:6060/v0_8" ./build/validator \
 
 In addition to the configuration described above, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag:
 
-1. Using specific staking and attestation contract addresses through the `--staking-contract-address` and `--attest-contract-address` flags respectively. If no values are provided, sensible defaults are provided based on the network id.
+1. Using specific staking and attestation contract addresses through the `--staking-contract-address` and `--attest-contract-address` flags respectively. If no values are provided, sensible defaults are provided based on the network id (only Mainnet and Sepolia).
 
-2. `--max-tries` allows you to set how many attempts the tool does to get attestation information. It can be set to any positive number or to _"infinite"_ if you want the tool to never stop execution. Defaults to 10.
+2. `--max-tries` allows you to set how many attempts the tool does to get attestation information. It can be set to any positive number or to *infinite* if you want the tool to never stop execution. It's set to*infinite* by default.
 
 3. `--log-level` set's the tool logging level. Default to `info`.
 
-4. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_.
+4. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. 
 
 ## Other features
 
-We offer other utilies such as [external signing](https://nethermindeth.github.io/starknet-staking-v2/external-signer) and [monitoring via prometheus](https://nethermindeth.github.io/starknet-staking-v2/metrics). 
+We offer advance features such as [external signing](https://nethermindeth.github.io/starknet-staking-v2/external-signer) and [monitoring via prometheus](https://nethermindeth.github.io/starknet-staking-v2/metrics). 
 
-Check our [documentation](https://nethermindeth.github.io/starknet-staking-v2/) for full details. 
+Please check our [documentation](https://nethermindeth.github.io/starknet-staking-v2/) to get full details of the validator tools
 
 
 
