@@ -48,11 +48,7 @@ func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
 		return Signer{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
 	}
 
-	publicKey, _, err := curve.Curve.PrivateToPoint(privKey)
-	if err != nil {
-		return Signer{}, errors.New("Cannot derive public key from private key")
-	}
-
+	publicKey, _ := curve.PrivateKeyToPoint(privKey)
 	publicKeyStr := publicKey.String()
 	ks := account.SetNewMemKeystore(publicKeyStr, privKey)
 
