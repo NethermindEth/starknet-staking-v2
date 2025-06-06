@@ -51,6 +51,6 @@ func (b *BlockHash) String() string {
 type BlockNumber uint64
 
 // Delete this method
-func (b BlockNumber) Uint64() uint64 {
-	return uint64(b)
+func (b *BlockNumber) Uint64() uint64 {
+	return uint64(*b)
 }

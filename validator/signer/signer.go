@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/crypto"
@@ -17,24 +16,26 @@ import (
 //go:generate go tool mockgen -destination=../../mocks/mock_signer.go -package=mocks github.com/NethermindEth/starknet-staking-v2/validator/signer Signer
 type Signer interface {
 	// Methods from Starknet.go Account implementation
-	GetTransactionStatus(
-		ctx context.Context, transactionHash *felt.Felt,
-	) (*rpc.TxnStatusResult, error)
-	BuildAndSendInvokeTxn(
-		ctx context.Context, functionCalls []rpc.InvokeFunctionCall, multiplier float64,
-	) (*rpc.AddInvokeTransactionResponse, error)
-	Call(ctx context.Context, call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
-	BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (interface{}, error)
+	GetTransactionStatus(transactionHash *felt.Felt) (*rpc.TxnStatusResult, error)
 
-	// Custom Methods
-	Address() *Address
-	ValidationContracts() *ValidationContracts
+	BuildAttestTransaction(blockHash *types.BlockHash) (rpc.BroadcastInvokeTxnV3, error)
+	EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error)
+	SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error)
+	InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.AddInvokeTransactionResponse, error)
+
+	Call(call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
+	BlockWithTxHashes(blockID rpc.BlockID) (any, error)
+
+	// Property Access
+	Nonce() (*felt.Felt, error)
+	Address() *types.Address
+	ValidationContracts() *types.ValidationContracts
 }
 
 // I believe all these functions down here should be methods
 // Postponing for now to not affect test code
 
-func FetchEpochInfo[S Signer](signer S) (EpochInfo, error) {
+func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 	functionCall := rpc.FunctionCall{
 		ContractAddress: signer.ValidationContracts().Staking.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt(
@@ -43,29 +44,29 @@ func FetchEpochInfo[S Signer](signer S) (EpochInfo, error) {
 		Calldata: []*felt.Felt{signer.Address().Felt()},
 	}
 
-	result, err := signer.Call(context.Background(), functionCall, rpc.BlockID{Tag: "latest"})
+	result, err := signer.Call(functionCall, rpc.BlockID{Tag: "latest"})
 	if err != nil {
-		return EpochInfo{},
+		return types.EpochInfo{},
 			entrypointInternalError("get_attestation_info_by_operational_address", err)
 	}
 
 	if len(result) != 5 {
-		return EpochInfo{}, entrypointResponseError("get_attestation_info_by_operational_address")
+		return types.EpochInfo{},
+			entrypointResponseError("get_attestation_info_by_operational_address")
 	}
 
 	stake := result[1].Bits()
-	return EpochInfo{
-		StakerAddress:             Address(*result[0]),
-		Stake:                     uint128.New(stake[0], stake[1]),
-		EpochLen:                  result[2].Uint64(),
-		EpochId:                   result[3].Uint64(),
-		CurrentEpochStartingBlock: BlockNumber(result[4].Uint64()),
+	return types.EpochInfo{
+		StakerAddress: types.Address(*result[0]),
+		Stake:         uint128.New(stake[0], stake[1]),
+		EpochLen:      result[2].Uint64(),
+		EpochId:       result[3].Uint64(),
+		StartingBlock: types.BlockNumber(result[4].Uint64()),
 	}, nil
 }
 
 func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 	result, err := signer.Call(
-		context.Background(),
 		rpc.FunctionCall{
 			ContractAddress:    signer.ValidationContracts().Attest.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("attestation_window"),
@@ -85,10 +86,9 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 }
 
 // For near future when tracking validator's balance
-func FetchValidatorBalance[Account Signer](account Account) (Balance, error) {
+func FetchValidatorBalance[Account Signer](account Account) (types.Balance, error) {
 	StrkTokenContract := types.AddressFromString(constants.STRK_CONTRACT_ADDRESS)
 	result, err := account.Call(
-		context.Background(),
 		rpc.FunctionCall{
 			ContractAddress:    StrkTokenContract.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("balanceOf"),
@@ -97,41 +97,42 @@ func FetchValidatorBalance[Account Signer](account Account) (Balance, error) {
 		rpc.BlockID{Tag: "latest"},
 	)
 	if err != nil {
-		return Balance{}, entrypointInternalError("balanceOf", err)
+		return types.Balance{}, entrypointInternalError("balanceOf", err)
 	}
 
 	if len(result) != 1 {
-		return Balance{}, entrypointResponseError("balanceOf")
+		return types.Balance{}, entrypointResponseError("balanceOf")
 	}
 
-	return Balance(*result[0]), nil
+	return types.Balance(*result[0]), nil
 }
 
 func FetchEpochAndAttestInfo[S Signer](
 	signer S, logger *junoUtils.ZapLogger,
-) (EpochInfo, AttestInfo, error) {
+) (types.EpochInfo, types.AttestInfo, error) {
 	epochInfo, err := FetchEpochInfo(signer)
 	if err != nil {
-		return EpochInfo{}, AttestInfo{}, err
+		return types.EpochInfo{}, types.AttestInfo{}, err
 	}
 	logger.Debugw(
 		"Fetched epoch info",
 		"epoch ID", epochInfo.EpochId,
-		"epoch starting block", epochInfo.CurrentEpochStartingBlock,
-		"epoch ending block", epochInfo.CurrentEpochStartingBlock+BlockNumber(epochInfo.EpochLen),
+		"epoch starting block", epochInfo.StartingBlock,
+		"epoch ending block", epochInfo.StartingBlock+
+			types.BlockNumber(epochInfo.EpochLen),
 	)
 
 	attestWindow, windowErr := FetchAttestWindow(signer)
 	if windowErr != nil {
-		return EpochInfo{}, AttestInfo{}, windowErr
+		return types.EpochInfo{}, types.AttestInfo{}, windowErr
 	}
 
 	blockNum := ComputeBlockNumberToAttestTo(&epochInfo, attestWindow)
 
-	attestInfo := AttestInfo{
+	attestInfo := types.AttestInfo{
 		TargetBlock: blockNum,
-		WindowStart: blockNum + BlockNumber(constants.MIN_ATTESTATION_WINDOW),
-		WindowEnd:   blockNum + BlockNumber(attestWindow),
+		WindowStart: blockNum + types.BlockNumber(constants.MIN_ATTESTATION_WINDOW),
+		WindowEnd:   blockNum + types.BlockNumber(attestWindow),
 	}
 
 	logger.Infof(
@@ -148,21 +149,37 @@ func FetchEpochAndAttestInfo[S Signer](
 	return epochInfo, attestInfo, nil
 }
 
-func InvokeAttest[S Signer](signer S, attest *AttestRequired) (
-	*rpc.AddInvokeTransactionResponse, error,
+func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier float64) (
+	rpc.BroadcastInvokeTxnV3, error,
 ) {
-	calls := []rpc.InvokeFunctionCall{{
-		ContractAddress: signer.ValidationContracts().Attest.Felt(),
-		FunctionName:    "attest",
-		CallData:        []*felt.Felt{attest.BlockHash.Felt()},
-	}}
+	txn, err := signer.BuildAttestTransaction(blockHash)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
 
-	return signer.BuildAndSendInvokeTxn(
-		context.Background(), calls, constants.FEE_ESTIMATION_MULTIPLIER,
-	)
+	_, err = signer.SignTransaction(&txn)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
+
+	estimate, err := signer.EstimateFee(&txn)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
+	txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, multiplier)
+
+	// patch for making sure txn.Version is correct
+	txn.Version = rpc.TransactionV3
+
+	_, err = signer.SignTransaction(&txn)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
+
+	return txn, nil
 }
 
-func ComputeBlockNumberToAttestTo(epochInfo *EpochInfo, attestWindow uint64) BlockNumber {
+func ComputeBlockNumberToAttestTo(epochInfo *types.EpochInfo, attestWindow uint64) types.BlockNumber {
 	hash := crypto.PoseidonArray(
 		new(felt.Felt).SetBigInt(epochInfo.Stake.Big()),
 		new(felt.Felt).SetUint64(epochInfo.EpochId),
@@ -175,5 +192,5 @@ func ComputeBlockNumberToAttestTo(epochInfo *EpochInfo, attestWindow uint64) Blo
 	blockOffset := new(big.Int)
 	blockOffset = blockOffset.Mod(hashBigInt, big.NewInt(int64(epochInfo.EpochLen-attestWindow)))
 
-	return BlockNumber(epochInfo.CurrentEpochStartingBlock.Uint64() + blockOffset.Uint64())
+	return types.BlockNumber(epochInfo.StartingBlock.Uint64() + blockOffset.Uint64())
 }

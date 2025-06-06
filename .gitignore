@@ -31,4 +31,5 @@ go.work.sum
 build
 # config file
 config.json
+config-mainnet.json
 

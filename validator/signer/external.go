@@ -23,16 +23,18 @@ var _ Signer = (*ExternalSigner)(nil)
 
 // Used as a wrapper around an exgernal signer implementation
 type ExternalSigner struct {
-	*rpc.Provider
-	operationalAddress  Address
+	ctx                 context.Context
+	Provider            *rpc.Provider
+	operationalAddress  types.Address
 	chainId             felt.Felt
 	url                 string
-	validationContracts ValidationContracts
+	validationContracts types.ValidationContracts
 	// If the account used represents a braavos account
 	braavos bool
 }
 
 func NewExternalSigner(
+	ctx context.Context,
 	provider *rpc.Provider,
 	logger *junoUtils.ZapLogger,
 	signer *config.Signer,
@@ -58,68 +60,111 @@ func NewExternalSigner(
 	}, nil
 }
 
-func (s *ExternalSigner) BuildAndSendInvokeTxn(
-	ctx context.Context,
-	functionCalls []rpc.InvokeFunctionCall,
-	multiplier float64,
-) (*rpc.AddInvokeTransactionResponse, error) {
-	nonce, err := s.Nonce(ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
+func (s *ExternalSigner) BuildAttestTransaction(
+	blockhash *types.BlockHash,
+) (rpc.BroadcastInvokeTxnV3, error) {
+	invokeCall := []rpc.InvokeFunctionCall{{
+		ContractAddress: s.ValidationContracts().Attest.Felt(),
+		FunctionName:    "attest",
+		CallData:        []*felt.Felt{blockhash.Felt()},
+	}}
+	call := utils.InvokeFuncCallsToFunctionCalls(invokeCall)
+	calldata := account.FmtCallDataCairo2(call)
+	defaultResources := makeDefaultResources()
+
+	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
 	if err != nil {
-		return nil, err
+		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	fnCallData := utils.InvokeFuncCallsToFunctionCalls(functionCalls)
-	formattedCallData := account.FmtCallDataCairo2(fnCallData)
+	// Taken from starknet.go `utils.BuildInvokeTxn`
+	attestTransaction := rpc.BroadcastInvokeTxnV3{
+		Type:                  rpc.TransactionType_Invoke,
+		SenderAddress:         s.Address().Felt(),
+		Calldata:              calldata,
+		Version:               rpc.TransactionV3,
+		Signature:             []*felt.Felt{},
+		Nonce:                 nonce,
+		ResourceBounds:        &defaultResources,
+		Tip:                   "0x0",
+		PayMasterData:         []*felt.Felt{},
+		AccountDeploymentData: []*felt.Felt{},
+		NonceDataMode:         rpc.DAModeL1,
+		FeeMode:               rpc.DAModeL1,
+	}
+	return attestTransaction, nil
 
-	// Building and signing the txn, as it needs a signature to estimate the fee
-	broadcastInvokeTxnV3 := utils.BuildInvokeTxn(
-		s.Address().Felt(),
-		nonce,
-		formattedCallData,
-		makeResourceBoundsMapWithZeroValues(),
-	)
+}
 
+func (s *ExternalSigner) EstimateFee(
+	txn *rpc.BroadcastInvokeTxnV3,
+) (rpc.FeeEstimation, error) {
 	if s.braavos {
 		// Braavos require the use of the query bit txn version for fee estimation.
-		// The query bit txn version is used for custom validation logic from wallets/accounts when estimating fee/simulating txns
-		broadcastInvokeTxnV3.Version = rpc.TransactionV3WithQueryBit
+		// The query bit txn version is used for custom validation logic from wallets/accounts
+		// when estimating fee/simulating txns
+		txn.Version = rpc.TransactionV3WithQueryBit
+		_, err := s.SignTransaction(txn)
+		if err != nil {
+			return rpc.FeeEstimation{}, nil
+		}
 	}
 
-	if err := SignInvokeTx(broadcastInvokeTxnV3, &s.chainId, s.url); err != nil {
-		return nil, err
-	}
-
-	// Estimate txn fee
-	estimateFee, err := s.EstimateFee(
-		ctx,
-		[]rpc.BroadcastTxn{broadcastInvokeTxnV3},
+	estimateFee, err := s.Provider.EstimateFee(
+		s.ctx,
+		[]rpc.BroadcastTxn{txn},
 		[]rpc.SimulationFlag{},
 		rpc.WithBlockTag("pending"),
 	)
+	if s.braavos {
+		// Revert the transaction version back.
+		// No need to re-sign
+		txn.Version = rpc.TransactionV3
+	}
 	if err != nil {
-		return nil, err
+		return rpc.FeeEstimation{}, err
 	}
-	txnFee := estimateFee[0]
-	broadcastInvokeTxnV3.ResourceBounds = utils.FeeEstToResBoundsMap(txnFee, multiplier)
-
-	// assuring the signed txn version will be rpc.TransactionV3, since queryBit txn version is only used for estimation/simulation
-	broadcastInvokeTxnV3.Version = rpc.TransactionV3
-
-	// Signing the txn again with the estimated fee,
-	// as the fee value is used in the txn hash calculation
-	if err := SignInvokeTx(broadcastInvokeTxnV3, &s.chainId, s.url); err != nil {
-		return nil, err
-	}
-
-	return s.AddInvokeTransaction(ctx, broadcastInvokeTxnV3)
+	return estimateFee[0], nil
 }
 
-func (s *ExternalSigner) Address() *Address {
+func (s *ExternalSigner) SignTransaction(
+	txn *rpc.BroadcastInvokeTxnV3,
+) (*rpc.BroadcastInvokeTxnV3, error) {
+	return txn, SignInvokeTx(txn, &s.chainId, s.url)
+}
+
+func (s *ExternalSigner) InvokeTransaction(
+	txn *rpc.BroadcastInvokeTxnV3,
+) (*rpc.AddInvokeTransactionResponse, error) {
+	return s.Provider.AddInvokeTransaction(s.ctx, txn)
+}
+
+func (s *ExternalSigner) GetTransactionStatus(transactionHash *felt.Felt) (
+	*rpc.TxnStatusResult, error,
+) {
+	return s.Provider.GetTransactionStatus(s.ctx, transactionHash)
+}
+
+func (s *ExternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
+	return s.Provider.BlockWithTxHashes(s.ctx, blockID)
+}
+
+func (s *ExternalSigner) Call(
+	call rpc.FunctionCall, blockId rpc.BlockID,
+) ([]*felt.Felt, error) {
+	return s.Provider.Call(s.ctx, call, blockId)
+}
+
+func (s *ExternalSigner) Address() *types.Address {
 	return &s.operationalAddress
 }
 
-func (s *ExternalSigner) ValidationContracts() *ValidationContracts {
+func (s *ExternalSigner) ValidationContracts() *types.ValidationContracts {
 	return &s.validationContracts
+}
+
+func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
+	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
 }
 
 func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
@@ -167,8 +212,8 @@ func HashAndSignTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, ex
 	return signResp, json.Unmarshal(body, &signResp)
 }
 
-func makeResourceBoundsMapWithZeroValues() *rpc.ResourceBoundsMapping {
-	return &rpc.ResourceBoundsMapping{
+func makeDefaultResources() rpc.ResourceBoundsMapping {
+	return rpc.ResourceBoundsMapping{
 		L1Gas: rpc.ResourceBounds{
 			MaxAmount:       "0x0",
 			MaxPricePerUnit: "0x0",

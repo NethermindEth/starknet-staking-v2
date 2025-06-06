@@ -17,7 +17,7 @@ type GitHubRelease struct {
 }
 
 func getLatestRelease() (string, error) {
-	url := "https://api.github.com/repos/NethermindEth/starknet-staking-v2/releases/latest"
+	const url = "https://api.github.com/repos/NethermindEth/starknet-staking-v2/releases/latest"
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch latest release: %w", err)
@@ -71,7 +71,7 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 			const currentVersion = "v" + validator.Version
 			needsUpdate, err := isLatestRelease(currentVersion, latestVersion)
 			if err != nil {
-				logger.Debugw(err.Error())
+				logger.Debug(err.Error())
 				continue
 			}
 
