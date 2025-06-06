@@ -1,7 +1,7 @@
 # Starknet Staking v2
 Validator software written in Go for Starknet staking v2 as specified in [SNIP 28](https://community.starknet.io/t/snip-28-staking-v2-proposal/115250)
 
-> ℹ️ This README provides a basic introduction to the tool. To get further information such as how to use the tool with docker or how to configure external signing or a metrics server, please visit the [official docs](https://nethermindeth.github.io/starknet-staking-v2/).
+ℹ️ **This README provides a basic introduction to the tool. To get further information such as how to use the tool with docker or how to configure external signing or a metrics server, please visit the [official docs](https://nethermindeth.github.io/starknet-staking-v2/).**
 
 ## Requirements
 
