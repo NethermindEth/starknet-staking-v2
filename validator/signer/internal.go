@@ -2,6 +2,7 @@ package signer
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -41,7 +42,7 @@ func NewInternalSigner(
 
 	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
 	if err != nil {
-		return InternalSigner{}, errors.New("cannot derive public key from private key")
+		return InternalSigner{}, fmt.Errorf("cannot derive public key from private key: %w", err)
 	}
 
 	publicKeyStr := publicKey.String()
@@ -50,7 +51,7 @@ func NewInternalSigner(
 	accountAddr := types.AddressFromString(signer.OperationalAddress)
 	account, err := account.NewAccount(provider, accountAddr.Felt(), publicKeyStr, ks, 2)
 	if err != nil {
-		return InternalSigner{}, errors.Errorf("cannot create internal signer: %s", err)
+		return InternalSigner{}, errors.Errorf("cannot create internal signer: %w", err)
 	}
 
 	chainIdStr, err := provider.ChainID(ctx)
@@ -77,35 +78,25 @@ func (s *InternalSigner) GetTransactionStatus(transactionHash *felt.Felt) (
 	return s.Account.Provider.GetTransactionStatus(s.ctx, transactionHash)
 }
 
-func (s *InternalSigner) BuildAndSendInvokeTxn(
-	functionCalls []rpc.InvokeFunctionCall,
-	multiplier float64,
-) (*rpc.AddInvokeTransactionResponse, error) {
-	return s.Account.BuildAndSendInvokeTxn(s.ctx, functionCalls, multiplier, s.braavos)
-}
-
 func (s *InternalSigner) BuildAttestTransaction(
-	attest *types.BlockHash,
+	blockhash *types.BlockHash,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	calls := []rpc.InvokeFunctionCall{{
 		ContractAddress: s.ValidationContracts().Attest.Felt(),
 		FunctionName:    "attest",
-		CallData:        []*felt.Felt{attest.Felt()},
+		CallData:        []*felt.Felt{blockhash.Felt()},
 	}}
 	calldata, err := s.Account.FmtCalldata(utils.InvokeFuncCallsToFunctionCalls(calls))
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	nonce, err := s.Account.Nonce(context.Background())
+	nonce, err := s.Account.Nonce(s.ctx)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	defaultResources := makeResourceBoundsMapWithZeroValues()
-	//	attestTransaction := utils.BuildInvokeTxn(
-	//		s.Account.Address, nonce, callData, &defaultResources,
-	//	)
+	defaultResources := makeDefaultResources()
 
 	// Taken from starknet.go `utils.BuildInvokeTxn`
 	attestTransaction := rpc.BroadcastInvokeTxnV3{
@@ -126,12 +117,28 @@ func (s *InternalSigner) BuildAttestTransaction(
 }
 
 func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error) {
+	if s.braavos {
+		// Braavos require the use of the query bit txn version for fee estimation.
+		// The query bit txn version is used for custom validation logic from wallets/accounts
+		// when estimating fee/simulating txns
+		txn.Version = rpc.TransactionV3WithQueryBit
+		_, err := s.SignTransaction(txn)
+		if err != nil {
+			return rpc.FeeEstimation{}, nil
+		}
+	}
+
 	estimateFee, err := s.Account.Provider.EstimateFee(
-		context.Background(),
+		s.ctx,
 		[]rpc.BroadcastTxn{txn},
 		[]rpc.SimulationFlag{},
 		rpc.WithBlockTag("pending"),
 	)
+	if s.braavos {
+		// Revert the transaction version back.
+		// No need to re-sign
+		txn.Version = rpc.TransactionV3
+	}
 	if err != nil {
 		return rpc.FeeEstimation{}, err
 	}
