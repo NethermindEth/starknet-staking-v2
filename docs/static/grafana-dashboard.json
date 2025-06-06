@@ -1,0 +1,1494 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 567,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Latest block number seen by the validator on the Starknet network.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "id": 313,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_starknet_latest_block_number{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "Latest Block",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Starknet Latest Block",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Displays the first block number of the current epoch.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
+          "id": 9,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_current_epoch_starting_block_number{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "Epoch Start Block",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Epoch Start Block",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "The specific block number within the current epoch for which the validator is assigned to attest.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 1
+          },
+          "id": 314,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_current_epoch_assigned_block_number{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "Assigned Block",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Assigned Attestation Block",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Shows the ID of the current epoch the validator is participating in.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "rgba(13, 115, 189, 0.89)",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 1
+          },
+          "id": 7,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_current_epoch_id{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "Current Epoch ID",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Current Epoch ID",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Visualizes the validator's progress through the current epoch.",
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "max": 100,
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": 0
+                  },
+                  {
+                    "color": "green",
+                    "value": 90
+                  }
+                ]
+              },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 0,
+            "y": 20
+          },
+          "id": 203,
+          "options": {
+            "minVizHeight": 75,
+            "minVizWidth": 75,
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true,
+            "sizing": "auto"
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "(\n  (\n    validator_attestation_starknet_latest_block_number{network=~\"$network\"} \n    - \n    validator_attestation_current_epoch_starting_block_number{network=~\"$network\"}\n  ) / validator_attestation_current_epoch_length{network=~\"$network\"}\n) * 100",
+              "instant": true,
+              "legendFormat": "Epoch Progress",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Epoch Progress",
+          "type": "gauge"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Progress towards next attestation duty. Shows how close the current block is to the assigned attestation block for this epoch.",
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "max": 100,
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 6,
+            "y": 20
+          },
+          "id": 312,
+          "options": {
+            "minVizHeight": 75,
+            "minVizWidth": 75,
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true,
+            "sizing": "auto"
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "clamp_max(\n  (\n    (validator_attestation_starknet_latest_block_number{network=~\"$network\"} - validator_attestation_current_epoch_starting_block_number{network=~\"$network\"})\n    /\n    (validator_attestation_current_epoch_assigned_block_number{network=~\"$network\"} - validator_attestation_current_epoch_starting_block_number{network=~\"$network\"})\n  ) * 100,\n  100\n)",
+              "instant": true,
+              "legendFormat": "Progress to Attestation",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Progress to Attestation",
+          "type": "gauge"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Blocks remaining until the validator's assigned attestation duty for the current epoch.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 12,
+            "y": 20
+          },
+          "id": 311,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_current_epoch_assigned_block_number{network=~\"$network\"} - validator_attestation_starknet_latest_block_number{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "Blocks Until Attestation",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Blocks Until Attestation",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Indicates the total length (in blocks) of the current epoch.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "rgba(50, 172, 45, 0.97)",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 18,
+            "y": 20
+          },
+          "id": 8,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_current_epoch_length{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "Epoch Length",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Current Epoch Length",
+          "type": "stat"
+        }
+      ],
+      "title": "Current Epoch & Network Status",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 102,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "The Unix timestamp (in seconds) of the last successful attestation submission, converted to minutes ago.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 30
+                  },
+                  {
+                    "color": "red",
+                    "value": 60
+                  }
+                ]
+              },
+              "unit": "m"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 2
+          },
+          "id": 301,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "(time() - validator_attestation_last_attestation_timestamp_seconds{network=~\"$network\"}) / 60",
+              "instant": true,
+              "legendFormat": "Minutes Ago",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Last Successful Attestation",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "The total number of attestations submitted by the validator since startup.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 2
+          },
+          "id": 401,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "increase(validator_attestation_attestation_submitted_count{network=~\"$network\"}[$__range])",
+              "instant": true,
+              "legendFormat": "Total Submitted",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Attestations Submitted (Total)",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "The total number of attestations that have been confirmed on the network since validator startup.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 2
+          },
+          "id": 402,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "increase(validator_attestation_attestation_confirmed_count{network=~\"$network\"}[$__range])",
+              "instant": true,
+              "legendFormat": "Total Confirmed",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Attestations Confirmed (Total)",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "The percentage of submitted attestations that have been successfully confirmed.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "max": 100,
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": 0
+                  },
+                  {
+                    "color": "green",
+                    "value": 90
+                  }
+                ]
+              },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 18,
+            "y": 2
+          },
+          "id": 315,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "(\n  increase(validator_attestation_attestation_confirmed_count{network=~\"$network\"}[$__range])\n  /\n  increase(validator_attestation_attestation_submitted_count{network=~\"$network\"}[$__range])\n) * 100",
+              "instant": true,
+              "legendFormat": "Success Rate",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Attestation Success Rate",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "The total number of attestation transaction submission failures encountered by the validator since startup.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 5
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 21
+          },
+          "id": 403,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "increase(validator_attestation_attestation_failure_count{network=~\"$network\"}[$__range])",
+              "instant": true,
+              "legendFormat": "Total Failures",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Attestation Failures",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Trend of total attestations confirmed over time.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 21
+          },
+          "id": 2,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_attestation_confirmed_count{network=~\"$network\"}",
+              "instant": false,
+              "legendFormat": "Confirmed",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Attestations Confirmed (Total Trend)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Trend of total attestations submitted over time.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 21
+          },
+          "id": 1,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_attestation_submitted_count{network=~\"$network\"}",
+              "instant": false,
+              "legendFormat": "Submitted",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Attestations Submitted (Total Trend)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Time since the last successful attestation was submitted.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 300
+                  },
+                  {
+                    "color": "red",
+                    "value": 600
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 25
+          },
+          "id": 4,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "time() - validator_attestation_last_attestation_timestamp_seconds{network=~\"$network\"}",
+              "instant": false,
+              "legendFormat": "Time Since Last Attestation",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Time Since Last Attestation Trend",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "bec9p4jndkuf4f"
+          },
+          "description": "Trend of total attestation submission failures over time.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "Count",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "dark-red",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 12,
+            "y": 25
+          },
+          "id": 11,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "bec9p4jndkuf4f"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_attestation_failure_count{network=~\"$network\"}",
+              "instant": false,
+              "legendFormat": "Failures",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Attestation Failures (Total Trend)",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Attestation Performance Overview",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "id": 103,
+      "panels": [],
+      "title": "Logs",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "eelo80t0nfri8d"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "id": 10,
+      "options": {
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "12.1.0-89256.patch1-89350",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "eelo80t0nfri8d"
+          },
+          "direction": "backward",
+          "editorMode": "code",
+          "expr": "{network=~\"$network\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "All",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "eelo80t0nfri8d"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 104,
+      "options": {
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": false,
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "pluginVersion": "12.1.0-89256.patch1-89350",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "eelo80t0nfri8d"
+          },
+          "direction": "backward",
+          "editorMode": "code",
+          "expr": "{network=~\"$network\"} |~ \"ERR|panic|error|fail\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Errors",
+      "type": "logs"
+    }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": [
+    "starknet",
+    "validator"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": ".*",
+        "current": {
+          "text": [
+            "SN_SEPOLIA"
+          ],
+          "value": [
+            "SN_SEPOLIA"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "bec9p4jndkuf4f"
+        },
+        "definition": "label_values(validator_attestation_starknet_latest_block_number, network)",
+        "description": "Starknet network (e.g., SN_SEPOLIA, SN_MAINNET)",
+        "includeAll": true,
+        "label": "Network",
+        "multi": true,
+        "name": "network",
+        "options": [],
+        "query": {
+          "query": "label_values(validator_attestation_starknet_latest_block_number, network)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Starknet Validator Dashboard (Single Instance)",
+  "uid": "starknet-validator-single-instance",
+  "version": 3
+}

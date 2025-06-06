@@ -55,7 +55,7 @@ You can then visualize these metrics using Grafana or any other Prometheus-compa
 
 ## Grafana Dashboard
 
-A sample Grafana dashboard is available to visualize the validator metrics: [grafana-dashboard.json](https://nethermindeth.github.io/starknet-staking-v2/grafana-dashboard.json)
+A sample Grafana dashboard is available to visualize the validator metrics: [grafana-dashboard.json](/grafana-dashboard.json)
 
 This dashboard provides comprehensive monitoring of your validator's performance including:
 - Block and epoch progression
