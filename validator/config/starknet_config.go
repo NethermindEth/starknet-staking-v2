@@ -19,8 +19,8 @@ const (
 var defaults = [2]ContractAddresses{
 	// Mainnet default values
 	{
-		Staking: "",
-		Attest:  "",
+		Staking: constants.MAINNET_STAKING_CONTRACT_ADDRESS,
+		Attest:  constants.MAINNET_ATTEST_CONTRACT_ADDRESS,
 	},
 	// Sepolia default values
 	{
