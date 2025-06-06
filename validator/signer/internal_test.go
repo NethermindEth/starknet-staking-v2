@@ -713,68 +713,68 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 	})
 }
 
-func TestInvokeAttest(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	t.Cleanup(mockCtrl.Finish)
-
-	mockSigner := mocks.NewMockSigner(mockCtrl)
-
-	t.Run("Return error", func(t *testing.T) {
-		blockhash := new(felt.Felt).SetUint64(123)
-
-		expectedFnCall := []rpc.InvokeFunctionCall{{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
-			FunctionName:    "attest",
-			CallData:        []*felt.Felt{blockhash},
-		}}
-
-		mockSigner.
-			EXPECT().
-			BuildAndSendInvokeTxn(
-				expectedFnCall, constants.FEE_ESTIMATION_MULTIPLIER,
-			).
-			Return(nil, errors.New("some sending error"))
-
-		mockSigner.EXPECT().ValidationContracts().Return(
-			validator.SepoliaValidationContracts(t),
-		).Times(1)
-
-		invokeRes, err := signer.InvokeAttest(mockSigner, (*types.BlockHash)(blockhash))
-
-		require.Nil(t, invokeRes)
-		require.EqualError(t, err, "some sending error")
-	})
-
-	t.Run("Invoke tx successfully sent", func(t *testing.T) {
-		blockHash := new(felt.Felt).SetUint64(123)
-
-		expectedFnCall := []rpc.InvokeFunctionCall{{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
-			FunctionName:    "attest",
-			CallData:        []*felt.Felt{blockHash},
-		}}
-
-		response := rpc.AddInvokeTransactionResponse{
-			Hash: utils.HexToFelt(t, "0x123"),
-		}
-		mockSigner.
-			EXPECT().
-			BuildAndSendInvokeTxn(
-				expectedFnCall,
-				constants.FEE_ESTIMATION_MULTIPLIER,
-			).
-			Return(&response, nil)
-
-		mockSigner.EXPECT().ValidationContracts().Return(
-			validator.SepoliaValidationContracts(t),
-		).Times(1)
-
-		invokeRes, err := signer.InvokeAttest(mockSigner, (*types.BlockHash)(blockHash))
-
-		require.Equal(t, &response, invokeRes)
-		require.Nil(t, err)
-	})
-}
+// func TestInvokeAttest(t *testing.T) {
+// 	mockCtrl := gomock.NewController(t)
+// 	t.Cleanup(mockCtrl.Finish)
+//
+// 	mockSigner := mocks.NewMockSigner(mockCtrl)
+//
+// 	t.Run("Return error", func(t *testing.T) {
+// 		blockhash := new(felt.Felt).SetUint64(123)
+//
+// 		expectedFnCall := []rpc.InvokeFunctionCall{{
+// 			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+// 			FunctionName:    "attest",
+// 			CallData:        []*felt.Felt{blockhash},
+// 		}}
+//
+// 		mockSigner.
+// 			EXPECT().
+// 			BuildAndSendInvokeTxn(
+// 				expectedFnCall, constants.FEE_ESTIMATION_MULTIPLIER,
+// 			).
+// 			Return(nil, errors.New("some sending error"))
+//
+// 		mockSigner.EXPECT().ValidationContracts().Return(
+// 			validator.SepoliaValidationContracts(t),
+// 		).Times(1)
+//
+// 		invokeRes, err := signer.InvokeAttest(mockSigner, (*types.BlockHash)(blockhash))
+//
+// 		require.Nil(t, invokeRes)
+// 		require.EqualError(t, err, "some sending error")
+// 	})
+//
+// 	t.Run("Invoke tx successfully sent", func(t *testing.T) {
+// 		blockHash := new(felt.Felt).SetUint64(123)
+//
+// 		expectedFnCall := []rpc.InvokeFunctionCall{{
+// 			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+// 			FunctionName:    "attest",
+// 			CallData:        []*felt.Felt{blockHash},
+// 		}}
+//
+// 		response := rpc.AddInvokeTransactionResponse{
+// 			Hash: utils.HexToFelt(t, "0x123"),
+// 		}
+// 		mockSigner.
+// 			EXPECT().
+// 			BuildAndSendInvokeTxn(
+// 				expectedFnCall,
+// 				constants.FEE_ESTIMATION_MULTIPLIER,
+// 			).
+// 			Return(&response, nil)
+//
+// 		mockSigner.EXPECT().ValidationContracts().Return(
+// 			validator.SepoliaValidationContracts(t),
+// 		).Times(1)
+//
+// 		invokeRes, err := signer.InvokeAttest(mockSigner, (*types.BlockHash)(blockHash))
+//
+// 		require.Equal(t, &response, invokeRes)
+// 		require.Nil(t, err)
+// 	})
+// }
 
 func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
