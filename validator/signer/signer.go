@@ -23,9 +23,6 @@ type Signer interface {
 	SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error)
 	InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.AddInvokeTransactionResponse, error)
 
-	BuildAndSendInvokeTxn(
-		functionCalls []rpc.InvokeFunctionCall, multiplier float64,
-	) (*rpc.AddInvokeTransactionResponse, error)
 	Call(call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
 	BlockWithTxHashes(blockID rpc.BlockID) (any, error)
 
@@ -180,20 +177,6 @@ func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier floa
 	}
 
 	return txn, nil
-}
-
-func InvokeAttest[S Signer](signer S, blockhash *types.BlockHash) (
-	*rpc.AddInvokeTransactionResponse, error,
-) {
-	calls := []rpc.InvokeFunctionCall{{
-		ContractAddress: signer.ValidationContracts().Attest.Felt(),
-		FunctionName:    "attest",
-		CallData:        []*felt.Felt{blockhash.Felt()},
-	}}
-
-	return signer.BuildAndSendInvokeTxn(
-		calls, constants.FEE_ESTIMATION_MULTIPLIER,
-	)
 }
 
 func ComputeBlockNumberToAttestTo(epochInfo *types.EpochInfo, attestWindow uint64) types.BlockNumber {
