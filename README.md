@@ -135,6 +135,9 @@ In addition to the configuration described above, the tool allows for other non-
 
 ## Other features
 
+We offer other utilies such as [external signing](https://nethermindeth.github.io/starknet-staking-v2/external-signer) and [monitoring via prometheus](https://nethermindeth.github.io/starknet-staking-v2/metrics). 
+
+Check our [documentation](https://nethermindeth.github.io/starknet-staking-v2/) for full details. 
 
 
 
