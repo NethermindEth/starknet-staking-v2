@@ -2,7 +2,6 @@ package signer
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -40,11 +39,7 @@ func NewInternalSigner(
 			errors.Errorf("cannot turn private key %s into a big int", privateKey)
 	}
 
-	publicKey, _, err := curve.Curve.PrivateToPoint(privateKey)
-	if err != nil {
-		return InternalSigner{}, fmt.Errorf("cannot derive public key from private key: %w", err)
-	}
-
+	publicKey, _ := curve.PrivateKeyToPoint(privateKey)
 	publicKeyStr := publicKey.String()
 	ks := account.SetNewMemKeystore(publicKeyStr, privateKey)
 

@@ -5,7 +5,7 @@ go 1.24.1
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/NethermindEth/juno v0.14.0
-	github.com/NethermindEth/starknet.go v0.11.1
+	github.com/NethermindEth/starknet.go v0.12.0
 	github.com/cockroachdb/errors v1.11.3
 	github.com/joho/godotenv v1.5.1
 	github.com/prometheus/client_golang v1.21.0
@@ -13,7 +13,6 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
-	golang.org/x/net v0.38.0
 	lukechampine.com/uint128 v1.3.0
 )
 
@@ -211,6 +210,7 @@ require (
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/exp/typeparams v0.0.0-20250210185358-939b2ce775ac // indirect
 	golang.org/x/mod v0.24.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
