@@ -31,7 +31,7 @@ var defaults = [2]ContractAddresses{
 
 func chainIDFromStr(s string) chainID {
 	switch s {
-	case "SN_MAINNET":
+	case "SN_MAIN":
 		return mainnet
 	case "SN_SEPOLIA":
 		return sepolia
