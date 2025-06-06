@@ -202,7 +202,7 @@ func NewCommand() cobra.Command {
 	cmd.Flags().StringVar(
 		&maxRetriesF,
 		"max-retries",
-		"10",
+		"infinite",
 		"How many times to retry to get information required for attestation."+
 			" It can be either a positive integer or the key word 'infinite'",
 	)

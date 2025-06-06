@@ -19,8 +19,8 @@ const (
 var defaults = [2]ContractAddresses{
 	// Mainnet default values
 	{
-		Staking: "",
-		Attest:  "",
+		Staking: constants.MAINNET_STAKING_CONTRACT_ADDRESS,
+		Attest:  constants.MAINNET_ATTEST_CONTRACT_ADDRESS,
 	},
 	// Sepolia default values
 	{
@@ -31,7 +31,7 @@ var defaults = [2]ContractAddresses{
 
 func chainIDFromStr(s string) chainID {
 	switch s {
-	case "SN_MAINNET":
+	case "SN_MAIN":
 		return mainnet
 	case "SN_SEPOLIA":
 		return sepolia

@@ -1,6 +1,10 @@
 package types
 
-import "github.com/NethermindEth/juno/core/felt"
+import (
+	"fmt"
+
+	"github.com/NethermindEth/juno/core/felt"
+)
 
 type Address felt.Felt
 
@@ -11,7 +15,7 @@ func (a *Address) Felt() *felt.Felt {
 func AddressFromString(addrStr string) Address {
 	adr, err := new(felt.Felt).SetString(addrStr)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("cannot turn string `%s` into an address: %s", addrStr, err.Error()))
 	}
 
 	return Address(*adr)
