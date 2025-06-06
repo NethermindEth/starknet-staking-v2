@@ -71,21 +71,6 @@ func (mr *MockSignerMockRecorder) BlockWithTxHashes(blockID any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockWithTxHashes", reflect.TypeOf((*MockSigner)(nil).BlockWithTxHashes), blockID)
 }
 
-// BuildAndSendInvokeTxn mocks base method.
-func (m *MockSigner) BuildAndSendInvokeTxn(functionCalls []rpc.InvokeFunctionCall, multiplier float64) (*rpc.AddInvokeTransactionResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildAndSendInvokeTxn", functionCalls, multiplier)
-	ret0, _ := ret[0].(*rpc.AddInvokeTransactionResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// BuildAndSendInvokeTxn indicates an expected call of BuildAndSendInvokeTxn.
-func (mr *MockSignerMockRecorder) BuildAndSendInvokeTxn(functionCalls, multiplier any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildAndSendInvokeTxn", reflect.TypeOf((*MockSigner)(nil).BuildAndSendInvokeTxn), functionCalls, multiplier)
-}
-
 // BuildAttestTransaction mocks base method.
 func (m *MockSigner) BuildAttestTransaction(blockHash *types.BlockHash) (rpc.BroadcastInvokeTxnV3, error) {
 	m.ctrl.T.Helper()
