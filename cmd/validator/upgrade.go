@@ -38,7 +38,7 @@ func getLatestRelease() (string, error) {
 	return release.TagName, nil
 }
 
-func isLatestRelease(currentVersion string, latestVersion string) (bool, error) {
+func needsUpdate(currentVersion string, latestVersion string) (bool, error) {
 	currentVer, err := semver.NewVersion(currentVersion)
 	if err != nil {
 		return false, fmt.Errorf("cannot parse current version: %w", err)
@@ -49,7 +49,13 @@ func isLatestRelease(currentVersion string, latestVersion string) (bool, error) 
 		return false, fmt.Errorf("cannot parse latest version: %w", err)
 	}
 
-	return latestVer.GreaterThan(currentVer), nil
+	if latestVer.Major() != currentVer.Major() {
+		return latestVer.Major() > currentVer.Major(), nil
+	}
+	if latestVer.Minor() != currentVer.Minor() {
+		return latestVer.Minor() > currentVer.Minor(), nil
+	}
+	return latestVer.Patch() > currentVer.Patch(), nil
 
 }
 
@@ -69,7 +75,7 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 			}
 
 			const currentVersion = "v" + validator.Version
-			needsUpdate, err := isLatestRelease(currentVersion, latestVersion)
+			needsUpdate, err := needsUpdate(currentVersion, latestVersion)
 			if err != nil {
 				logger.Debug(err.Error())
 				continue
