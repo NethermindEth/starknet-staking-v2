@@ -193,13 +193,10 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			}
 
 			// if the attest event is already being tracked by the tool
-			if d.CurrentAttest.Status != Iddle {
+			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
 				// If  status is still not successful, check for it
 				if d.CurrentAttest.Status != Successful {
 					d.CurrentAttest.UpdateStatus(signer, logger)
-					if d.CurrentAttest.Status == Successful {
-						tracer.RecordAttestationConfirmed()
-					}
 				}
 				// If status is status is already succesful or ongoing, do nothing.
 				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
@@ -233,7 +230,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
-					tracer.RecordAttestationConfirmed()
 					logger.Infow(
 						"Attestation is already done for this epoch",
 						"block hash", targetBlockHash.String(),
@@ -249,8 +245,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 				)
 				d.CurrentAttest.setStatus(Failed)
 
-				// Record attestation failure in metrics
-				tracer.RecordAttestationFailure()
 				continue
 			}
 			logger.Debugw("Attest transaction sent", "hash", resp.Hash)
@@ -268,7 +262,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 					"Successfully attested to target block",
 					"target block hash", targetBlockHash.String(),
 				)
-				// Record attestation confirmation in metrics
 				tracer.RecordAttestationConfirmed()
 			} else {
 				logger.Warnw(
@@ -276,6 +269,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 					"target block hash", targetBlockHash.String(),
 					"latest attest status", d.CurrentAttest.Status,
 				)
+				tracer.RecordAttestationFailure()
 			}
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
