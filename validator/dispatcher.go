@@ -110,7 +110,6 @@ type AttestTracker struct {
 func NewAttestTracker() AttestTracker {
 	return AttestTracker{
 		Transaction: AttestTransaction{},
-		Hash:        felt.Zero,
 		Status:      Iddle,
 	}
 }
@@ -134,10 +133,6 @@ func (a *AttestTracker) setStatus(status AttestStatus) {
 	default:
 		panic(fmt.Sprintf("unknown tracker status %d", status))
 	}
-}
-
-func (a *AttestTracker) setHash(hash *felt.Felt) {
-	a.Hash = *hash
 }
 
 type EventDispatcher[S signerP.Signer] struct {
@@ -209,12 +204,13 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			// or the transaction invoke failed.
 			if !d.CurrentAttest.Transaction.Valid() {
 				targetBlockHash = attest.BlockHash
-				logger.Debug("building attest transaction in `do` stage (and not `prepare`)")
+				logger.Debugf("building attest transaction (in `do` stage) for blockhash: %s", &targetBlockHash)
 				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 					continue
 				}
+				logger.Debug("built attest transaction succesfully")
 			} else {
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
@@ -248,7 +244,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 				continue
 			}
 			logger.Debugw("Attest transaction sent", "hash", resp.Hash)
-			d.CurrentAttest.setHash(resp.Hash)
+			d.CurrentAttest.Hash = *resp.Hash
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
