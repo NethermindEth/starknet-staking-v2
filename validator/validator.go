@@ -198,7 +198,8 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			}
 			// Update epoch info metrics
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
-		} else if uint64(attestInfo.TargetBlock) == block.Number {
+		}
+		if uint64(attestInfo.TargetBlock) == block.Number {
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Infow(
 				"Target block reached",
