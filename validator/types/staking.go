@@ -10,12 +10,12 @@ import (
 
 // Represents an event for the dispatcher to prepare for the next attest
 type PrepareAttest struct {
-	BlockHash *BlockHash
+	BlockHash BlockHash
 }
 
 // Represents an event for the dispatcher to invoke an attest transaction
 type DoAttest struct {
-	BlockHash *BlockHash
+	BlockHash BlockHash
 }
 
 // Used by the validator to keep track of the starknet attestation window

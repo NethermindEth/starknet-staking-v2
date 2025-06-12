@@ -163,7 +163,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 	defer wg.Wait()
 
 	// Block hash to attest to
-	var targetBlockHash *types.BlockHash
+	var targetBlockHash types.BlockHash
 
 	for {
 		select {
@@ -180,7 +180,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 
 			targetBlockHash = attest.BlockHash
 			logger.Debugf("preparing attest transaction for blockhash: %s", targetBlockHash.String())
-			err := d.CurrentAttest.Transaction.Build(signer, targetBlockHash)
+			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 				continue
@@ -213,7 +213,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			if !d.CurrentAttest.Transaction.Valid() {
 				targetBlockHash = attest.BlockHash
 				logger.Debug("building attest transaction in `do` stage (and not `prepare`)")
-				err := d.CurrentAttest.Transaction.Build(signer, targetBlockHash)
+				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 					continue
@@ -279,7 +279,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			}
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
-			targetBlockHash = nil
 		}
 	}
 }

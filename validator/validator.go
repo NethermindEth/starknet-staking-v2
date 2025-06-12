@@ -210,7 +210,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 				"end", attestInfo.WindowEnd,
 			)
 			dispatcher.PrepareAttest <- types.PrepareAttest{
-				BlockHash: &attestInfo.TargetBlockHash,
+				BlockHash: attestInfo.TargetBlockHash,
 			}
 		}
 
@@ -218,13 +218,13 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			// From [target block, window start), make sure to prepare the transaction
 			types.BlockNumber(block.Number) < attestInfo.WindowStart-1 {
 			dispatcher.PrepareAttest <- types.PrepareAttest{
-				BlockHash: &attestInfo.TargetBlockHash,
+				BlockHash: attestInfo.TargetBlockHash,
 			}
 		} else if types.BlockNumber(block.Number) >= attestInfo.WindowStart-1 &&
 			// from [window start, window end), make sure the attestation is done
 			types.BlockNumber(block.Number) < attestInfo.WindowEnd {
 			dispatcher.DoAttest <- types.DoAttest{
-				BlockHash: &attestInfo.TargetBlockHash,
+				BlockHash: attestInfo.TargetBlockHash,
 			}
 		} else if types.BlockNumber(block.Number) == attestInfo.WindowEnd {
 			dispatcher.EndOfWindow <- struct{}{}
