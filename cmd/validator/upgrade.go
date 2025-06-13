@@ -49,14 +49,7 @@ func needsUpdate(currentVersion string, latestVersion string) (bool, error) {
 		return false, fmt.Errorf("cannot parse latest version: %w", err)
 	}
 
-	if latestVer.Major() != currentVer.Major() {
-		return latestVer.Major() > currentVer.Major(), nil
-	}
-	if latestVer.Minor() != currentVer.Minor() {
-		return latestVer.Minor() > currentVer.Minor(), nil
-	}
-	return latestVer.Patch() > currentVer.Patch(), nil
-
+	return latestVer.GreaterThan(currentVer), nil
 }
 
 func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
