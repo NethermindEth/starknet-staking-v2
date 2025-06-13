@@ -79,7 +79,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 	calls := []rpc.InvokeFunctionCall{{
 		ContractAddress: s.ValidationContracts().Attest.Felt(),
 		FunctionName:    "attest",
-		CallData:        []*felt.Felt{blockhash.Felt()},
+		CallData:        []*felt.Felt{blockhash.Felt().Clone()},
 	}}
 	calldata, err := s.Account.FmtCalldata(utils.InvokeFuncCallsToFunctionCalls(calls))
 	if err != nil {

@@ -101,7 +101,7 @@ func TestDispatch(t *testing.T) {
 		wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
 
 		// Send event
-		dispatcher.DoAttest <- types.DoAttest{BlockHash: blockhash}
+		dispatcher.DoAttest <- types.DoAttest{BlockHash: *blockhash}
 
 		// Preparation for EndOfWindow event
 		mockSigner.EXPECT().

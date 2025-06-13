@@ -110,7 +110,6 @@ type AttestTracker struct {
 func NewAttestTracker() AttestTracker {
 	return AttestTracker{
 		Transaction: AttestTransaction{},
-		Hash:        felt.Zero,
 		Status:      Iddle,
 	}
 }
@@ -136,10 +135,6 @@ func (a *AttestTracker) setStatus(status AttestStatus) {
 	}
 }
 
-func (a *AttestTracker) setHash(hash *felt.Felt) {
-	a.Hash = *hash
-}
-
 type EventDispatcher[S signerP.Signer] struct {
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
@@ -163,7 +158,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 	defer wg.Wait()
 
 	// Block hash to attest to
-	var targetBlockHash *types.BlockHash
+	var targetBlockHash types.BlockHash
 
 	for {
 		select {
@@ -180,7 +175,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 
 			targetBlockHash = attest.BlockHash
 			logger.Debugf("preparing attest transaction for blockhash: %s", targetBlockHash.String())
-			err := d.CurrentAttest.Transaction.Build(signer, targetBlockHash)
+			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 				continue
@@ -193,13 +188,10 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			}
 
 			// if the attest event is already being tracked by the tool
-			if d.CurrentAttest.Status != Iddle {
+			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
 				// If  status is still not successful, check for it
 				if d.CurrentAttest.Status != Successful {
 					d.CurrentAttest.UpdateStatus(signer, logger)
-					if d.CurrentAttest.Status == Successful {
-						tracer.RecordAttestationConfirmed()
-					}
 				}
 				// If status is status is already succesful or ongoing, do nothing.
 				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
@@ -212,12 +204,13 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			// or the transaction invoke failed.
 			if !d.CurrentAttest.Transaction.Valid() {
 				targetBlockHash = attest.BlockHash
-				logger.Debug("building attest transaction in `do` stage (and not `prepare`)")
-				err := d.CurrentAttest.Transaction.Build(signer, targetBlockHash)
+				logger.Debugf("building attest transaction (in `do` stage) for blockhash: %s", &targetBlockHash)
+				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 					continue
 				}
+				logger.Debug("built attest transaction succesfully")
 			} else {
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
@@ -233,7 +226,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
-					tracer.RecordAttestationConfirmed()
 					logger.Infow(
 						"Attestation is already done for this epoch",
 						"block hash", targetBlockHash.String(),
@@ -249,12 +241,10 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 				)
 				d.CurrentAttest.setStatus(Failed)
 
-				// Record attestation failure in metrics
-				tracer.RecordAttestationFailure()
 				continue
 			}
 			logger.Debugw("Attest transaction sent", "hash", resp.Hash)
-			d.CurrentAttest.setHash(resp.Hash)
+			d.CurrentAttest.Hash = *resp.Hash
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
@@ -268,7 +258,6 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 					"Successfully attested to target block",
 					"target block hash", targetBlockHash.String(),
 				)
-				// Record attestation confirmation in metrics
 				tracer.RecordAttestationConfirmed()
 			} else {
 				logger.Warnw(
@@ -276,10 +265,10 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 					"target block hash", targetBlockHash.String(),
 					"latest attest status", d.CurrentAttest.Status,
 				)
+				tracer.RecordAttestationFailure()
 			}
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
-			targetBlockHash = nil
 		}
 	}
 }
