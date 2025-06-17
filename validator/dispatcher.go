@@ -180,7 +180,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 				continue
 			}
-			logger.Debug("built attest transaction succesfully")
+			logger.Debug("built attest transaction successfully")
 
 		case attest, ok := <-d.DoAttest:
 			if !ok {
@@ -193,7 +193,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 				if d.CurrentAttest.Status != Successful {
 					d.CurrentAttest.UpdateStatus(signer, logger)
 				}
-				// If status is status is already succesful or ongoing, do nothing.
+				// If status is status is already successful or ongoing, do nothing.
 				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
 					continue
 				}
@@ -210,7 +210,7 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 					continue
 				}
-				logger.Debug("built attest transaction succesfully")
+				logger.Debug("built attest transaction successfully")
 			} else {
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
@@ -323,7 +323,7 @@ func TrackAttest[S signerP.Signer](
 	}
 
 	logger.Infow(
-		"Attest transaction SUCCESFULL",
+		"Attest transaction SUCCESSFUL",
 		"transaction hash", txHash,
 		"finality status", txStatus.FinalityStatus,
 		"execution status", txStatus.ExecutionStatus,

@@ -258,8 +258,8 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 	}
 }
 
-func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
-	account Account,
+func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
+	signer Signer,
 	logger *utils.ZapLogger,
 	prevEpoch *types.EpochInfo,
 	isEpochSwitchCorrect func(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool,
@@ -269,7 +269,7 @@ func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
 	// storing the initial value for error reporting
 	totalRetryAmount := maxRetries.String()
 
-	newEpoch, newAttestInfo, err := signerP.FetchEpochAndAttestInfo(account, logger)
+	newEpoch, newAttestInfo, err := signerP.FetchEpochAndAttestInfo(signer, logger)
 
 	for (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && !maxRetries.IsZero() {
 		if err != nil {
@@ -281,7 +281,7 @@ func FetchEpochAndAttestInfoWithRetry[Account signerP.Signer](
 
 		Sleep(time.Second)
 
-		newEpoch, newAttestInfo, err = signerP.FetchEpochAndAttestInfo(account, logger)
+		newEpoch, newAttestInfo, err = signerP.FetchEpochAndAttestInfo(signer, logger)
 		maxRetries.Sub()
 	}
 
