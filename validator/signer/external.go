@@ -51,6 +51,7 @@ func NewExternalSigner(
 	logger.Infof("validation contracts: %s", validationContracts.String())
 
 	return ExternalSigner{
+		ctx:                 ctx,
 		Provider:            provider,
 		operationalAddress:  types.AddressFromString(signer.OperationalAddress),
 		url:                 signer.ExternalURL,
