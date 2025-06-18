@@ -48,7 +48,7 @@ func New(
 			return Validator{}, err
 		}
 		signer = &externalSigner
-		logger.Info("Using external signer at %s", config.Signer.ExternalURL)
+		logger.Infof("Using external signer at %s", config.Signer.ExternalURL)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
 			context.Background(),
