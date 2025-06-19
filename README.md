@@ -69,12 +69,12 @@ Note that because both `url` and `privateKey` fields are set in the previous exa
 Alternatively, similarly as described as the previous section, the validator can be configured using environment vars. The following example using a `.env` file with the following content:
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v0_8"
-PROVIDER_WS_URL="ws://localhost:6061/v0_8"
+export PROVIDER_HTTP_URL="http://localhost:6060/v0_8"
+export PROVIDER_WS_URL="ws://localhost:6061/v0_8"
 
-SIGNER_EXTERNAL_URL="http://localhost:8080"
-SIGNER_OPERATIONAL_ADDRESS="0x123"
-SIGNER_PRIVATE_KEY="0x456"
+export SIGNER_EXTERNAL_URL="http://localhost:8080"
+export SIGNER_OPERATIONAL_ADDRESS="0x123"
+export SIGNER_PRIVATE_KEY="0x456"
 ```
 
 Source the enviroment vars and run the validator:
