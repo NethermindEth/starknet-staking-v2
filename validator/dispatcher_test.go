@@ -1,6 +1,7 @@
 package validator_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -98,7 +99,7 @@ func TestDispatch(t *testing.T) {
 
 		dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+		wg.Go(func() { dispatcher.Dispatch(mockSigner, math.Inf(1), logger, tracer) })
 
 		// Send event
 		dispatcher.DoAttest <- types.DoAttest{BlockHash: *blockhash}
