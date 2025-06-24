@@ -28,6 +28,8 @@ type Metrics struct {
 	attestationSubmittedCount       *prometheus.CounterVec
 	attestationFailureCount         *prometheus.CounterVec
 	attestationConfirmedCount       *prometheus.CounterVec
+	signerBalance                   *prometheus.GaugeVec
+	signerBalanceBelowThreshold     *prometheus.GaugeVec
 }
 
 // NewMetrics creates a new metrics server
@@ -101,6 +103,20 @@ func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *
 			},
 			[]string{"network"},
 		),
+		signerBalance: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "validator_attestation_signer_balance",
+				Help: "The balance of the account that signs the attestation after each attest transaction",
+			},
+			[]string{"network"},
+		),
+		signerBalanceBelowThreshold: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "validator_attestation_signer_below_threshold",
+				Help: "Set to true if the account that signs the attestation has it's balance below certain threshold",
+			},
+			[]string{"network"},
+		),
 	}
 
 	// Register metrics with Prometheus registry
@@ -149,13 +165,13 @@ func (m *Metrics) Stop(ctx context.Context) error {
 
 // UpdateLatestBlockNumber updates the latest block number metric
 func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
-	m.logger.Debugw("metrics.UpdateLatestBlockNumber", "blockNumber", blockNumber)
+	m.logger.Debugw("UpdateLatestBlockNumber", "blockNumber", blockNumber)
 	m.latestBlockNumber.WithLabelValues(m.network).Set(float64(blockNumber))
 }
 
 // UpdateEpochInfo updates the epoch-related metrics
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
-	m.logger.Debugw("metrics.UpdateEpochInfo", "epochInfo", epochInfo, "targetBlock", targetBlock)
+	m.logger.Debugw("UpdateEpochInfo", "epochInfo", epochInfo, "targetBlock", targetBlock)
 	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochId))
 	m.currentEpochLength.WithLabelValues(m.network).Set(float64(epochInfo.EpochLen))
 	m.currentEpochStartingBlockNumber.
@@ -164,21 +180,40 @@ func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64
 	m.currentEpochAssignedBlockNumber.WithLabelValues(m.network).Set(float64(targetBlock))
 }
 
+// UpdateSignerBalance set's the signer account balance. If it is too big a default max value is set
+// instead
+func (m *Metrics) UpdateSignerBalance(balance float64) {
+	m.logger.Debugw("UpdateSignerBalancer", "balance", balance)
+	m.signerBalance.WithLabelValues(m.network).Set(balance)
+}
+
 // RecordAttestationSubmitted increments the attestation submitted counter
 func (m *Metrics) RecordAttestationSubmitted() {
-	m.logger.Debugw("metrics.RecordAttestationSubmitted")
+	m.logger.Debugw("RecordAttestationSubmitted")
 	m.attestationSubmittedCount.WithLabelValues(m.network).Inc()
 	m.lastAttestationTimestamp.WithLabelValues(m.network).Set(float64(time.Now().Unix()))
 }
 
 // RecordAttestationFailure increments the attestation failure counter
 func (m *Metrics) RecordAttestationFailure() {
-	m.logger.Debugw("metrics.RecordAttestationFailure")
+	m.logger.Debugw("RecordAttestationFailure")
 	m.attestationFailureCount.WithLabelValues(m.network).Inc()
 }
 
 // RecordAttestationConfirmed increments the attestation confirmed counter
 func (m *Metrics) RecordAttestationConfirmed() {
-	m.logger.Debugw("metrics.RecordAttestationConfirmed")
+	m.logger.Debugw("RecordAttestationConfirmed")
 	m.attestationConfirmedCount.WithLabelValues(m.network).Inc()
+}
+
+// RecordSignerBalanceAboveThreshold sets the value to 0
+func (m *Metrics) RecordSignerBalanceAboveThreshold() {
+	m.logger.Debug("RecordSignerBalanceAboveThreshold")
+	m.signerBalanceBelowThreshold.WithLabelValues(m.network).Set(0)
+}
+
+// RecordSignerBalanceBelowThreshold sets the value to 1
+func (m *Metrics) RecordSignerBalanceBelowThreshold() {
+	m.logger.Debug("RecordSignerBalanceAboveThreshold")
+	m.signerBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
 }
