@@ -52,7 +52,7 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 
 	if len(result) != 5 {
 		return types.EpochInfo{},
-			entrypointResponseError("get_attestation_info_by_operational_address")
+			entrypointResponseError("get_attestation_info_by_operational_address", result)
 	}
 
 	stake := result[1].Bits()
@@ -79,32 +79,32 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 	}
 
 	if len(result) != 1 {
-		return 0, entrypointResponseError("attestation_window")
+		return 0, entrypointResponseError("attestation_window", result)
 	}
 
 	return result[0].Uint64(), nil
 }
 
 // For near future when tracking validator's balance
-func FetchValidatorBalance[Account Signer](account Account) (types.Balance, error) {
+func FetchValidatorBalance[S Signer](signer S) (types.Balance, error) {
 	StrkTokenContract := types.AddressFromString(constants.STRK_CONTRACT_ADDRESS)
-	result, err := account.Call(
+	result, err := signer.Call(
 		rpc.FunctionCall{
 			ContractAddress:    StrkTokenContract.Felt(),
-			EntryPointSelector: utils.GetSelectorFromNameFelt("balanceOf"),
-			Calldata:           []*felt.Felt{account.Address().Felt()},
+			EntryPointSelector: utils.GetSelectorFromNameFelt("balance_of"),
+			Calldata:           []*felt.Felt{signer.Address().Felt()},
 		},
 		rpc.BlockID{Tag: "latest"},
 	)
 	if err != nil {
-		return types.Balance{}, entrypointInternalError("balanceOf", err)
+		return types.Balance{}, entrypointInternalError("balance_of", err)
 	}
 
-	if len(result) != 1 {
-		return types.Balance{}, entrypointResponseError("balanceOf")
+	if len(result) != 2 {
+		return types.Balance{}, entrypointResponseError("balance_of", result)
 	}
 
-	return types.Balance(*result[0]), nil
+	return types.NewBalance(result[0], result[1]), nil
 }
 
 func FetchEpochAndAttestInfo[S Signer](

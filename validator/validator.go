@@ -15,7 +15,7 @@ import (
 	"github.com/sourcegraph/conc"
 )
 
-const Version = "0.2.6"
+const Version = "0.2.7-rc.0"
 
 type Validator struct {
 	provider *rpc.Provider
@@ -87,13 +87,16 @@ func (v *Validator) ChainID() string {
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
 func (v *Validator) Attest(
-	ctx context.Context, maxRetries types.Retries, tracer metrics.Tracer,
+	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
+	// Initial check of the account balance
+	go CheckBalance(v.signer, balanceThreshold, &v.logger, tracer)
+
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
-		dispatcher.Dispatch(v.signer, &v.logger, tracer)
+		dispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
 	defer wg.Wait()

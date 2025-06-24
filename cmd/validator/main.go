@@ -37,6 +37,7 @@ func NewCommand() cobra.Command {
 
 	var config configP.Config
 	var maxRetries types.Retries
+	var balanceThreshold float64
 	var snConfig configP.StarknetConfig
 	var logger utils.ZapLogger
 
@@ -126,7 +127,7 @@ func NewCommand() cobra.Command {
 		// Start validator in a goroutine
 		errCh := make(chan error, 1)
 		go func() {
-			err := v.Attest(globalCtx, maxRetries, tracer)
+			err := v.Attest(globalCtx, maxRetries, balanceThreshold, tracer)
 			if err != nil {
 				logger.Error(err)
 				errCh <- err
@@ -193,7 +194,7 @@ func NewCommand() cobra.Command {
 		"Staking contract address. Defaults values are provided for Sepolia and Mainnet",
 	)
 
-	// Metrick trackng flags
+	// Metric tracking flags
 	cmd.Flags().BoolVar(&metricsF, "metrics", false, "Enable metric tracking via Prometheus")
 	cmd.Flags().StringVar(&metricsHostF, "metrics-host", "localhost", "Host for the metric server")
 	cmd.Flags().StringVar(&metricsPortF, "metrics-port", "9090", "Port for the metric server")
@@ -205,6 +206,13 @@ func NewCommand() cobra.Command {
 		"infinite",
 		"How many times to retry to get information required for attestation."+
 			" It can be either a positive integer or the key word 'infinite'",
+	)
+	cmd.Flags().Float64Var(
+		&balanceThreshold,
+		"balance-threshold",
+		0,
+		"Triggers a warning if it detects the signer account (i.e. operational address)"+
+			" stark balance below the specified threshold. One stark equals 1 << 1e18.",
 	)
 	cmd.Flags().BoolVar(
 		&braavosAccount,
