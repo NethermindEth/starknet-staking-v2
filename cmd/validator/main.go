@@ -210,7 +210,7 @@ func NewCommand() cobra.Command {
 	cmd.Flags().Float64Var(
 		&balanceThreshold,
 		"balance-threshold",
-		0,
+		100,
 		"Triggers a warning if it detects the signer account (i.e. operational address)"+
 			" stark balance below the specified threshold. One stark equals 1 << 1e18.",
 	)
