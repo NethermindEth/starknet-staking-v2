@@ -130,6 +130,8 @@ func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *
 		m.attestationSubmittedCount,
 		m.attestationFailureCount,
 		m.attestationConfirmedCount,
+		m.signerBalance,
+		m.signerBalanceBelowThreshold,
 	)
 
 	// Create HTTP server
@@ -214,6 +216,6 @@ func (m *Metrics) RecordSignerBalanceAboveThreshold() {
 
 // RecordSignerBalanceBelowThreshold sets the value to 1
 func (m *Metrics) RecordSignerBalanceBelowThreshold() {
-	m.logger.Debug("RecordSignerBalanceAboveThreshold")
+	m.logger.Debug("RecordSignerBalanceBelowThreshold")
 	m.signerBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
 }
