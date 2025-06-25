@@ -24,8 +24,8 @@ func CheckBalance[S signerP.Signer](
 	logger.Infow(
 		"Account balance",
 		"address", signer.Address(),
-		"WEI", balance.Text(10),
 		"STRK", balanceF64,
+		"WEI", balance.Text(10),
 	)
 
 	if math.IsInf(balanceF64, 1) {
