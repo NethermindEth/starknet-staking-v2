@@ -120,9 +120,11 @@ In addition to the configuration described above, the tool allows for other non-
 
 2. `--max-tries` allows you to set how many attempts the tool does to get attestation information. It can be set to any positive number or to *infinite* if you want the tool to never stop execution. It's set to*infinite* by default.
 
-3. `--log-level` set's the tool logging level. Default to `info`.
+3. `--balance-threshold` the minimum stark balance you wish to maintain above. If balance goes below it will emit a warning. Checks are performed after every attestation window ends. It is set to 100 STRK by default.
 
-4. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. 
+4. `--log-level` set's the tool logging level. Defaults to `info`.
+
+5. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. 
 
 ## Other features
 
