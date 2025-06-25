@@ -120,7 +120,7 @@ In addition to the configuration described above, the tool allows for other non-
 
 2. `--max-tries` allows you to set how many attempts the tool does to get attestation information. It can be set to any positive number or to *infinite* if you want the tool to never stop execution. It's set to*infinite* by default.
 
-3. `--balance-threshold` the minimum stark balance you wish to maintain above. If balance goes below it will emit a warning. Checks are performed after every attestation window ends. It is set to 100 STRK by default.
+3. `--balance-threshold` represents the balance amount you want your signer account to be above of. Checks are performed after every attestation window ends and if the balance is below the specified amount a warning is emitted. Defaults to 100 STRK.
 
 4. `--log-level` set's the tool logging level. Defaults to `info`.
 
