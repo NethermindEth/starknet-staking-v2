@@ -15,35 +15,36 @@ func CheckBalance[S signerP.Signer](
 	// record the balance
 	// give a warning if below certain threshold (optional)
 	logger.Debugf("Calling balance of %s", signer.Address())
-	balance, err := signerP.FetchValidatorBalance(signer)
+	balanceWei, err := signerP.FetchValidatorBalance(signer)
 	if err != nil {
-		logger.Warnf("Unable to get balance of account %s: %s", signer.Address(), err.Error())
+		logger.Warnf("Unable to get STRK balance of account %s: %s", signer.Address(), err.Error())
 		return
 	}
-	balanceF64 := balance.Float()
+	balance := balanceWei.Strk()
 	logger.Infow(
 		"Account balance",
 		"address", signer.Address(),
-		"STRK", balanceF64,
-		"WEI", balance.Text(10),
+		"STRK", balance,
+		"WEI", balanceWei.Text(10),
 	)
 
-	if math.IsInf(balanceF64, 1) {
+	if math.IsInf(balance, 1) {
 		logger.Debugf(
-			"Signer balance value cannot be represented as a float64. Setting value to %d",
-			balanceF64,
+			"Signer STRK balance value cannot be represented as a float64. Setting value to %d",
+			balance,
 		)
-	} else if math.IsInf(balanceF64, -1) || math.IsNaN(balanceF64) {
+	} else if math.IsInf(balance, -1) || math.IsNaN(balance) {
 		logger.Error(
-			"Unexpected balance conversion value from %s to %f",
-			balance.Text(10),
-			balanceF64,
+			"Unexpected balance conversion value from WEI: %s to STRK: %f",
+			balanceWei.Text(10),
+			balance,
 		)
+		return
 	}
-	tracer.UpdateSignerBalance(balanceF64)
+	tracer.UpdateSignerBalance(balance)
 
-	if balanceF64 <= threshold {
-		logger.Warnf("Balance below threshold: %f <= %f", balanceF64, threshold)
+	if balance <= threshold {
+		logger.Warnf("Balance below threshold: %f <= %f", balance, threshold)
 		tracer.RecordSignerBalanceBelowThreshold()
 	} else {
 		tracer.RecordSignerBalanceAboveThreshold()
