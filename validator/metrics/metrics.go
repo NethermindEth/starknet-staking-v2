@@ -113,7 +113,7 @@ func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *
 		signerBalanceBelowThreshold: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_signer_below_threshold",
-				Help: "Set to true if the account that signs the attestation has it's balance below certain threshold",
+				Help: "Set to one if the account that signs the attestation has it's balance below certain threshold",
 			},
 			[]string{"network"},
 		),
