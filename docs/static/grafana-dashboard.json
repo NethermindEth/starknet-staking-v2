@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 567,
+  "id": 585,
   "links": [],
   "panels": [
     {
@@ -29,12 +29,180 @@
         "x": 0,
         "y": 0
       },
+      "id": 300,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "Displays OK vs LOW BALANCE status based on threshold. Shows whether the attestation signer has sufficient STRK balance to continue operations.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "0": {
+                      "index": 1,
+                      "text": "OK"
+                    },
+                    "1": {
+                      "color": "dark-red",
+                      "index": 0,
+                      "text": "LOW BALANCE"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "dark-red",
+                    "value": 1
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "id": 405,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-90058",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_signer_below_threshold{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "Balance Status",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Signer Balance Status",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "Current STRK token balance of the attestation signer account. Monitor this to ensure sufficient funds for transaction fees.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 4,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "STRK"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 18,
+            "x": 6,
+            "y": 1
+          },
+          "id": 404,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.1.0-90058",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "validator_attestation_signer_balance{network=~\"$network\"}",
+              "instant": true,
+              "legendFormat": "STRK balance",
+              "range": false,
+              "refId": "A"
+            }
+          ],
+          "title": "Signer Balance",
+          "type": "stat"
+        }
+      ],
+      "title": "Health",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
       "id": 100,
       "panels": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Latest block number seen by the validator on the Starknet network.",
           "fieldConfig": {
@@ -60,7 +228,7 @@
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 1
+            "y": 8
           },
           "id": 313,
           "options": {
@@ -80,12 +248,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_starknet_latest_block_number{network=~\"$network\"}",
@@ -101,7 +269,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Displays the first block number of the current epoch.",
           "fieldConfig": {
@@ -127,7 +295,7 @@
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 1
+            "y": 8
           },
           "id": 9,
           "options": {
@@ -147,12 +315,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_current_epoch_starting_block_number{network=~\"$network\"}",
@@ -168,7 +336,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "The specific block number within the current epoch for which the validator is assigned to attest.",
           "fieldConfig": {
@@ -194,7 +362,7 @@
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 1
+            "y": 8
           },
           "id": 314,
           "options": {
@@ -214,18 +382,16 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_current_epoch_assigned_block_number{network=~\"$network\"}",
-              "instant": true,
-              "legendFormat": "Assigned Block",
-              "range": false,
+              "range": true,
               "refId": "A"
             }
           ],
@@ -235,7 +401,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Shows the ID of the current epoch the validator is participating in.",
           "fieldConfig": {
@@ -261,7 +427,7 @@
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 1
+            "y": 8
           },
           "id": 7,
           "options": {
@@ -281,12 +447,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_current_epoch_id{network=~\"$network\"}",
@@ -302,7 +468,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Visualizes the validator's progress through the current epoch.",
           "fieldConfig": {
@@ -331,7 +497,7 @@
             "h": 8,
             "w": 6,
             "x": 0,
-            "y": 20
+            "y": 12
           },
           "id": 203,
           "options": {
@@ -349,12 +515,12 @@
             "showThresholdMarkers": true,
             "sizing": "auto"
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "(\n  (\n    validator_attestation_starknet_latest_block_number{network=~\"$network\"} \n    - \n    validator_attestation_current_epoch_starting_block_number{network=~\"$network\"}\n  ) / validator_attestation_current_epoch_length{network=~\"$network\"}\n) * 100",
@@ -370,7 +536,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Progress towards next attestation duty. Shows how close the current block is to the assigned attestation block for this epoch.",
           "fieldConfig": {
@@ -395,7 +561,7 @@
             "h": 8,
             "w": 6,
             "x": 6,
-            "y": 20
+            "y": 12
           },
           "id": 312,
           "options": {
@@ -413,12 +579,12 @@
             "showThresholdMarkers": true,
             "sizing": "auto"
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "clamp_max(\n  (\n    (validator_attestation_starknet_latest_block_number{network=~\"$network\"} - validator_attestation_current_epoch_starting_block_number{network=~\"$network\"})\n    /\n    (validator_attestation_current_epoch_assigned_block_number{network=~\"$network\"} - validator_attestation_current_epoch_starting_block_number{network=~\"$network\"})\n  ) * 100,\n  100\n)",
@@ -434,7 +600,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Blocks remaining until the validator's assigned attestation duty for the current epoch.",
           "fieldConfig": {
@@ -460,7 +626,7 @@
             "h": 8,
             "w": 6,
             "x": 12,
-            "y": 20
+            "y": 12
           },
           "id": 311,
           "options": {
@@ -480,12 +646,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_current_epoch_assigned_block_number{network=~\"$network\"} - validator_attestation_starknet_latest_block_number{network=~\"$network\"}",
@@ -501,7 +667,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Indicates the total length (in blocks) of the current epoch.",
           "fieldConfig": {
@@ -527,7 +693,7 @@
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 20
+            "y": 12
           },
           "id": 8,
           "options": {
@@ -547,12 +713,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_current_epoch_length{network=~\"$network\"}",
@@ -575,14 +741,14 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 2
       },
       "id": 102,
       "panels": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "The Unix timestamp (in seconds) of the last successful attestation submission, converted to minutes ago.",
           "fieldConfig": {
@@ -600,11 +766,11 @@
                   },
                   {
                     "color": "yellow",
-                    "value": 30
+                    "value": 60
                   },
                   {
                     "color": "red",
-                    "value": 60
+                    "value": 90
                   }
                 ]
               },
@@ -616,7 +782,7 @@
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 2
+            "y": 21
           },
           "id": 301,
           "options": {
@@ -636,12 +802,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "(time() - validator_attestation_last_attestation_timestamp_seconds{network=~\"$network\"}) / 60",
@@ -657,7 +823,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "The total number of attestations submitted by the validator since startup.",
           "fieldConfig": {
@@ -683,7 +849,7 @@
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 2
+            "y": 21
           },
           "id": 401,
           "options": {
@@ -703,12 +869,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "increase(validator_attestation_attestation_submitted_count{network=~\"$network\"}[$__range])",
@@ -718,13 +884,13 @@
               "refId": "A"
             }
           ],
-          "title": "Attestations Submitted (Total)",
+          "title": "Attestations Submitted",
           "type": "stat"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "The total number of attestations that have been confirmed on the network since validator startup.",
           "fieldConfig": {
@@ -750,7 +916,7 @@
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 2
+            "y": 21
           },
           "id": 402,
           "options": {
@@ -770,12 +936,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "increase(validator_attestation_attestation_confirmed_count{network=~\"$network\"}[$__range])",
@@ -785,13 +951,13 @@
               "refId": "A"
             }
           ],
-          "title": "Attestations Confirmed (Total)",
+          "title": "Attestations Confirmed",
           "type": "stat"
         },
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "The percentage of submitted attestations that have been successfully confirmed.",
           "fieldConfig": {
@@ -823,7 +989,7 @@
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 2
+            "y": 21
           },
           "id": 315,
           "options": {
@@ -843,15 +1009,15 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "(\n  increase(validator_attestation_attestation_confirmed_count{network=~\"$network\"}[$__range])\n  /\n  increase(validator_attestation_attestation_submitted_count{network=~\"$network\"}[$__range])\n) * 100",
+              "expr": "(\n  increase(validator_attestation_attestation_confirmed_count{network=~\"$network\"}[$__range])\n  /\n  (\n    increase(validator_attestation_attestation_confirmed_count{network=~\"$network\"}[$__range])\n    +\n    (\n      increase(validator_attestation_attestation_failure_count{network=~\"$network\"}[$__range])\n      or\n      (increase(validator_attestation_attestation_confirmed_count{network=~\"$network\"}[$__range]) * 0)\n    )\n  )\n) * 100",
               "instant": true,
               "legendFormat": "Success Rate",
               "range": false,
@@ -864,7 +1030,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "The total number of attestation transaction submission failures encountered by the validator since startup.",
           "fieldConfig": {
@@ -898,7 +1064,7 @@
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 21
+            "y": 25
           },
           "id": 403,
           "options": {
@@ -918,12 +1084,12 @@
             "textMode": "auto",
             "wideLayout": true
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "increase(validator_attestation_attestation_failure_count{network=~\"$network\"}[$__range])",
@@ -939,7 +1105,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Trend of total attestations confirmed over time.",
           "fieldConfig": {
@@ -998,7 +1164,7 @@
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 21
+            "y": 25
           },
           "id": 2,
           "options": {
@@ -1016,12 +1182,12 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_attestation_confirmed_count{network=~\"$network\"}",
@@ -1037,7 +1203,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Trend of total attestations submitted over time.",
           "fieldConfig": {
@@ -1096,7 +1262,7 @@
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 21
+            "y": 25
           },
           "id": 1,
           "options": {
@@ -1114,12 +1280,12 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_attestation_submitted_count{network=~\"$network\"}",
@@ -1135,9 +1301,9 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
-          "description": "Time since the last successful attestation was submitted.",
+          "description": "Time since the last successful attestation was submitted by any validator instance.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -1203,7 +1369,7 @@
             "h": 5,
             "w": 12,
             "x": 0,
-            "y": 25
+            "y": 29
           },
           "id": 4,
           "options": {
@@ -1219,12 +1385,12 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "time() - validator_attestation_last_attestation_timestamp_seconds{network=~\"$network\"}",
@@ -1240,7 +1406,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "bec9p4jndkuf4f"
+            "uid": "${datasource}"
           },
           "description": "Trend of total attestation submission failures over time.",
           "fieldConfig": {
@@ -1299,7 +1465,7 @@
             "h": 5,
             "w": 12,
             "x": 12,
-            "y": 25
+            "y": 29
           },
           "id": 11,
           "options": {
@@ -1317,12 +1483,12 @@
               "sort": "none"
             }
           },
-          "pluginVersion": "12.1.0-89256.patch1-89350",
+          "pluginVersion": "12.1.0-90058",
           "targets": [
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "bec9p4jndkuf4f"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "validator_attestation_attestation_failure_count{network=~\"$network\"}",
@@ -1340,105 +1506,106 @@
       "type": "row"
     },
     {
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 2
-      },
-      "id": 103,
-      "panels": [],
-      "title": "Logs",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "eelo80t0nfri8d"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
         "y": 3
       },
-      "id": 10,
-      "options": {
-        "dedupStrategy": "none",
-        "enableInfiniteScrolling": false,
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "pluginVersion": "12.1.0-89256.patch1-89350",
-      "targets": [
+      "id": 103,
+      "panels": [
         {
           "datasource": {
             "type": "loki",
-            "uid": "eelo80t0nfri8d"
+            "uid": "${datasourceLog}"
           },
-          "direction": "backward",
-          "editorMode": "code",
-          "expr": "{network=~\"$network\"}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "All",
-      "type": "logs"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "eelo80t0nfri8d"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 24,
-        "x": 0,
-        "y": 13
-      },
-      "id": 104,
-      "options": {
-        "dedupStrategy": "none",
-        "enableInfiniteScrolling": false,
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "pluginVersion": "12.1.0-89256.patch1-89350",
-      "targets": [
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 35
+          },
+          "id": 10,
+          "options": {
+            "dedupStrategy": "none",
+            "enableInfiniteScrolling": false,
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": false,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "pluginVersion": "12.1.0-90058",
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${datasourceLog}"
+              },
+              "direction": "backward",
+              "editorMode": "code",
+              "expr": "{job=~\".*validator.*\"}",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "title": "All",
+          "type": "logs"
+        },
         {
           "datasource": {
             "type": "loki",
-            "uid": "eelo80t0nfri8d"
+            "uid": "${datasourceLog}"
           },
-          "direction": "backward",
-          "editorMode": "code",
-          "expr": "{network=~\"$network\"} |~ \"ERR|panic|error|fail\"",
-          "queryType": "range",
-          "refId": "A"
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 24,
+            "x": 0,
+            "y": 45
+          },
+          "id": 104,
+          "options": {
+            "dedupStrategy": "none",
+            "enableInfiniteScrolling": false,
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": false,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "pluginVersion": "12.1.0-90058",
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "${datasourceLog}"
+              },
+              "direction": "backward",
+              "editorMode": "code",
+              "expr": "{job=~\".*validator.*\"} |~ \"ERR|panic|error|fail\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ],
+          "title": "Errors",
+          "type": "logs"
         }
       ],
-      "title": "Errors",
-      "type": "logs"
+      "title": "Logs",
+      "type": "row"
     }
   ],
   "preload": false,
@@ -1446,10 +1613,35 @@
   "schemaVersion": 41,
   "tags": [
     "starknet",
-    "validator"
+    "validator",
+    "sepolia"
   ],
   "templating": {
     "list": [
+      {
+        "current": {
+          "text": "Default Prometheus Datasource",
+          "value": "default-prometheus-datasource"
+        },
+        "label": "datasource",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "label": "datasourceLog",
+        "name": "datasourceLog",
+        "options": [],
+        "query": "loki",
+        "refresh": 1,
+        "type": "datasource"
+      },
       {
         "allValue": ".*",
         "current": {
@@ -1462,7 +1654,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "bec9p4jndkuf4f"
+          "uid": "${datasource}"
         },
         "definition": "label_values(validator_attestation_starknet_latest_block_number, network)",
         "description": "Starknet network (e.g., SN_SEPOLIA, SN_MAINNET)",
@@ -1483,12 +1675,12 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Starknet Validator Dashboard (Single Instance)",
-  "uid": "starknet-validator-single-instance",
-  "version": 3
+  "title": "Starknet Validator Dashboard",
+  "uid": "starknet-validator",
+  "version": 2
 }
