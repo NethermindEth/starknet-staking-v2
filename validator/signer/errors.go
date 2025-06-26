@@ -17,6 +17,6 @@ func entrypointResponseError(entrypointName string, result []*felt.Felt) error {
 	stringArr := utils.FeltArrToStringArr(result)
 	stringErr := "[" + strings.Join(stringArr, ", ") + "]"
 	return fmt.Errorf(
-		"invalid response from entrypoint %s. Response: %s", entrypointName, stringErr,
+		"invalid response from entrypoint `%s`. Response: %s", entrypointName, stringErr,
 	)
 }

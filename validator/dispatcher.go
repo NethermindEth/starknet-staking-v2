@@ -287,7 +287,7 @@ func TrackAttest[S signerP.Signer](
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Infow(
 				"Attest transaction status was not found. Will wait.",
-				"hash", txHash,
+				"transaction hash", txHash,
 			)
 			return Ongoing
 		} else {

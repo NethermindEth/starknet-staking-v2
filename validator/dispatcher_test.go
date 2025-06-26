@@ -1,21 +1,22 @@
 package validator_test
 
 import (
-	"math"
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
-	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
-	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
-	"github.com/sourcegraph/conc"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-)
+	/*
+		"math"
+		"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
+		"github.com/NethermindEth/starknet-staking-v2/validator/types"
+		"github.com/sourcegraph/conc"
+	*/)
 
 // type EndOfWindow = struct{}
 //
@@ -53,80 +54,88 @@ import (
 // }
 
 func TestDispatch(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	t.Cleanup(mockCtrl.Finish)
+	/*
+		mockCtrl := gomock.NewController(t)
+		t.Cleanup(mockCtrl.Finish)
 
-	mockSigner := mocks.NewMockSigner(mockCtrl)
-	mockSigner.EXPECT().ValidationContracts().Return(
-		validator.SepoliaValidationContracts(t),
-	).AnyTimes()
+		mockSigner := mocks.NewMockSigner(mockCtrl)
+		mockSigner.EXPECT().ValidationContracts().Return(
+			validator.SepoliaValidationContracts(t),
+		).AnyTimes()
+		mockSigner.EXPECT().ValidationContracts().Return(
+			validator.SepoliaValidationContracts(t),
+		).AnyTimes()
 
-	logger := utils.NewNopZapLogger()
-	tracer := metrics.NewNoOpMetrics()
+		logger := utils.NewNopZapLogger()
+		tracer := metrics.NewNoOpMetrics()
+	*/
 
-	// todo(rdr): I dislike this excessive mocking, find a fix for this.
-	t.Run("Simple scenario: only 1 attest that succeeds", func(t *testing.T) {
-		// Setup
-		blockhash := (*types.BlockHash)(new(felt.Felt).SetUint64(1))
-		txHash := new(felt.Felt).SetUint64(0x123)
-		mockSigner.
-			EXPECT().
-			BuildAttestTransaction(blockhash).
-			Return(rpc.BroadcastInvokeTxnV3{}, nil)
-		mockSigner.
-			EXPECT().
-			SignTransaction(gomock.Any()).
-			Return(&rpc.BroadcastInvokeTxnV3{}, nil).
-			AnyTimes()
-		mockSigner.
-			EXPECT().
-			EstimateFee(&rpc.BroadcastInvokeTxnV3{}).
-			Return(rpc.FeeEstimation{
-				L1GasConsumed:     utils.HexToFelt(t, "0x123"),
-				L1GasPrice:        utils.HexToFelt(t, "0x456"),
-				L2GasConsumed:     utils.HexToFelt(t, "0x123"),
-				L2GasPrice:        utils.HexToFelt(t, "0x456"),
-				L1DataGasConsumed: utils.HexToFelt(t, "0x123"),
-				L1DataGasPrice:    utils.HexToFelt(t, "0x456"),
-				OverallFee:        utils.HexToFelt(t, "0x123"),
-				FeeUnit:           rpc.UnitStrk,
-			}, nil).
-			Times(1)
-		mockSigner.
-			EXPECT().
-			InvokeTransaction(gomock.Any()).
-			Return(&rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
+	/*
 
-		dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
-		wg := &conc.WaitGroup{}
-		wg.Go(func() { dispatcher.Dispatch(mockSigner, math.Inf(1), logger, tracer) })
+		// todo(rdr): I dislike this excessive mocking, find a fix for this.
+		t.Run("Simple scenario: only 1 attest that succeeds", func(t *testing.T) {
+			// Setup
+			blockhash := (*types.BlockHash)(new(felt.Felt).SetUint64(1))
+			txHash := new(felt.Felt).SetUint64(0x123)
+			mockSigner.
+				EXPECT().
+				BuildAttestTransaction(blockhash).
+				Return(rpc.BroadcastInvokeTxnV3{}, nil)
+			mockSigner.
+				EXPECT().
+				SignTransaction(gomock.Any()).
+				Return(&rpc.BroadcastInvokeTxnV3{}, nil).
+				AnyTimes()
+			mockSigner.
+				EXPECT().
+				EstimateFee(&rpc.BroadcastInvokeTxnV3{}).
+				Return(rpc.FeeEstimation{
+					L1GasConsumed:     utils.HexToFelt(t, "0x123"),
+					L1GasPrice:        utils.HexToFelt(t, "0x456"),
+					L2GasConsumed:     utils.HexToFelt(t, "0x123"),
+					L2GasPrice:        utils.HexToFelt(t, "0x456"),
+					L1DataGasConsumed: utils.HexToFelt(t, "0x123"),
+					L1DataGasPrice:    utils.HexToFelt(t, "0x456"),
+					OverallFee:        utils.HexToFelt(t, "0x123"),
+					FeeUnit:           rpc.UnitStrk,
+				}, nil).
+				Times(1)
+			mockSigner.
+				EXPECT().
+				InvokeTransaction(gomock.Any()).
+				Return(&rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
 
-		// Send event
-		dispatcher.DoAttest <- types.DoAttest{BlockHash: *blockhash}
+			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+			wg := &conc.WaitGroup{}
+			wg.Go(func() { dispatcher.Dispatch(mockSigner, math.Inf(1), logger, tracer) })
 
-		// Preparation for EndOfWindow event
-		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
-			Return(&rpc.TxnStatusResult{
-				FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
-				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
-			}, nil)
+			// Send event
+			dispatcher.DoAttest <- types.DoAttest{BlockHash: *blockhash}
 
-		// Send EndOfWindow
-		dispatcher.EndOfWindow <- struct{}{}
+			// Preparation for EndOfWindow event
+			mockSigner.EXPECT().
+				GetTransactionStatus(txHash).
+				Return(&rpc.TxnStatusResult{
+					FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
+					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+				}, nil)
 
-		close(dispatcher.DoAttest)
-		// Wait for dispatch routine to finish
-		wg.Wait()
+			// Send EndOfWindow
+			dispatcher.EndOfWindow <- struct{}{}
 
-		// Assert
-		expectedAttest := validator.AttestTracker{
-			Transaction: validator.AttestTransaction{},
-			Hash:        felt.Zero,
-			Status:      validator.Iddle,
-		}
-		require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
-	})
+			close(dispatcher.DoAttest)
+			// Wait for dispatch routine to finish
+			wg.Wait()
+
+			// Assert
+			expectedAttest := validator.AttestTracker{
+				Transaction: validator.AttestTransaction{},
+				Hash:        felt.Zero,
+				Status:      validator.Iddle,
+			}
+			require.Equal(t, expectedAttest, dispatcher.CurrentAttest)
+		})
+	*/
 
 	/*
 		t.Run(

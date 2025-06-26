@@ -340,7 +340,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		require.Equal(
 			t,
 			errors.New(
-				"Invalid response from entrypoint `get_attestation_info_by_operational_address`",
+				"invalid response from entrypoint `get_attestation_info_by_operational_address`. Response: [0x1]",
 			),
 			err,
 		)
@@ -445,7 +445,11 @@ func TestFetchAttestWindow(t *testing.T) {
 		window, err := signer.FetchAttestWindow(mockSigner)
 
 		require.Equal(t, uint64(0), window)
-		require.Equal(t, errors.New("Invalid response from entrypoint `attestation_window`"), err)
+		require.Equal(
+			t,
+			errors.New("invalid response from entrypoint `attestation_window`. Response: []"),
+			err,
+		)
 	})
 
 	t.Run("Successful contract call", func(t *testing.T) {
