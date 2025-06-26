@@ -36,6 +36,8 @@ The following metrics are available:
 | `validator_attestation_attestation_submitted_count` | Counter | The total number of attestations submitted by the validator since startup | `validator_attestation_attestation_submitted_count{network="SN_SEPOLIA"} 55` |
 | `validator_attestation_attestation_failure_count` | Counter | The total number of attestation transaction submission failures encountered by the validator since startup | `validator_attestation_attestation_failure_count{network="SN_SEPOLIA"} 3` |
 | `validator_attestation_attestation_confirmed_count` | Counter | The total number of attestations that have been confirmed on the network since validator startup | `validator_attestation_attestation_confirmed_count{network="SN_SEPOLIA"} 52` |
+| `validator_attestation_signer_balance` | Counter | The balance of the account that signs the attestation after each attest transaction | `validator_attestation_signer_balance{network="SN_SEPOLIA"} 113` |
+| `validator_attestation_signer_below_threshold` | Counter | Set to one if the account that signs the attestation has it's balance below certain threshold | `validator_attestation_signer_below_threshold{network="SN_SEPOLIA"} 0` |
 
 All metrics include a `network` label that indicates the Starknet network (e.g., "SN_MAINNET", "SN_SEPOLIA").
 
