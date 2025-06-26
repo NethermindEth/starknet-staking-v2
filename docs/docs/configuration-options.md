@@ -27,7 +27,7 @@ In addition to the core configuration described in the [Configuration](./configu
 | `--staking-contract-address` | - | - | Auto-detected | Custom staking contract address |
 | `--attest-contract-address` | - | - | Auto-detected | Custom attestation contract address |
 | `--max-tries` | - | - | `10` | Maximum attempts to get attestation info (or "infinite") |
-| `--balance-threshold` | - | - | `100` | riggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. One stark equals 1 << 1e18 |
+| `--balance-threshold` | - | - | `100` | riggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. One stark equals 1e18 |
 | `--log-level` | - | - | `info` | Set logging level (trace, debug, info, warn, error) |
 | `--metrics` | - | - | `false` | Enable metrics server |
 | `--metrics-host` | - | - | `localhost` | Metrics server host |
