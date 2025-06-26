@@ -27,6 +27,7 @@ In addition to the core configuration described in the [Configuration](./configu
 | `--staking-contract-address` | - | - | Auto-detected | Custom staking contract address |
 | `--attest-contract-address` | - | - | Auto-detected | Custom attestation contract address |
 | `--max-tries` | - | - | `10` | Maximum attempts to get attestation info (or "infinite") |
+| `--balance-threshold` | - | - | `100` | riggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. One stark equals 1e18 |
 | `--log-level` | - | - | `info` | Set logging level (trace, debug, info, warn, error) |
 | `--metrics` | - | - | `false` | Enable metrics server |
 | `--metrics-host` | - | - | `localhost` | Metrics server host |
@@ -39,6 +40,8 @@ In addition to the core configuration described in the [Configuration](./configu
 
 2. **Max Tries**: `--max-tries` allows you to set how many attempts the tool does to get attestation information. It can be set to any positive number or to _"infinite"_ if you want the tool to never stop execution. Defaults to 10.
 
-3. **Log Level**: `--log-level` set's the tool logging level. Default to `info`.
+4. **Balance Threshold**: `--balance-threshold` represents the balance amount you want your signer account to be above of. Checks are performed after every attestation window ends and if the balance is below the specified amount a warning is emitted. Defaults to 100 STRK.
 
-4. **Braavos Account**: `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_.
+5. **Log Level**: `--log-level` set's the tool logging level. Default to `info`.
+
+6. **Braavos Account**: `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_.

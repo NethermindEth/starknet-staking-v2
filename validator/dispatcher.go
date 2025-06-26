@@ -153,7 +153,9 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	}
 }
 
-func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tracer metrics.Tracer) {
+func (d *EventDispatcher[S]) Dispatch(
+	signer S, balanceThreshold float64, logger *junoUtils.ZapLogger, tracer metrics.Tracer,
+) {
 	wg := conc.NewWaitGroup()
 	defer wg.Wait()
 
@@ -269,6 +271,8 @@ func (d *EventDispatcher[S]) Dispatch(signer S, logger *junoUtils.ZapLogger, tra
 			}
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
+			// check the account balance
+			go CheckBalance(signer, balanceThreshold, logger, tracer)
 		}
 	}
 }
@@ -283,7 +287,7 @@ func TrackAttest[S signerP.Signer](
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Infow(
 				"Attest transaction status was not found. Will wait.",
-				"hash", txHash,
+				"transaction hash", txHash,
 			)
 			return Ongoing
 		} else {

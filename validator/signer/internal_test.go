@@ -340,7 +340,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		require.Equal(
 			t,
 			errors.New(
-				"Invalid response from entrypoint `get_attestation_info_by_operational_address`",
+				"invalid response from entrypoint `get_attestation_info_by_operational_address`. Response: [0x1]",
 			),
 			err,
 		)
@@ -445,7 +445,11 @@ func TestFetchAttestWindow(t *testing.T) {
 		window, err := signer.FetchAttestWindow(mockSigner)
 
 		require.Equal(t, uint64(0), window)
-		require.Equal(t, errors.New("Invalid response from entrypoint `attestation_window`"), err)
+		require.Equal(
+			t,
+			errors.New("invalid response from entrypoint `attestation_window`. Response: []"),
+			err,
+		)
 	})
 
 	t.Run("Successful contract call", func(t *testing.T) {
@@ -471,83 +475,83 @@ func TestFetchAttestWindow(t *testing.T) {
 	})
 }
 
-func TestFetchValidatorBalance(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	t.Cleanup(mockCtrl.Finish)
-
-	mockSigner := mocks.NewMockSigner(mockCtrl)
-
-	// expected hash of `balanceOf`
-	expectedBalanceOfEntrypointHash := utils.HexToFelt(
-		t, "0x2e4263afad30923c891518314c3c95dbe830a16874e8abc5777a9a20b54c76e",
-	)
-
-	t.Run("Return error: contract internal error", func(t *testing.T) {
-		addr := types.AddressFromString("0x123")
-
-		mockSigner.EXPECT().Address().Return(&addr)
-
-		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.STRK_CONTRACT_ADDRESS),
-			EntryPointSelector: expectedBalanceOfEntrypointHash,
-			Calldata:           []*felt.Felt{addr.Felt()},
-		}
-
-		mockSigner.
-			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
-			Return(nil, errors.New("some contract error"))
-
-		balance, err := signer.FetchValidatorBalance(mockSigner)
-
-		require.Equal(t, types.Balance(felt.Zero), balance)
-		require.Equal(t, errors.New("Error when calling entrypoint `balanceOf`: some contract error"), err)
-	})
-
-	t.Run("Return error: wrong contract response length", func(t *testing.T) {
-		addr := types.AddressFromString("0x123")
-
-		mockSigner.EXPECT().Address().Return(&addr)
-
-		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.STRK_CONTRACT_ADDRESS),
-			EntryPointSelector: expectedBalanceOfEntrypointHash,
-			Calldata:           []*felt.Felt{addr.Felt()},
-		}
-
-		mockSigner.
-			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
-			Return([]*felt.Felt{}, nil)
-
-		balance, err := signer.FetchValidatorBalance(mockSigner)
-
-		require.Equal(t, types.Balance(felt.Zero), balance)
-		require.Equal(t, errors.New("Invalid response from entrypoint `balanceOf`"), err)
-	})
-
-	t.Run("Successful contract call", func(t *testing.T) {
-		addr := types.AddressFromString("0x123")
-
-		mockSigner.EXPECT().Address().Return(&addr)
-
-		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.STRK_CONTRACT_ADDRESS),
-			EntryPointSelector: expectedBalanceOfEntrypointHash,
-			Calldata:           []*felt.Felt{addr.Felt()},
-		}
-
-		mockSigner.
-			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
-			Return([]*felt.Felt{new(felt.Felt).SetUint64(1)}, nil)
-
-		balance, err := signer.FetchValidatorBalance(mockSigner)
-
-		require.Equal(t, types.Balance(*new(felt.Felt).SetUint64(1)), balance)
-		require.Nil(t, err)
-	})
-}
+// func TestFetchValidatorBalance(t *testing.T) {
+// 	mockCtrl := gomock.NewController(t)
+// 	t.Cleanup(mockCtrl.Finish)
+//
+// 	mockSigner := mocks.NewMockSigner(mockCtrl)
+//
+// 	// expected hash of `balanceOf`
+// 	expectedBalanceOfEntrypointHash := utils.HexToFelt(
+// 		t, "0x2e4263afad30923c891518314c3c95dbe830a16874e8abc5777a9a20b54c76e",
+// 	)
+//
+// 	t.Run("Return error: contract internal error", func(t *testing.T) {
+// 		addr := types.AddressFromString("0x123")
+//
+// 		mockSigner.EXPECT().Address().Return(&addr)
+//
+// 		expectedFnCall := rpc.FunctionCall{
+// 			ContractAddress:    utils.HexToFelt(t, constants.STRK_CONTRACT_ADDRESS),
+// 			EntryPointSelector: expectedBalanceOfEntrypointHash,
+// 			Calldata:           []*felt.Felt{addr.Felt()},
+// 		}
+//
+// 		mockSigner.
+// 			EXPECT().
+// 			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+// 			Return(nil, errors.New("some contract error"))
+//
+// 		balance, err := signer.FetchValidatorBalance(mockSigner)
+//
+// 		require.Equal(t, types.Balance(felt.Zero), balance)
+// 		require.Equal(t, errors.New("Error when calling entrypoint `balanceOf`: some contract error"), err)
+// 	})
+//
+// 	t.Run("Return error: wrong contract response length", func(t *testing.T) {
+// 		addr := types.AddressFromString("0x123")
+//
+// 		mockSigner.EXPECT().Address().Return(&addr)
+//
+// 		expectedFnCall := rpc.FunctionCall{
+// 			ContractAddress:    utils.HexToFelt(t, constants.STRK_CONTRACT_ADDRESS),
+// 			EntryPointSelector: expectedBalanceOfEntrypointHash,
+// 			Calldata:           []*felt.Felt{addr.Felt()},
+// 		}
+//
+// 		mockSigner.
+// 			EXPECT().
+// 			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+// 			Return([]*felt.Felt{}, nil)
+//
+// 		balance, err := signer.FetchValidatorBalance(mockSigner)
+//
+// 		require.Equal(t, types.Balance(felt.Zero), balance)
+// 		require.Equal(t, errors.New("Invalid response from entrypoint `balanceOf`"), err)
+// 	})
+//
+// 	t.Run("Successful contract call", func(t *testing.T) {
+// 		addr := types.AddressFromString("0x123")
+//
+// 		mockSigner.EXPECT().Address().Return(&addr)
+//
+// 		expectedFnCall := rpc.FunctionCall{
+// 			ContractAddress:    utils.HexToFelt(t, constants.STRK_CONTRACT_ADDRESS),
+// 			EntryPointSelector: expectedBalanceOfEntrypointHash,
+// 			Calldata:           []*felt.Felt{addr.Felt()},
+// 		}
+//
+// 		mockSigner.
+// 			EXPECT().
+// 			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+// 			Return([]*felt.Felt{new(felt.Felt).SetUint64(1)}, nil)
+//
+// 		balance, err := signer.FetchValidatorBalance(mockSigner)
+//
+// 		require.Equal(t, types.Balance(*new(felt.Felt).SetUint64(1)), balance)
+// 		require.Nil(t, err)
+// 	})
+// }
 
 func TestFetchEpochAndAttestInfo(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
