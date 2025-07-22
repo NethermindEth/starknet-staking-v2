@@ -242,9 +242,9 @@ func (d *EventDispatcher[S]) Dispatch(
 					"error", err,
 				)
 				d.CurrentAttest.setStatus(Failed)
-
 				continue
 			}
+
 			logger.Debugw("Attest transaction sent", "hash", resp.Hash)
 			d.CurrentAttest.Hash = *resp.Hash
 			// Record attestation submission in metrics

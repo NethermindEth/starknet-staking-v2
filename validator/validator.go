@@ -181,7 +181,8 @@ func ProcessBlockHeaders[Account signerP.Signer](
 
 	for block := range headersFeed {
 		logger.Infof("Block %d received", block.Number)
-		logger.Debugw("Block header information", "block header", block)
+		// unsure of the helpfulness of this log: never have been useful debugging issues
+		// logger.Debugw("Block header information", "block header", block)
 		tracer.UpdateLatestBlockNumber(block.Number)
 
 		// todo(rdr): look for some nice way of refactoring this if/else blocks
