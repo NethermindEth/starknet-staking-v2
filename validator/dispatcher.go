@@ -212,7 +212,7 @@ func (d *EventDispatcher[S]) Dispatch(
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 					continue
 				}
-				logger.Debug("built attest transaction successfully")
+				logger.Debugw("built attest transaction successfully", "nonce", d.CurrentAttest.Transaction.txn.Nonce)
 			} else {
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
