@@ -22,6 +22,9 @@ type Validator struct {
 	signer   signerP.Signer
 	logger   utils.ZapLogger
 
+	// Used to determine if a nodeProvider is synced or not
+	nodeProvider NodeProvider
+
 	// Used to initiate a websocket connection later on
 	wsProvider string
 }
@@ -65,11 +68,14 @@ func New(
 		logger.Info("Using internal signer")
 	}
 
+	starknetNode := GetProviderNodeType(config.Provider.Http, &logger)
+
 	return Validator{
-		provider:   provider,
-		signer:     signer,
-		logger:     logger,
-		wsProvider: config.Provider.Ws,
+		provider:     provider,
+		signer:       signer,
+		logger:       logger,
+		nodeProvider: starknetNode,
+		wsProvider:   config.Provider.Ws,
 	}, nil
 }
 
@@ -103,16 +109,18 @@ func (v *Validator) Attest(
 	defer close(dispatcher.PrepareAttest)
 
 	return RunBlockHeaderWatcher(
-		ctx, v.wsProvider, &v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
+		ctx, v.wsProvider, &v.logger, v.signer, &dispatcher, v.nodeProvider, maxRetries, wg, tracer,
 	)
 }
 
+// todo(rdr): This function is screaming to be refactored
 func RunBlockHeaderWatcher[S signerP.Signer](
 	ctx context.Context,
 	wsProviderURL string,
 	logger *utils.ZapLogger,
 	signer S,
 	dispatcher *EventDispatcher[S],
+	nodeProvider NodeProvider,
 	maxRetries types.Retries,
 	wg *conc.WaitGroup,
 	tracer metrics.Tracer,
@@ -124,6 +132,12 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 
 	localRetries := maxRetries
 	for {
+		if !nodeProvider.Synced() {
+			logger.Info("node provider is not synced. Awaiting 3 seconds")
+			time.Sleep(3 * time.Second)
+			continue
+		}
+
 		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(
 			wsProviderURL, logger,
 		)

@@ -61,15 +61,56 @@ func SubscribeToBlockHeaders[Logger utils.Logger](wsProviderUrl string, logger L
 	return wsProvider, headersFeed, clientSubscription, nil
 }
 
-type ProviderNode uint
+type NodeProvider interface {
+	Synced() bool
+}
 
-const (
-	Juno ProviderNode = iota
-	Pathfinder
-	Other
-)
+type JunoNode struct {
+	url    string
+	logger utils.Logger
+}
 
-func GetProviderNodeType[L utils.Logger](providerURL string, logger L) ProviderNode {
+func (j *JunoNode) Synced() bool {
+	resp, err := http.Get(j.url + "/ready/sync")
+	if err != nil {
+		j.logger.Debugw(
+			"trying to check if Juno is synced",
+			"error", err.Error(),
+		)
+	}
+
+	//nolint:errcheck // this program is meant to be short lived and the error is of little danger
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
+type PathfinderNode struct {
+	url    string
+	logger utils.Logger
+}
+
+func (p *PathfinderNode) Synced() bool {
+	resp, err := http.Get(p.url + "/ready/synced")
+	if err != nil {
+		p.logger.Debugw(
+			"trying to check if Pathfinder is synced",
+			"error", err.Error(),
+		)
+	}
+
+	//nolint:errcheck // this program is meant to be short lived and the error is of little danger
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
+type OtherNode struct {
+}
+
+func (o *OtherNode) Synced() bool {
+	return true
+}
+
+func GetProviderNodeType(providerURL string, logger utils.Logger) NodeProvider {
 	errs := make([]error, 0, 2)
 
 	resp, err := rpcVersionRequest(providerURL, "juno_version")
@@ -77,7 +118,10 @@ func GetProviderNodeType[L utils.Logger](providerURL string, logger L) ProviderN
 		ver, err := semver.NewVersion(resp)
 		if err == nil {
 			logger.Infof("connected to Juno %s", ver)
-			return Juno
+			return &JunoNode{
+				url:    providerURL,
+				logger: logger,
+			}
 		}
 	}
 	errs = append(errs, err)
@@ -88,26 +132,29 @@ func GetProviderNodeType[L utils.Logger](providerURL string, logger L) ProviderN
 		ver, err := semver.NewVersion(resp)
 		if err == nil {
 			logger.Infof("connected to Pathfinder %s", ver)
-			return Pathfinder
+			return &PathfinderNode{
+				url:    providerURL,
+				logger: logger,
+			}
 		}
 	}
 	errs = append(errs, err)
 
-	logger.Warnw("coulnd't identify connected node")
+	logger.Infof("couldnt't identify connected node (i.e. Juno or Pathfiinder)")
 	logger.Debugw(
 		"error while trying to identify if connected to either Juno or Pathfinder",
-		"Juno", errs[0],
-		"Pathfinder", errs[1],
+		"Juno", errs[0].Error(),
+		"Pathfinder", errs[1].Error(),
 	)
-	return Other
+	return &OtherNode{}
 
 }
 
 func rpcVersionRequest(providerURL string, methodName string) (string, error) {
 	const rawJson = `{
 		"id": 1,
-		"jsonrpc": 2.0,
-		"method": %s
+		"jsonrpc": "2.0",
+		"method": "%s"
 	}`
 	rpcReq := fmt.Sprintf(rawJson, methodName)
 
