@@ -158,7 +158,6 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		select {
 		case <-ctx.Done():
 			wg.Wait()
-			println("here")
 			return nil
 		case err := <-clientSubscription.Err():
 			logger.Errorw("client subscription error", "error", err.Error())
