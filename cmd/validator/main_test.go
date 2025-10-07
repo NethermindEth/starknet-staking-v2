@@ -7,6 +7,7 @@ import (
 
 	main "github.com/NethermindEth/starknet-staking-v2/cmd/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,8 +42,6 @@ func TestNewCommand(t *testing.T) {
 	})
 
 	t.Run("Full command setup works with config file", func(t *testing.T) {
-		command := main.NewCommand()
-
 		config := config.Config{
 			Provider: config.Provider{
 				Http: "http://localhost:1234",
@@ -56,20 +55,19 @@ func TestNewCommand(t *testing.T) {
 		filePath := createTemporaryConfigFile(t, &config)
 		defer deleteFile(t, filePath)
 
-		command.SetArgs([]string{"--config", filePath})
-
+		command := newTestCommandWithArgs(t, "--config", filePath)
 		err := command.ExecuteContext(t.Context())
 		require.Nil(t, err)
 	})
 
 	t.Run("Full command setup works with config through flags", func(t *testing.T) {
-		command := main.NewCommand()
-		command.SetArgs([]string{
+		command := newTestCommandWithArgs(
+			t,
 			"--provider-http", "http://localhost:1234",
 			"--provider-ws", "ws://localhost:1234",
 			"--signer-op-address", "0x456",
 			"--signer-url", "http://localhost:5555",
-		})
+		)
 		err := command.ExecuteContext(t.Context())
 		require.NoError(t, err)
 	})
@@ -88,13 +86,12 @@ func TestNewCommand(t *testing.T) {
 		filePath := createTemporaryConfigFile(t, &config)
 		defer deleteFile(t, filePath)
 
-		command := main.NewCommand()
-		command.SetArgs([]string{
+		command := newTestCommandWithArgs(
+			t,
 			"--config", filePath,
 			"--provider-ws", "ws://localhost:1234",
 			"--signer-op-address", "0x456",
-		})
-
+		)
 		err = command.ExecuteContext(t.Context())
 		require.NoError(t, err)
 	})
@@ -118,12 +115,11 @@ func TestNewCommand(t *testing.T) {
 		// Configuration through env var
 		t.Setenv("SIGNER_EXTERNAL_URL", "some other")
 
-		command := main.NewCommand()
-		command.SetArgs([]string{
+		command := newTestCommandWithArgs(
+			t,
 			"--config", filePath,
 			"--provider-http", "12",
-		})
-
+		)
 		err = command.ExecuteContext(t.Context())
 		// Very hard to test with the current architecture
 		// return in the future to fix it
@@ -152,4 +148,14 @@ func createTemporaryConfigFile(t *testing.T, config *config.Config) string {
 func deleteFile(t *testing.T, filePath string) {
 	t.Helper()
 	require.NoError(t, os.Remove(filePath))
+}
+
+// Creates a new command with max retries set to 1
+func newTestCommandWithArgs(t *testing.T, args ...string) cobra.Command {
+	t.Helper()
+
+	args = append(args, "--max-retries", "1")
+	cmd := main.NewCommand()
+	cmd.SetArgs(args)
+	return cmd
 }

@@ -104,18 +104,12 @@ func NewCommand() cobra.Command {
 			}
 		}
 
-		globalCtx := context.Background()
 		var tracer metrics.Tracer = metrics.NewNoOpMetrics()
 		if metricsF {
 			// Create metrics server
 			address := fmt.Sprintf("%s:%s", metricsHostF, metricsPortF)
 			metrics := metrics.NewMetrics(address, v.ChainID(), &logger)
 			tracer = metrics
-
-			// Setup signal handling for graceful shutdown
-			ctx, cancel := context.WithCancel(context.Background())
-			globalCtx = ctx
-			defer cancel()
 
 			// Start metrics server in a goroutine
 			go func() {
@@ -126,7 +120,7 @@ func NewCommand() cobra.Command {
 			// Graceful shutdown at the end
 			defer func() {
 				shutdownCtx, shutdownCancel := context.WithTimeout(
-					context.Background(), 5*time.Second,
+					cmd.Context(), 5*time.Second,
 				)
 				defer shutdownCancel()
 				if err := metrics.Stop(shutdownCtx); err != nil {
@@ -141,15 +135,14 @@ func NewCommand() cobra.Command {
 		// Start validator in a goroutine
 		errCh := make(chan error, 1)
 		go func() {
-			err := v.Attest(globalCtx, maxRetries, balanceThreshold, tracer)
+			err := v.Attest(cmd.Context(), maxRetries, balanceThreshold, tracer)
 			if err != nil {
-				logger.Error(err)
 				errCh <- err
 			}
 		}()
 
 		// run upgrader tracker
-		go trackLatestRelease(globalCtx, &logger)
+		go trackLatestRelease(cmd.Context(), &logger)
 
 		// Wait for signal or error
 		select {
@@ -158,7 +151,6 @@ func NewCommand() cobra.Command {
 		case err := <-errCh:
 			logger.Errorw("Validator stopped with error", "error", err)
 		}
-
 	}
 
 	cmd := cobra.Command{
