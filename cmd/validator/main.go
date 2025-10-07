@@ -239,9 +239,8 @@ func NewCommand() cobra.Command {
 }
 
 func main() {
-	ctx, _ := context.WithCancel(context.Background())
 	command := NewCommand()
-	if err := command.ExecuteContext(ctx); err != nil {
+	if err := command.ExecuteContext(context.Background()); err != nil {
 		os.Exit(1)
 	}
 }
