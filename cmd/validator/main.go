@@ -111,10 +111,6 @@ func NewCommand() cobra.Command {
 			metrics := metrics.NewMetrics(address, v.ChainID(), &logger)
 			tracer = metrics
 
-			// // Setup signal handling for graceful shutdown
-			// ctx, cancel := context.WithCancel(cmd.Context())
-			// defer cancel()
-
 			// Start metrics server in a goroutine
 			go func() {
 				if err := metrics.Start(); err != nil && err.Error() != "http: Server closed" {
