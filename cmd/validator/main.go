@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -85,9 +86,22 @@ func NewCommand() cobra.Command {
 		fmt.Printf(greeting, validator.Version)
 
 		v, err := validator.New(&config, &snConfig, logger, braavosAccount)
-		if err != nil {
-			logger.Errorf("cannot start validator: %s", err.Error())
-			return
+		for err != nil {
+			if strings.Contains(err.Error(), "cannot connect to RPC provider") {
+				logger.Errorf(
+					"couldn't connect with RPC Provider at %s. Will retry after 3s",
+					config.Provider.Http,
+				)
+				time.Sleep(3 * time.Second)
+				v, err = validator.New(&config, &snConfig, logger, braavosAccount)
+			} else {
+				logger.Errorw(
+					"cannot start validator. Unexpected error:",
+					"error",
+					err.Error(),
+				)
+				return
+			}
 		}
 
 		globalCtx := context.Background()
