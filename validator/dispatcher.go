@@ -59,7 +59,6 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	if !t.valid {
 		return nil, errors.New("invoking attest transaction before building it")
 	}
-	t.valid = false
 
 	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
 	estimate, err := signer.EstimateFee(&t.txn)
@@ -214,8 +213,8 @@ func (d *EventDispatcher[S]) Dispatch(
 				}
 				logger.Debug("built attest transaction successfully")
 			} else {
-				// Otherwise, the tx was prepared in advance. Update the transaction nonce
-				// since it was set some blocks ago
+				// Otherwise, the tx was either prepared in advance or failed, and it needs to be resend.
+				// In both cases, the transaction nonce needs to be updated.
 				logger.Debug("updating attest transaction nonce")
 				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
 				if err != nil {
