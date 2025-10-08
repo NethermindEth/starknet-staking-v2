@@ -45,7 +45,7 @@ type Signer struct {
 func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
 	privKey, ok := new(big.Int).SetString(privateKey, 0)
 	if !ok {
-		return Signer{}, errors.Errorf("Cannot turn private key %s into a big int", privateKey)
+		return Signer{}, errors.Errorf("cannot turn private key %s into a big int", privateKey)
 	}
 
 	publicKey, _ := curve.PrivateKeyToPoint(privKey)
@@ -64,32 +64,32 @@ func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
 func (s *Signer) Listen(address string) error {
 	http.HandleFunc(SIGN_ENDPOINT, s.handler)
 
-	s.logger.Infof("Server running at %s", address)
+	s.logger.Infof("server running at %s", address)
 
 	return http.ListenAndServe(address, nil)
 }
 
 // Decodes the request and returns ECDSA `r` and `s` signature values via http
 func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
-	s.logger.Debug("Receiving http request")
+	s.logger.Debugw("receiving http request", "request", r)
 
 	defer func() { _ = r.Body.Close() }()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Failed to read request body: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "failed to read request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	var req Request
 	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, "Failed to decode request body: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	signature, err := s.hashAndSign(req.InvokeTxnV3, req.ChainId)
 	if err != nil {
-		http.Error(w, "Failed to sign tx: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to sign tx: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -97,15 +97,18 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
-		s.logger.Errorf("Error encoding response %s: %s", resp, err)
+		s.logger.Errorf("encoding response %s: %s", resp, err)
 		return
 	}
 
-	s.logger.Debugw("Answered http request", "response", resp)
+	s.logger.Debugw("answered http request", "response", resp)
 }
 
 // Given a transaction hash returns the ECDSA `r` and `s` signature values
-func (s *Signer) hashAndSign(invokeTxnV3 *rpc.InvokeTxnV3, chainId *felt.Felt) ([2]*felt.Felt, error) {
+func (s *Signer) hashAndSign(
+	invokeTxnV3 *rpc.InvokeTxnV3,
+	chainId *felt.Felt,
+) ([2]*felt.Felt, error) {
 	s.logger.Infow("Signing transaction", "transaction", invokeTxnV3, "chainId", chainId)
 
 	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)

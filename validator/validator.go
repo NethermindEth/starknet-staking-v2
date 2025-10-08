@@ -2,6 +2,7 @@ package validator
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -31,7 +32,7 @@ func New(
 ) (Validator, error) {
 	provider, err := NewProvider(config.Provider.Http, &logger)
 	if err != nil {
-		return Validator{}, err
+		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
 	}
 
 	var signer signerP.Signer
@@ -45,10 +46,10 @@ func New(
 			braavos,
 		)
 		if err != nil {
-			return Validator{}, err
+			return Validator{}, fmt.Errorf("failed to connect to external signer: %w", err)
 		}
 		signer = &externalSigner
-		logger.Infof("Using external signer at %s", config.Signer.ExternalURL)
+		logger.Infof("using external signer at %s", config.Signer.ExternalURL)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
 			context.Background(),
@@ -59,10 +60,10 @@ func New(
 			braavos,
 		)
 		if err != nil {
-			return Validator{}, err
+			return Validator{}, fmt.Errorf("failed to initialize internal signer: %w", err)
 		}
 		signer = &internalSigner
-		logger.Info("Using internal signer")
+		logger.Info("using internal signer")
 	}
 
 	return Validator{
@@ -161,7 +162,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			return nil
 		case err := <-clientSubscription.Err():
 			logger.Errorw("client subscription error", "error", err.Error())
-			logger.Debug("Ending headers subscription, closing websocket connection and retrying...")
+			logger.Debug("ending headers subscription, closing websocket connection and retrying...")
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
 			logger.Errorw("processing block headers", "error", err.Error())
@@ -189,17 +190,16 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	}
 
 	SetTargetBlockHashIfExists(account, logger, &attestInfo)
+
+	logNewEpoch(&epochInfo, &attestInfo, logger)
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	for block := range headersFeed {
-		logger.Infof("Block %d received", block.Number)
-		// unsure of the helpfulness of this log: never have been useful debugging issues
-		// logger.Debugw("Block header information", "block header", block)
+		logBlock(block.Number, &epochInfo, &attestInfo, logger)
 		tracer.UpdateLatestBlockNumber(block.Number)
 
 		// todo(rdr): look for some nice way of refactoring this if/else blocks
 		if block.Number >= uint64(epochInfo.StartingBlock)+epochInfo.EpochLen {
-			logger.Infow("New epoch start", "epoch id", epochInfo.EpochId+1)
 			prevEpochInfo := epochInfo
 			epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
 				account,
@@ -212,6 +212,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			if err != nil {
 				return err
 			}
+			logNewEpoch(&epochInfo, &attestInfo, logger)
 			// Update epoch info metrics
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 		}
@@ -219,12 +220,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Infow(
 				"Target block reached",
-				"block number", block.Number,
 				"block hash", block.Hash,
-			)
-			logger.Infow("Window to attest to",
-				"start", attestInfo.WindowStart,
-				"end", attestInfo.WindowEnd,
 			)
 			dispatcher.PrepareAttest <- types.PrepareAttest{
 				BlockHash: attestInfo.TargetBlockHash,
@@ -264,11 +260,8 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 		if block, ok := res.(*rpc.BlockTxHashes); ok {
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Infow(
-				"Target block already exists. Registering block hash.",
+				"target block already exists. Registering block hash.",
 				"target block", attestInfo.TargetBlock.Uint64(),
-				"block hash", attestInfo.TargetBlockHash.String(),
-				"window start", attestInfo.WindowStart.Uint64(),
-				"window end", attestInfo.WindowEnd.Uint64(),
 			)
 		}
 	}
@@ -289,11 +282,18 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 
 	for (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && !maxRetries.IsZero() {
 		if err != nil {
-			logger.Debugw("Failed to fetch epoch info", "epoch id", newEpochId, "error", err.Error())
+			logger.Debugw("failed to fetch epoch info",
+				"epoch id", newEpochId,
+				"error", err.Error(),
+			)
 		} else {
-			logger.Debugw("Wrong epoch switch", "from epoch", prevEpoch, "to epoch", &newEpoch)
+			logger.Debugw(
+				"wrong epoch switch",
+				"from epoch", prevEpoch,
+				"to epoch", &newEpoch,
+			)
 		}
-		logger.Debugf("Retrying to fetch epoch info: %s retries remaining", &maxRetries)
+		logger.Debugf("retrying to fetch epoch info: %s retries remaining", &maxRetries)
 
 		Sleep(time.Second)
 
@@ -305,16 +305,16 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 		return types.EpochInfo{},
 			types.AttestInfo{},
 			errors.Errorf(
-				"Failed to fetch epoch info after %s retries. Epoch id: %s. Error: %s",
+				"failed to fetch epoch info after %s retries. Epoch id: %s. Error: %w",
 				totalRetryAmount,
 				newEpochId,
-				err.Error(),
+				err,
 			)
 	}
 	if !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
 		return types.EpochInfo{},
 			types.AttestInfo{},
-			errors.Errorf("Wrong epoch switch after %s retries from epoch:\n%s\nTo epoch:\n%s",
+			errors.Errorf("wrong epoch switch after %s retries from epoch:\n%s\nTo epoch:\n%s",
 				totalRetryAmount,
 				prevEpoch.String(),
 				newEpoch.String(),

@@ -13,7 +13,6 @@ import (
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
-	"github.com/sourcegraph/conc"
 )
 
 // Created a function variable for mocking purposes in tests
@@ -64,7 +63,7 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
 	estimate, err := signer.EstimateFee(&t.txn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to estimate fee: %w", err)
 	}
 	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, 1.5)
 
@@ -73,9 +72,15 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 
 	_, err = signer.SignTransaction(&t.txn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
-	return signer.InvokeTransaction(&t.txn)
+
+	res, err := signer.InvokeTransaction(&t.txn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to invoke transaction: %w", err)
+	}
+
+	return res, nil
 }
 
 func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
@@ -156,10 +161,6 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 func (d *EventDispatcher[S]) Dispatch(
 	signer S, balanceThreshold float64, logger *junoUtils.ZapLogger, tracer metrics.Tracer,
 ) {
-	wg := conc.NewWaitGroup()
-	defer wg.Wait()
-
-	// Block hash to attest to
 	var targetBlockHash types.BlockHash
 
 	for {
@@ -176,13 +177,13 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			targetBlockHash = attest.BlockHash
-			logger.Debugf("preparing attest transaction for blockhash: %s", targetBlockHash.String())
+			logger.Debugf("buildng attest transaction for blockhash: %s", targetBlockHash.String())
 			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 				continue
 			}
-			logger.Debug("built attest transaction successfully")
+			logger.Debug("attest transaction built successfully")
 
 		case attest, ok := <-d.DoAttest:
 			if !ok {
@@ -212,7 +213,7 @@ func (d *EventDispatcher[S]) Dispatch(
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 					continue
 				}
-				logger.Debug("built attest transaction successfully")
+				logger.Debug("attest transaction built successfully")
 			} else {
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
@@ -224,46 +225,44 @@ func (d *EventDispatcher[S]) Dispatch(
 				}
 			}
 
-			logger.Infow("Invoking attest", "block hash", targetBlockHash.String())
+			logger.Infof("invoking attest; target block hash: %s", targetBlockHash.String())
 			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
 					logger.Infow(
-						"Attestation is already done for this epoch",
-						"block hash", targetBlockHash.String(),
+						"attestation is already done for this epoch",
 					)
 					d.CurrentAttest.setStatus(Successful)
 					continue
 				}
 
 				logger.Errorw(
-					"Failed to attest",
-					"block hash", targetBlockHash.String(),
-					"error", err,
+					"failed to attest",
+					"error", err.Error(),
 				)
 				d.CurrentAttest.setStatus(Failed)
 				continue
 			}
 
-			logger.Debugw("Attest transaction sent", "hash", resp.Hash)
+			logger.Debugw("attest transaction sent", "hash", resp.Hash)
 			d.CurrentAttest.Hash = *resp.Hash
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
 		case <-d.EndOfWindow:
-			logger.Info("End of window reached")
+			logger.Info("end of window reached")
 			if d.CurrentAttest.Status != Successful {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
 			if d.CurrentAttest.Status == Successful {
 				logger.Infow(
-					"Successfully attested to target block",
+					"successfully attested to target block",
 					"target block hash", targetBlockHash.String(),
 				)
 				tracer.RecordAttestationConfirmed()
 			} else {
 				logger.Warnw(
-					"Failed to attest to target block",
+					"failed to attest to target block",
 					"target block hash", targetBlockHash.String(),
 					"latest attest status", d.CurrentAttest.Status,
 				)
@@ -286,13 +285,13 @@ func TrackAttest[S signerP.Signer](
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Infow(
-				"Attest transaction status was not found. Will wait.",
+				"attest transaction status was not found. Will wait.",
 				"transaction hash", txHash,
 			)
 			return Ongoing
 		} else {
 			logger.Errorw(
-				"Attest transaction FAILED. Will retry.",
+				"attest transaction FAILED. Will retry.",
 				"transaction hash", txHash,
 				"error", err,
 			)
@@ -302,7 +301,7 @@ func TrackAttest[S signerP.Signer](
 
 	if txStatus.FinalityStatus == rpc.TxnStatus_Received {
 		logger.Infow(
-			"Attest transaction RECEIVED.",
+			"attest transaction RECEIVED. Will wait.",
 			"hash", txHash,
 		)
 		return Ongoing
@@ -311,7 +310,7 @@ func TrackAttest[S signerP.Signer](
 	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
 		// TODO: are we guaranteed err is nil if tx got rejected ?
 		logger.Errorw(
-			"Attest transaction REJECTED",
+			"attest transaction REJECTED. Will retry.",
 			"transaction hash", txHash,
 		)
 		return Failed
@@ -319,7 +318,7 @@ func TrackAttest[S signerP.Signer](
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
 		logger.Errorw(
-			"Attest transaction REVERTED",
+			"attest transaction REVERTED. Will retry.",
 			"transaction hash", txHash,
 			"failure reason", txStatus.FailureReason,
 		)
@@ -327,7 +326,7 @@ func TrackAttest[S signerP.Signer](
 	}
 
 	logger.Infow(
-		"Attest transaction SUCCESSFUL",
+		"attest transaction SUCCESSFUL.",
 		"transaction hash", txHash,
 		"finality status", txStatus.FinalityStatus,
 		"execution status", txStatus.ExecutionStatus,
