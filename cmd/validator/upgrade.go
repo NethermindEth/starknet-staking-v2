@@ -75,7 +75,7 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 				continue
 			}
 
-			const currentVersion = "v" + validator.Version
+			currentVersion := validator.Version
 			needsUpdate, err := needsUpdate(currentVersion, latestVersion)
 			if err != nil {
 				logger.Debug(err.Error())
