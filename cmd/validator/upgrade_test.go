@@ -1,55 +1,65 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestNeedsUpdate(t *testing.T) {
-	currentVer := "1.3.0"
-
 	otherVer := []struct {
-		version string
-		update  bool
+		currentVer string
+		otherVer   string
+		update     bool
 	}{
 		{
-			version: "0.4.0",
-			update:  false,
+			currentVer: "1.3.0",
+			otherVer:   "0.4.0",
+			update:     false,
 		},
 		{
-			version: "1.2.9",
-			update:  false,
+			currentVer: "1.3.0",
+			otherVer:   "1.2.9",
+			update:     false,
 		},
 		{
-			version: "1.3.0",
-			update:  false,
+			currentVer: "1.3.0",
+			otherVer:   "1.3.0-rc.0",
+			update:     false,
 		},
 		{
-			version: "1.3.1",
-			update:  true,
+			currentVer: "1.3.0",
+			otherVer:   "1.3.0",
+			update:     false,
 		},
 		{
-			version: "1.3.1-rc.0",
-			update:  true,
+			currentVer: "1.3.0",
+			otherVer:   "1.3.1",
+			update:     true,
 		},
 		{
-			version: "2.0.0-rc.1",
-			update:  true,
+			currentVer: "1.3.0",
+			otherVer:   "2.0.0-rc.1",
+			update:     true,
 		},
 		{
-			version: "2.0.0",
-			update:  true,
+			currentVer: "1.3.0",
+			otherVer:   "2.0.0",
+			update:     true,
 		},
 		{
-			version: "dev",
-			update:  false,
+			currentVer: "dev",
+			otherVer:   "9.9.9",
+			update:     false,
 		},
 	}
 
 	for _, val := range otherVer {
-		update, err := needsUpdate(currentVer, val.version)
-		require.NoError(t, err)
-		require.Equal(t, val.update, update)
+		t.Run(fmt.Sprintf("from %s to %s", val.currentVer, val.otherVer), func(t *testing.T) {
+			update, err := needsUpdate(val.currentVer, val.otherVer)
+			require.NoError(t, err)
+			require.Equal(t, val.update, update)
+		})
 	}
 }
