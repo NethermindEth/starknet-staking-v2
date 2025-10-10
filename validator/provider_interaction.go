@@ -15,16 +15,16 @@ var ChainID string
 func NewProvider[Logger utils.Logger](providerUrl string, logger Logger) (*rpc.Provider, error) {
 	provider, err := rpc.NewProvider(providerUrl)
 	if err != nil {
-		return nil, errors.Errorf("cannot create RPC provider at %s: %s", providerUrl, err)
+		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerUrl, err)
 	}
 
 	// Connection check
 	ChainID, err = provider.ChainID(context.Background())
 	if err != nil {
-		return nil, errors.Errorf("cannot connect to RPC provider at %s: %s", providerUrl, err)
+		return nil, errors.Errorf("cannot connect to RPC provider at %s: %w", providerUrl, err)
 	}
 
-	logger.Infof("Connected to RPC at %s", providerUrl)
+	logger.Infof("connected to RPC at %s", providerUrl)
 	return provider, nil
 }
 
@@ -35,11 +35,11 @@ func SubscribeToBlockHeaders[Logger utils.Logger](ctx context.Context, wsProvide
 	*client.ClientSubscription,
 	error,
 ) {
-	logger.Debugw("Initialising websocket connection", "wsProviderUrl", wsProviderUrl)
+	logger.Debugw("initialising websocket connection", "wsProviderUrl", wsProviderUrl)
 	// This needs a timeout or something
 	wsProvider, err := rpc.NewWebsocketProvider(wsProviderUrl)
 	if err != nil {
-		return nil, nil, nil, errors.Errorf("dialling WS provider at %s: %s", wsProviderUrl, err)
+		return nil, nil, nil, errors.Errorf("dialling WS provider at %s: %w", wsProviderUrl, err)
 	}
 
 	logger.Debugw("Subscribing to new block headers...")
@@ -48,9 +48,9 @@ func SubscribeToBlockHeaders[Logger utils.Logger](ctx context.Context, wsProvide
 		ctx, headersFeed, rpc.BlockID{Tag: "latest"},
 	)
 	if err != nil {
-		return nil, nil, nil, errors.Errorf("subscribing to new block headers: %s", err)
+		return nil, nil, nil, errors.Errorf("subscribing to new block headers: %w", err)
 	}
 
-	logger.Infof("Subscribed to new block header. Subscription ID: %s", clientSubscription.ID())
+	logger.Infof("subscribed to new block header. Subscription ID: %s", clientSubscription.ID())
 	return wsProvider, headersFeed, clientSubscription, nil
 }
