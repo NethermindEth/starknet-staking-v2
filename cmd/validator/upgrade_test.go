@@ -41,6 +41,10 @@ func TestNeedsUpdate(t *testing.T) {
 			version: "2.0.0",
 			update:  true,
 		},
+		{
+			version: "dev",
+			update:  false,
+		},
 	}
 
 	for _, val := range otherVer {

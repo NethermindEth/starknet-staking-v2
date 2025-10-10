@@ -39,6 +39,14 @@ func getLatestRelease() (string, error) {
 }
 
 func needsUpdate(currentVersion string, latestVersion string) (bool, error) {
+	// keeping this condition here because if we are on a development build we don't
+	// want to check for releases. Writing it here instead of disabling the upgrader
+	// code altogether to get a similar behaviour to production, except for this
+	// function.
+	if currentVersion == "dev" {
+		return false, nil
+	}
+
 	currentVer, err := semver.NewVersion(currentVersion)
 	if err != nil {
 		return false, fmt.Errorf("cannot parse current version: %w", err)
