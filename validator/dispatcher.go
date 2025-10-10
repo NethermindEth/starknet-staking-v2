@@ -177,7 +177,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			targetBlockHash = attest.BlockHash
-			logger.Debugf("buildng attest transaction for blockhash: %s", targetBlockHash.String())
+			logger.Debugf("building attest transaction for blockhash: %s", targetBlockHash.String())
 			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
@@ -207,7 +207,10 @@ func (d *EventDispatcher[S]) Dispatch(
 			// or the transaction invoke failed.
 			if !d.CurrentAttest.Transaction.Valid() {
 				targetBlockHash = attest.BlockHash
-				logger.Debugf("building attest transaction (in `do` stage) for blockhash: %s", &targetBlockHash)
+				logger.Debugf(
+					"building attest transaction (in `do` stage) for blockhash: %s",
+					&targetBlockHash,
+				)
 				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
