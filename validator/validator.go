@@ -16,6 +16,7 @@ import (
 	"github.com/sourcegraph/conc"
 )
 
+// The current version of the validator tool.  This is set at build time
 var Version string = "dev"
 
 type Validator struct {

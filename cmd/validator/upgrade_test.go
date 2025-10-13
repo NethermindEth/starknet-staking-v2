@@ -70,8 +70,8 @@ func TestNeedsUpdate(t *testing.T) {
 		},
 		{
 			currentVer: "dev",
-			otherVer:   "9.9.9",
-			update:     false,
+			otherVer:   "0.0.0",
+			update:     true,
 		},
 	}
 
