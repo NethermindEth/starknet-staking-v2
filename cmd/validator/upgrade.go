@@ -39,6 +39,12 @@ func getLatestRelease() (string, error) {
 }
 
 func needsUpdate(currentVersion string, latestVersion string) (bool, error) {
+	// keeping this condition here because if we are on a development build
+	// we can check that the upgrader is being triggered correctly
+	if currentVersion == "dev" {
+		return true, nil
+	}
+
 	currentVer, err := semver.NewVersion(currentVersion)
 	if err != nil {
 		return false, fmt.Errorf("cannot parse current version: %w", err)
@@ -47,6 +53,11 @@ func needsUpdate(currentVersion string, latestVersion string) (bool, error) {
 	latestVer, err := semver.NewVersion(latestVersion)
 	if err != nil {
 		return false, fmt.Errorf("cannot parse latest version: %w", err)
+	}
+
+	// Don't trigger updates from a stable version to a pre-release version
+	if currentVer.Prerelease() == "" && latestVer.Prerelease() != "" {
+		return false, nil
 	}
 
 	return latestVer.GreaterThan(currentVer), nil
@@ -67,7 +78,7 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 				continue
 			}
 
-			const currentVersion = "v" + validator.Version
+			currentVersion := validator.Version
 			needsUpdate, err := needsUpdate(currentVersion, latestVersion)
 			if err != nil {
 				logger.Debug(err.Error())

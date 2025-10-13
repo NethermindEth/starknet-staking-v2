@@ -16,7 +16,8 @@ import (
 	"github.com/sourcegraph/conc"
 )
 
-const Version = "0.2.7"
+// The current version of the validator tool.  This is set at build time
+var Version string = "dev"
 
 type Validator struct {
 	provider *rpc.Provider
