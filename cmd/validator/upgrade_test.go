@@ -41,6 +41,26 @@ func TestNeedsUpdate(t *testing.T) {
 		{
 			currentVer: "1.3.0",
 			otherVer:   "2.0.0-rc.1",
+			update:     false,
+		},
+		{
+			currentVer: "1.3.0",
+			otherVer:   "2.0.0-beta.1",
+			update:     false,
+		},
+		{
+			currentVer: "1.3.0-rc.1",
+			otherVer:   "1.3.0-rc.2",
+			update:     true,
+		},
+		{
+			currentVer: "1.3.0-rc.3",
+			otherVer:   "1.3.0-rc.1",
+			update:     false,
+		},
+		{
+			currentVer: "1.3.0-rc.3",
+			otherVer:   "1.4.0-rc.1",
 			update:     true,
 		},
 		{

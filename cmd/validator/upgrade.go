@@ -57,6 +57,11 @@ func needsUpdate(currentVersion string, latestVersion string) (bool, error) {
 		return false, fmt.Errorf("cannot parse latest version: %w", err)
 	}
 
+	// Don't trigger updates from a stable version to a pre-release version
+	if currentVer.Prerelease() == "" && latestVer.Prerelease() != "" {
+		return false, nil
+	}
+
 	return latestVer.GreaterThan(currentVer), nil
 }
 
