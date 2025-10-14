@@ -2,7 +2,7 @@
 
 validator:
 	mkdir -p build
-	go build -o "./build/validator" "./cmd/validator/."
+	go build -ldflags "-X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(shell git describe --tags)" -o "./build/validator" "./cmd/validator/."
 
 signer:
 	mkdir -p build
