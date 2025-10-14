@@ -45,7 +45,7 @@ func SubscribeToBlockHeaders[Logger utils.Logger](ctx context.Context, wsProvide
 	logger.Debugw("Subscribing to new block headers...")
 	headersFeed := make(chan *rpc.BlockHeader)
 	clientSubscription, err := wsProvider.SubscribeNewHeads(
-		ctx, headersFeed, rpc.BlockID{Tag: "latest"},
+		ctx, headersFeed, rpc.SubscriptionBlockID{Tag: "latest"},
 	)
 	if err != nil {
 		return nil, nil, nil, errors.Errorf("subscribing to new block headers: %w", err)

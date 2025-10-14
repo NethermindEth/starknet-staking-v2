@@ -18,7 +18,7 @@ import (
 // Created a function variable for mocking purposes in tests
 var Sleep = time.Sleep
 
-var ErrTxnHashNotFound = rpc.RPCError{Code: 29, Message: "Transaction hash not found"}
+var ErrTxnHashNotFound = rpc.ErrHashNotFound
 
 type AttestStatus uint8
 
