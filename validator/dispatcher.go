@@ -302,23 +302,6 @@ func TrackAttest[S signerP.Signer](
 		}
 	}
 
-	if txStatus.FinalityStatus == rpc.TxnStatus_Received {
-		logger.Infow(
-			"attest transaction RECEIVED. Will wait.",
-			"hash", txHash,
-		)
-		return Ongoing
-	}
-
-	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
-		// TODO: are we guaranteed err is nil if tx got rejected ?
-		logger.Errorw(
-			"attest transaction REJECTED. Will retry.",
-			"transaction hash", txHash,
-		)
-		return Failed
-	}
-
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
 		logger.Errorw(
 			"attest transaction REVERTED. Will retry.",
@@ -328,11 +311,20 @@ func TrackAttest[S signerP.Signer](
 		return Failed
 	}
 
-	logger.Infow(
-		"attest transaction SUCCESSFUL.",
-		"transaction hash", txHash,
-		"finality status", txStatus.FinalityStatus,
-		"execution status", txStatus.ExecutionStatus,
-	)
-	return Successful
+	switch txStatus.FinalityStatus {
+	case rpc.TxnStatusReceived, rpc.TxnStatusCandidate, rpc.TxnStatusPreConfirmed:
+		logger.Infow(
+			fmt.Sprintf("attest transaction %s. Will wait.", txStatus.FinalityStatus),
+			"hash", txHash,
+		)
+		return Ongoing
+	default:
+		logger.Infow(
+			"attest transaction SUCCESSFUL.",
+			"transaction hash", txHash,
+			"finality status", txStatus.FinalityStatus,
+			"execution status", txStatus.ExecutionStatus,
+		)
+		return Successful
+	}
 }
