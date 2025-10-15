@@ -127,7 +127,7 @@ func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEsti
 		s.ctx,
 		[]rpc.BroadcastTxn{txn},
 		[]rpc.SimulationFlag{},
-		rpc.WithBlockTag("pending"),
+		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 	)
 	if s.braavos {
 		// Revert the transaction version back.

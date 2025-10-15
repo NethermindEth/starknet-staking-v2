@@ -73,7 +73,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 	calldata := account.FmtCallDataCairo2(call)
 	defaultResources := makeDefaultResources()
 
-	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
+	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
@@ -115,7 +115,7 @@ func (s *ExternalSigner) EstimateFee(
 		s.ctx,
 		[]rpc.BroadcastTxn{txn},
 		[]rpc.SimulationFlag{},
-		rpc.WithBlockTag("pending"),
+		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 	)
 	if s.braavos {
 		// Revert the transaction version back.
@@ -165,7 +165,7 @@ func (s *ExternalSigner) ValidationContracts() *types.ValidationContracts {
 }
 
 func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
-	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
+	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 }
 
 func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
