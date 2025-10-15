@@ -490,7 +490,7 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
+			TransactionStatus(txHash).
 			Return(nil, validator.ErrTxnHashNotFound)
 
 		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
@@ -504,7 +504,7 @@ func TestTrackAttest(t *testing.T) {
 			txHash := new(felt.Felt).SetUint64(1)
 
 			mockSigner.EXPECT().
-				GetTransactionStatus(txHash).
+				TransactionStatus(txHash).
 				Return(nil, errors.New("some internal error"))
 
 			txStatus := validator.TrackAttest(mockSigner, logger, txHash)
@@ -512,28 +512,14 @@ func TestTrackAttest(t *testing.T) {
 			require.Equal(t, validator.Failed, txStatus)
 		})
 
-	t.Run("attestation fails if REJECTED", func(t *testing.T) {
-		txHash := new(felt.Felt).SetUint64(1)
-
-		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
-			Return(&rpc.TxnStatusResult{
-				FinalityStatus: rpc.TxnStatus_Rejected,
-			}, nil)
-
-		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
-
-		require.Equal(t, validator.Failed, txStatus)
-	})
-
 	t.Run("attestation fails if accepted but REVERTED", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		revertError := "reverted for some reason"
 		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
+			TransactionStatus(txHash).
 			Return(&rpc.TxnStatusResult{
-				FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
+				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
 				FailureReason:   revertError,
 			}, nil)
@@ -547,9 +533,9 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
+			TransactionStatus(txHash).
 			Return(&rpc.TxnStatusResult{
-				FinalityStatus:  rpc.TxnStatus_Accepted_On_L2,
+				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
 			}, nil)
 

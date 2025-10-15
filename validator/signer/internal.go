@@ -67,10 +67,10 @@ func NewInternalSigner(
 	}, nil
 }
 
-func (s *InternalSigner) GetTransactionStatus(transactionHash *felt.Felt) (
+func (s *InternalSigner) TransactionStatus(transactionHash *felt.Felt) (
 	*rpc.TxnStatusResult, error,
 ) {
-	return s.Account.Provider.GetTransactionStatus(s.ctx, transactionHash)
+	return s.Account.Provider.TransactionStatus(s.ctx, transactionHash)
 }
 
 func (s *InternalSigner) BuildAttestTransaction(
@@ -95,7 +95,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 
 	// Taken from starknet.go `utils.BuildInvokeTxn`
 	attestTransaction := rpc.BroadcastInvokeTxnV3{
-		Type:                  rpc.TransactionType_Invoke,
+		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         s.Account.Address,
 		Calldata:              calldata,
 		Version:               rpc.TransactionV3,
@@ -127,7 +127,7 @@ func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEsti
 		s.ctx,
 		[]rpc.BroadcastTxn{txn},
 		[]rpc.SimulationFlag{},
-		rpc.WithBlockTag("pending"),
+		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 	)
 	if s.braavos {
 		// Revert the transaction version back.
@@ -148,7 +148,7 @@ func (s *InternalSigner) SignTransaction(
 
 func (s *InternalSigner) InvokeTransaction(
 	txn *rpc.BroadcastInvokeTxnV3,
-) (*rpc.AddInvokeTransactionResponse, error) {
+) (rpc.AddInvokeTransactionResponse, error) {
 	return s.Account.Provider.AddInvokeTransaction(s.ctx, txn)
 }
 

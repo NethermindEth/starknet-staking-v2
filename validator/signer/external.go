@@ -73,14 +73,14 @@ func (s *ExternalSigner) BuildAttestTransaction(
 	calldata := account.FmtCallDataCairo2(call)
 	defaultResources := makeDefaultResources()
 
-	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
+	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
 	// Taken from starknet.go `utils.BuildInvokeTxn`
 	attestTransaction := rpc.BroadcastInvokeTxnV3{
-		Type:                  rpc.TransactionType_Invoke,
+		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         s.Address().Felt(),
 		Calldata:              calldata,
 		Version:               rpc.TransactionV3,
@@ -115,7 +115,7 @@ func (s *ExternalSigner) EstimateFee(
 		s.ctx,
 		[]rpc.BroadcastTxn{txn},
 		[]rpc.SimulationFlag{},
-		rpc.WithBlockTag("pending"),
+		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 	)
 	if s.braavos {
 		// Revert the transaction version back.
@@ -136,14 +136,14 @@ func (s *ExternalSigner) SignTransaction(
 
 func (s *ExternalSigner) InvokeTransaction(
 	txn *rpc.BroadcastInvokeTxnV3,
-) (*rpc.AddInvokeTransactionResponse, error) {
+) (rpc.AddInvokeTransactionResponse, error) {
 	return s.Provider.AddInvokeTransaction(s.ctx, txn)
 }
 
-func (s *ExternalSigner) GetTransactionStatus(transactionHash *felt.Felt) (
+func (s *ExternalSigner) TransactionStatus(transactionHash *felt.Felt) (
 	*rpc.TxnStatusResult, error,
 ) {
-	return s.Provider.GetTransactionStatus(s.ctx, transactionHash)
+	return s.Provider.TransactionStatus(s.ctx, transactionHash)
 }
 
 func (s *ExternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
@@ -165,7 +165,7 @@ func (s *ExternalSigner) ValidationContracts() *types.ValidationContracts {
 }
 
 func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
-	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag("pending"), s.Address().Felt())
+	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 }
 
 func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {

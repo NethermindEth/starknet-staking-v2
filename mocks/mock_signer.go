@@ -116,26 +116,11 @@ func (mr *MockSignerMockRecorder) EstimateFee(txn any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateFee", reflect.TypeOf((*MockSigner)(nil).EstimateFee), txn)
 }
 
-// GetTransactionStatus mocks base method.
-func (m *MockSigner) GetTransactionStatus(transactionHash *felt.Felt) (*rpc.TxnStatusResult, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransactionStatus", transactionHash)
-	ret0, _ := ret[0].(*rpc.TxnStatusResult)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTransactionStatus indicates an expected call of GetTransactionStatus.
-func (mr *MockSignerMockRecorder) GetTransactionStatus(transactionHash any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionStatus", reflect.TypeOf((*MockSigner)(nil).GetTransactionStatus), transactionHash)
-}
-
 // InvokeTransaction mocks base method.
-func (m *MockSigner) InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.AddInvokeTransactionResponse, error) {
+func (m *MockSigner) InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (rpc.AddInvokeTransactionResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InvokeTransaction", txn)
-	ret0, _ := ret[0].(*rpc.AddInvokeTransactionResponse)
+	ret0, _ := ret[0].(rpc.AddInvokeTransactionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -174,6 +159,21 @@ func (m *MockSigner) SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.Broadc
 func (mr *MockSignerMockRecorder) SignTransaction(txn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignTransaction", reflect.TypeOf((*MockSigner)(nil).SignTransaction), txn)
+}
+
+// TransactionStatus mocks base method.
+func (m *MockSigner) TransactionStatus(transactionHash *felt.Felt) (*rpc.TxnStatusResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransactionStatus", transactionHash)
+	ret0, _ := ret[0].(*rpc.TxnStatusResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransactionStatus indicates an expected call of TransactionStatus.
+func (mr *MockSignerMockRecorder) TransactionStatus(transactionHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransactionStatus", reflect.TypeOf((*MockSigner)(nil).TransactionStatus), transactionHash)
 }
 
 // ValidationContracts mocks base method.

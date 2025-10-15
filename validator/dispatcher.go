@@ -18,7 +18,7 @@ import (
 // Created a function variable for mocking purposes in tests
 var Sleep = time.Sleep
 
-var ErrTxnHashNotFound = rpc.RPCError{Code: 29, Message: "Transaction hash not found"}
+var ErrTxnHashNotFound = rpc.ErrHashNotFound
 
 type AttestStatus uint8
 
@@ -53,17 +53,18 @@ func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockH
 }
 
 func (t *AttestTransaction) Invoke(signer signerP.Signer) (
-	*rpc.AddInvokeTransactionResponse, error,
+	rpc.AddInvokeTransactionResponse, error,
 ) {
+	var resp rpc.AddInvokeTransactionResponse
 	if !t.valid {
-		return nil, errors.New("invoking attest transaction before building it")
+		return resp, errors.New("invoking attest transaction before building it")
 	}
 	t.valid = false
 
 	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
 	estimate, err := signer.EstimateFee(&t.txn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to estimate fee: %w", err)
+		return resp, fmt.Errorf("failed to estimate fee: %w", err)
 	}
 	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, 1.5)
 
@@ -72,15 +73,15 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 
 	_, err = signer.SignTransaction(&t.txn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+		return resp, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
-	res, err := signer.InvokeTransaction(&t.txn)
+	resp, err = signer.InvokeTransaction(&t.txn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to invoke transaction: %w", err)
+		return resp, fmt.Errorf("failed to invoke transaction: %w", err)
 	}
 
-	return res, nil
+	return resp, nil
 }
 
 func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
@@ -284,7 +285,7 @@ func TrackAttest[S signerP.Signer](
 	logger *junoUtils.ZapLogger,
 	txHash *felt.Felt,
 ) AttestStatus {
-	txStatus, err := signer.GetTransactionStatus(txHash)
+	txStatus, err := signer.TransactionStatus(txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Infow(
@@ -302,23 +303,6 @@ func TrackAttest[S signerP.Signer](
 		}
 	}
 
-	if txStatus.FinalityStatus == rpc.TxnStatus_Received {
-		logger.Infow(
-			"attest transaction RECEIVED. Will wait.",
-			"hash", txHash,
-		)
-		return Ongoing
-	}
-
-	if txStatus.FinalityStatus == rpc.TxnStatus_Rejected {
-		// TODO: are we guaranteed err is nil if tx got rejected ?
-		logger.Errorw(
-			"attest transaction REJECTED. Will retry.",
-			"transaction hash", txHash,
-		)
-		return Failed
-	}
-
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
 		logger.Errorw(
 			"attest transaction REVERTED. Will retry.",
@@ -328,11 +312,20 @@ func TrackAttest[S signerP.Signer](
 		return Failed
 	}
 
-	logger.Infow(
-		"attest transaction SUCCESSFUL.",
-		"transaction hash", txHash,
-		"finality status", txStatus.FinalityStatus,
-		"execution status", txStatus.ExecutionStatus,
-	)
-	return Successful
+	switch txStatus.FinalityStatus {
+	case rpc.TxnStatusReceived, rpc.TxnStatusCandidate, rpc.TxnStatusPreConfirmed:
+		logger.Infow(
+			fmt.Sprintf("attest transaction %s. Will wait.", txStatus.FinalityStatus),
+			"hash", txHash,
+		)
+		return Ongoing
+	default:
+		logger.Infow(
+			"attest transaction SUCCESSFUL.",
+			"transaction hash", txHash,
+			"finality status", txStatus.FinalityStatus,
+			"execution status", txStatus.ExecutionStatus,
+		)
+		return Successful
+	}
 }
