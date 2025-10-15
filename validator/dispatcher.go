@@ -53,17 +53,18 @@ func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockH
 }
 
 func (t *AttestTransaction) Invoke(signer signerP.Signer) (
-	*rpc.AddInvokeTransactionResponse, error,
+	rpc.AddInvokeTransactionResponse, error,
 ) {
+	var resp rpc.AddInvokeTransactionResponse
 	if !t.valid {
-		return nil, errors.New("invoking attest transaction before building it")
+		return resp, errors.New("invoking attest transaction before building it")
 	}
 	t.valid = false
 
 	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
 	estimate, err := signer.EstimateFee(&t.txn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to estimate fee: %w", err)
+		return resp, fmt.Errorf("failed to estimate fee: %w", err)
 	}
 	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, 1.5)
 
@@ -72,15 +73,15 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 
 	_, err = signer.SignTransaction(&t.txn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+		return resp, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
-	res, err := signer.InvokeTransaction(&t.txn)
+	resp, err = signer.InvokeTransaction(&t.txn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to invoke transaction: %w", err)
+		return resp, fmt.Errorf("failed to invoke transaction: %w", err)
 	}
 
-	return res, nil
+	return resp, nil
 }
 
 func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
@@ -284,7 +285,7 @@ func TrackAttest[S signerP.Signer](
 	logger *junoUtils.ZapLogger,
 	txHash *felt.Felt,
 ) AttestStatus {
-	txStatus, err := signer.GetTransactionStatus(txHash)
+	txStatus, err := signer.TransactionStatus(txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Infow(

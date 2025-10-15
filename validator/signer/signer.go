@@ -16,12 +16,12 @@ import (
 //go:generate go tool mockgen -destination=../../mocks/mock_signer.go -package=mocks github.com/NethermindEth/starknet-staking-v2/validator/signer Signer
 type Signer interface {
 	// Methods from Starknet.go Account implementation
-	GetTransactionStatus(transactionHash *felt.Felt) (*rpc.TxnStatusResult, error)
+	TransactionStatus(transactionHash *felt.Felt) (*rpc.TxnStatusResult, error)
 
 	BuildAttestTransaction(blockHash *types.BlockHash) (rpc.BroadcastInvokeTxnV3, error)
 	EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error)
 	SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error)
-	InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.AddInvokeTransactionResponse, error)
+	InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (rpc.AddInvokeTransactionResponse, error)
 
 	Call(call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
 	BlockWithTxHashes(blockID rpc.BlockID) (any, error)

@@ -490,7 +490,7 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
+			TransactionStatus(txHash).
 			Return(nil, validator.ErrTxnHashNotFound)
 
 		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
@@ -504,7 +504,7 @@ func TestTrackAttest(t *testing.T) {
 			txHash := new(felt.Felt).SetUint64(1)
 
 			mockSigner.EXPECT().
-				GetTransactionStatus(txHash).
+				TransactionStatus(txHash).
 				Return(nil, errors.New("some internal error"))
 
 			txStatus := validator.TrackAttest(mockSigner, logger, txHash)
@@ -517,7 +517,7 @@ func TestTrackAttest(t *testing.T) {
 
 		revertError := "reverted for some reason"
 		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
+			TransactionStatus(txHash).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
@@ -533,7 +533,7 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			GetTransactionStatus(txHash).
+			TransactionStatus(txHash).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,

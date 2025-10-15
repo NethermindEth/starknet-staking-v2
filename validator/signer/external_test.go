@@ -363,6 +363,7 @@ func TestHashAndSignTx(t *testing.T) {
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
+			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
 		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
@@ -390,6 +391,7 @@ func TestHashAndSignTx(t *testing.T) {
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
+			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
 		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
@@ -416,6 +418,7 @@ func TestHashAndSignTx(t *testing.T) {
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
+			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
 		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
@@ -441,6 +444,7 @@ func TestHashAndSignTx(t *testing.T) {
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
+			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
 		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)

@@ -181,7 +181,7 @@ func TestNewInternalSigner(t *testing.T) {
 func TestSignInvokeTx(t *testing.T) {
 	t.Run("Error signing tx", func(t *testing.T) {
 		invokeTx := rpc.InvokeTxnV3{
-			Type:          rpc.TransactionType_Invoke,
+			Type:          rpc.TransactionTypeInvoke,
 			SenderAddress: utils.HexToFelt(t, "0x123"),
 			Calldata:      []*felt.Felt{utils.HexToFelt(t, "0x456")},
 			Version:       rpc.TransactionV3,
@@ -220,7 +220,7 @@ func TestSignInvokeTx(t *testing.T) {
 
 	t.Run("Successful signing", func(t *testing.T) {
 		invokeTx := rpc.InvokeTxnV3{
-			Type:          rpc.TransactionType_Invoke,
+			Type:          rpc.TransactionTypeInvoke,
 			SenderAddress: new(felt.Felt).SetUint64(0xabc),
 			Calldata: []*felt.Felt{
 				new(felt.Felt).SetUint64(0xcba),
