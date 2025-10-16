@@ -233,6 +233,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
+					tracer.RecordAttestationConfirmed()
 					logger.Infow(
 						"attestation is already done for this epoch",
 					)
