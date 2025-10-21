@@ -28,8 +28,8 @@ func tryNewValidator(
 			logger.Warnf(
 				"couldn't connect with RPC Provider at %s (attempts left: %s)."+
 					" Retrying in 3s...",
-				retries.String(),
 				config.Provider.Http,
+				retries.String(),
 			)
 			time.Sleep(3 * time.Second)
 		} else {
