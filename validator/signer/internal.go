@@ -2,6 +2,7 @@ package signer
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -83,12 +84,12 @@ func (s *InternalSigner) BuildAttestTransaction(
 	}}
 	calldata, err := s.Account.FmtCalldata(utils.InvokeFuncCallsToFunctionCalls(calls))
 	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
+		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to format calldata: %w", err)
 	}
 
 	nonce, err := s.Account.Nonce(s.ctx)
 	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
+		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to update the account nonce: %w", err)
 	}
 
 	defaultResources := makeDefaultResources()

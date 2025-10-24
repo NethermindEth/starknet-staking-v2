@@ -40,16 +40,16 @@ func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockH
 	var err error
 	t.txn, err = signer.BuildAttestTransaction(blockHash)
 	if err != nil {
-		return err
+		return fmt.Errorf("signer failed building the transaction: %w", err)
 	}
 
 	_, err = signer.SignTransaction(&t.txn)
 	if err != nil {
-		return err
+		return fmt.Errorf("signer failed to sign the transaction: %w", err)
 	}
 
-	t.valid = err == nil
-	return err
+	t.valid = true
+	return nil
 }
 
 func (t *AttestTransaction) Invoke(signer signerP.Signer) (
@@ -64,7 +64,7 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
 	estimate, err := signer.EstimateFee(&t.txn)
 	if err != nil {
-		return resp, fmt.Errorf("failed to estimate fee: %w", err)
+		return resp, fmt.Errorf("signer failed to estimate fee: %w", err)
 	}
 	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, 1.5)
 
@@ -73,12 +73,12 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 
 	_, err = signer.SignTransaction(&t.txn)
 	if err != nil {
-		return resp, fmt.Errorf("failed to sign transaction: %w", err)
+		return resp, fmt.Errorf("signer failed to sign the transaction: %w", err)
 	}
 
 	resp, err = signer.InvokeTransaction(&t.txn)
 	if err != nil {
-		return resp, fmt.Errorf("failed to invoke transaction: %w", err)
+		return resp, fmt.Errorf("signer failed to invoke the transaction: %w", err)
 	}
 
 	return resp, nil
@@ -86,17 +86,17 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 
 func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
 	if !t.valid {
-		return errors.New("updating transaction nonce before building it")
+		return errors.New("updating the transaction nonce before building the transaction")
 	}
 	newNonce, err := signer.Nonce()
 	if err != nil {
-		return err
+		return fmt.Errorf("signer failed to get the nonce: %w", err)
 	}
 	if !t.txn.Nonce.Equal(newNonce) {
 		t.txn.Nonce = newNonce
 		_, err := signer.SignTransaction(&t.txn)
 		if err != nil {
-			return err
+			return fmt.Errorf("signer failed to sign the transaction: %w", err)
 		}
 	}
 	return nil
