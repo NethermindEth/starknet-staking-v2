@@ -28,4 +28,4 @@ generate: ## Generate mocks
 	go generate ./...
 
 lint:
-	go tool golangci-lint run --fix
+	go tool -modfile=golangci-lint.mod golangci-lint run --fix
