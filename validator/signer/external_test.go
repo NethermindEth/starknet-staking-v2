@@ -25,7 +25,7 @@ func TestNewExternalSigner(t *testing.T) {
 
 	t.Run("Error getting chain ID", func(t *testing.T) {
 		// Setup
-		provider, providerErr := rpc.NewProvider("http://localhost:1234")
+		provider, providerErr := rpc.NewProvider(t.Context(), "http://localhost:1234")
 		require.NoError(t, providerErr)
 
 		externalSigner, err := signer.NewExternalSigner(
@@ -57,7 +57,7 @@ func TestExternalSignerAddress(t *testing.T) {
 		mockRpc := validator.MockRPCServer(t, operationalAddress, "")
 		defer mockRpc.Close()
 
-		provider, err := rpc.NewProvider(mockRpc.URL)
+		provider, err := rpc.NewProvider(t.Context(), mockRpc.URL)
 		require.NoError(t, err)
 
 		externalSigner, err := signer.NewExternalSigner(

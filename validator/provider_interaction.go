@@ -37,7 +37,7 @@ func SubscribeToBlockHeaders[Logger utils.Logger](ctx context.Context, wsProvide
 ) {
 	logger.Debugw("initialising websocket connection", "wsProviderUrl", wsProviderUrl)
 	// This needs a timeout or something
-	wsProvider, err := rpc.NewWebsocketProvider(wsProviderUrl)
+	wsProvider, err := rpc.NewWebsocketProvider(ctx, wsProviderUrl)
 	if err != nil {
 		return nil, nil, nil, errors.Errorf("dialling WS provider at %s: %w", wsProviderUrl, err)
 	}
