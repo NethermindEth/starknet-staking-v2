@@ -105,9 +105,15 @@ func MockRPCServer(
 			w.WriteHeader(http.StatusInternalServerError)
 			_, err = w.Write([]byte(serverInternalError))
 			require.NoError(t, err)
+
+		// Called when calling `rpc.NewProvider` in Starknet.Go
+		case "starknet_specVersion":
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "v0.9.0", "id": 1}`))
+			require.NoError(t, err)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, err = w.Write([]byte(`Should not get here`))
+			_, err = w.Write([]byte(`Should not get here, method: ` + req.Name))
 			require.NoError(t, err)
 		}
 	}))
