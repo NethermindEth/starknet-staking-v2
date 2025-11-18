@@ -9,8 +9,6 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-var ChainID string
-
 // Returns a new Starknet.Go RPC Provider
 func NewProvider[Logger utils.Logger](
 	ctx context.Context,
@@ -20,12 +18,6 @@ func NewProvider[Logger utils.Logger](
 	provider, err := rpc.NewProvider(ctx, providerUrl)
 	if err != nil {
 		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerUrl, err)
-	}
-
-	// Connection check
-	ChainID, err = provider.ChainID(context.Background())
-	if err != nil {
-		return nil, errors.Errorf("cannot connect to RPC provider at %s: %w", providerUrl, err)
 	}
 
 	logger.Infof("connected to RPC at %s", providerUrl)

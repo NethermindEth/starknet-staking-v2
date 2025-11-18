@@ -26,17 +26,6 @@ func TestNewProvider(t *testing.T) {
 		require.ErrorContains(t, err, expectedErrorMsg)
 	})
 
-	t.Run("Error connecting to provider", func(t *testing.T) {
-		providerURL := "http://localhost:1234"
-
-		provider, err := validator.NewProvider(t.Context(), providerURL, logger)
-
-		require.Nil(t, provider)
-
-		expectedErrorMsg := fmt.Sprintf(`cannot connect to RPC provider at %s`, providerURL)
-		require.ErrorContains(t, err, expectedErrorMsg)
-	})
-
 	envVars, err := validator.LoadEnv(t)
 	loadedEnvVars := err == nil
 	if loadedEnvVars {
