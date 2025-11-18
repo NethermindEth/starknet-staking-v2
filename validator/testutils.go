@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -113,7 +114,7 @@ func MockRPCServer(
 			require.NoError(t, err)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, err = w.Write([]byte(`Should not get here, method: ` + req.Name))
+			_, err = w.Write([]byte(`Should not get here, method: ` + html.EscapeString(req.Name)))
 			require.NoError(t, err)
 		}
 	}))
