@@ -19,7 +19,7 @@ func TestNewProvider(t *testing.T) {
 	t.Run("Error creating provider", func(t *testing.T) {
 		providerURL := "wrong url"
 
-		provider, err := validator.NewProvider(providerURL, logger)
+		provider, err := validator.NewProvider(t.Context(), providerURL, logger)
 
 		require.Nil(t, provider)
 		expectedErrorMsg := fmt.Sprintf(`cannot create RPC provider at %s`, providerURL)
@@ -29,7 +29,7 @@ func TestNewProvider(t *testing.T) {
 	t.Run("Error connecting to provider", func(t *testing.T) {
 		providerURL := "http://localhost:1234"
 
-		provider, err := validator.NewProvider(providerURL, logger)
+		provider, err := validator.NewProvider(t.Context(), providerURL, logger)
 
 		require.Nil(t, provider)
 
@@ -45,7 +45,7 @@ func TestNewProvider(t *testing.T) {
 				t.Skip(err)
 			}
 
-			provider, err := validator.NewProvider(envVars.HttpProviderUrl, logger)
+			provider, err := validator.NewProvider(t.Context(), envVars.HttpProviderUrl, logger)
 
 			require.NoError(t, err)
 			require.NotNil(t, provider)

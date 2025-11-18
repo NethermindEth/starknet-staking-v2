@@ -84,7 +84,14 @@ func NewCommand() cobra.Command {
 	run := func(cmd *cobra.Command, args []string) {
 		fmt.Printf(greeting, validator.Version)
 
-		v, err := tryNewValidator(&config, &snConfig, maxRetries, logger, braavosAccount)
+		v, err := tryNewValidator(
+			cmd.Context(),
+			&config,
+			&snConfig,
+			maxRetries,
+			logger,
+			braavosAccount,
+		)
 		if err != nil {
 			logger.Error(err)
 			return
@@ -94,7 +101,7 @@ func NewCommand() cobra.Command {
 		if metricsF {
 			// Create metrics server
 			address := fmt.Sprintf("%s:%s", metricsHostF, metricsPortF)
-			metrics := metrics.NewMetrics(address, v.ChainID(), &logger)
+			metrics := metrics.NewMetrics(address, v.ChainID(cmd.Context()), &logger)
 			tracer = metrics
 
 			// Start metrics server in a goroutine

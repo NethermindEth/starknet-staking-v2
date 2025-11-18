@@ -12,8 +12,12 @@ import (
 var ChainID string
 
 // Returns a new Starknet.Go RPC Provider
-func NewProvider[Logger utils.Logger](providerUrl string, logger Logger) (*rpc.Provider, error) {
-	provider, err := rpc.NewProvider(providerUrl)
+func NewProvider[Logger utils.Logger](
+	ctx context.Context,
+	providerUrl string,
+	logger Logger,
+) (*rpc.Provider, error) {
+	provider, err := rpc.NewProvider(ctx, providerUrl)
 	if err != nil {
 		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerUrl, err)
 	}

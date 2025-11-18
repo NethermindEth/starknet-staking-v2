@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 )
 
 func tryNewValidator(
+	ctx context.Context,
 	config *config.Config,
 	snConfig *config.StarknetConfig,
 	retries types.Retries,
@@ -19,7 +21,7 @@ func tryNewValidator(
 	braavosAccount bool,
 ) (validator.Validator, error) {
 	for {
-		v, err := validator.New(config, snConfig, logger, braavosAccount)
+		v, err := validator.New(ctx, config, snConfig, logger, braavosAccount)
 		if err == nil {
 			return v, nil
 		}
