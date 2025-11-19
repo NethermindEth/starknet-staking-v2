@@ -39,8 +39,8 @@ The configuration file properties for internal signing will look like:
 ```json
 {
   "provider": {
-      "http": "http://localhost:6060/v0_8",
-      "ws": "ws://localhost:6061/v0_8"
+      "http": "http://localhost:6060/v0_9",
+      "ws": "ws://localhost:6061/v0_9"
   },
   "signer": {
       "operationalAddress": "your operational address",

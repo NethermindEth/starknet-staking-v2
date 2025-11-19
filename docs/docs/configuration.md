@@ -20,8 +20,8 @@ The validator can be configured directly on the command line, e.g:
 
 ```bash
 docker run nethermind/starknet-staking-v2 \
-    --provider-http "http://localhost:6060/rpc/v0_8" \
-    --provider-ws "ws://localhost:6061/ws/v0_8" \
+    --provider-http "http://localhost:6060/rpc/v0_9" \
+    --provider-ws "ws://localhost:6061/ws/v0_9" \
     --signer-op-address "0x123" \
     --signer-url "http://localhost:8080"
 ```
@@ -35,8 +35,8 @@ Command line parameters override environment variables and configuration file.
 The validator can be configured through environment variables using specific variable names:
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v0_8" \
-PROVIDER_WS_URL="ws://localhost:6061/v0_8" \
+PROVIDER_HTTP_URL="http://localhost:6060/v0_9" \
+PROVIDER_WS_URL="ws://localhost:6061/v0_9" \
 SIGNER_OPERATIONAL_ADDRESS="0x123" \
 SIGNER_PRIVATE_KEY="0x456" \
 ./build/validator
@@ -47,8 +47,8 @@ SIGNER_PRIVATE_KEY="0x456" \
 Create a `.env` file with your configuration:
 
 ```bash title=".env"
-PROVIDER_HTTP_URL="http://localhost:6060/v0_8"
-PROVIDER_WS_URL="ws://localhost:6061/v0_8"
+PROVIDER_HTTP_URL="http://localhost:6060/v0_9"
+PROVIDER_WS_URL="ws://localhost:6061/v0_9"
 
 SIGNER_OPERATIONAL_ADDRESS="0x123"
 SIGNER_EXTERNAL_URL="http://localhost:8080"
@@ -67,8 +67,8 @@ When using Docker, set environment variables using the `-e` option:
 
 ```bash
 docker run \
-  -e PROVIDER_HTTP_URL="http://host.docker.internal:6060/v0_8" \
-  -e PROVIDER_WS_URL="ws://host.docker.internal:6061/v0_8" \
+  -e PROVIDER_HTTP_URL="http://host.docker.internal:6060/v0_9" \
+  -e PROVIDER_WS_URL="ws://host.docker.internal:6061/v0_9" \
   -e SIGNER_OPERATIONAL_ADDRESS="0x123" \
   -e SIGNER_EXTERNAL_URL="http://host.docker.internal:8080" \
   nethermind/starknet-staking-v2
@@ -93,8 +93,8 @@ The validator can be configured using a JSON file:
 ```json
 {
   "provider": {
-    "http": "http://localhost:6060/v0_8",
-    "ws": "ws://localhost:6061/v0_8"
+    "http": "http://localhost:6060/v0_9",
+    "ws": "ws://localhost:6061/v0_9"
   },
   "signer": {
     "operationalAddress": "0x123",
@@ -124,9 +124,9 @@ You must provide either `privateKey` for internal signing or `url` for external 
 You can combine multiple configuration methods. Values set by command line flags will override environment variables, and environment variables will override configuration file settings.
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v0_8" ./build/validator \
+PROVIDER_HTTP_URL="http://localhost:6060/v0_9" ./build/validator \
     --config config.json \
-    --provider-ws "ws://localhost:6061/v0_8" \
+    --provider-ws "ws://localhost:6061/v0_9" \
     --signer-url "http://localhost:8080" \
     --log-level debug
 ```
