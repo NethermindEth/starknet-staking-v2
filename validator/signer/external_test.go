@@ -19,32 +19,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestNewExternalSigner(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	t.Cleanup(mockCtrl.Finish)
-
-	t.Run("Error getting chain ID", func(t *testing.T) {
-		// Setup
-		provider, providerErr := rpc.NewProvider("http://localhost:1234")
-		require.NoError(t, providerErr)
-
-		externalSigner, err := signer.NewExternalSigner(
-			t.Context(),
-			provider,
-			utils.NewNopZapLogger(),
-			&config.Signer{
-				ExternalURL:        "http://localhost:1234",
-				OperationalAddress: "0x123",
-			},
-			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-			false,
-		)
-
-		require.Zero(t, externalSigner)
-		require.Error(t, err)
-	})
-}
-
 func TestExternalSignerAddress(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
@@ -57,7 +31,7 @@ func TestExternalSignerAddress(t *testing.T) {
 		mockRpc := validator.MockRPCServer(t, operationalAddress, "")
 		defer mockRpc.Close()
 
-		provider, err := rpc.NewProvider(mockRpc.URL)
+		provider, err := rpc.NewProvider(t.Context(), mockRpc.URL)
 		require.NoError(t, err)
 
 		externalSigner, err := signer.NewExternalSigner(

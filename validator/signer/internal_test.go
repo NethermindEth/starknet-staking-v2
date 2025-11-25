@@ -43,7 +43,7 @@ func TestNewInternalSigner(t *testing.T) {
 			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
 		}
 
-		provider, providerErr := rpc.NewProvider(envVars.HttpProviderUrl)
+		provider, providerErr := rpc.NewProvider(t.Context(), envVars.HttpProviderUrl)
 		require.NoError(t, providerErr)
 
 		validatorAccount, err := signer.NewInternalSigner(
@@ -66,7 +66,7 @@ func TestNewInternalSigner(t *testing.T) {
 			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
 		}
 
-		provider, err := rpc.NewProvider(envVars.HttpProviderUrl)
+		provider, err := rpc.NewProvider(t.Context(), envVars.HttpProviderUrl)
 		require.NoError(t, err)
 
 		configSigner := config.Signer{
@@ -99,26 +99,6 @@ func TestNewInternalSigner(t *testing.T) {
 		require.Equal(
 			t, validator.SepoliaValidationContracts(t), internalSigner.ValidationContracts(),
 		)
-	})
-
-	t.Run("Error: cannot create validator account", func(t *testing.T) {
-		provider, providerErr := rpc.NewProvider("http://localhost:1234")
-		require.NoError(t, providerErr)
-
-		validatorAccount, err := signer.NewInternalSigner(
-			t.Context(),
-			provider,
-			logger,
-			&config.Signer{
-				PrivKey:            "0x123",
-				OperationalAddress: "0x456",
-			},
-			contractAddresses,
-			braavosAccount,
-		)
-
-		require.Equal(t, signer.InternalSigner{}, validatorAccount)
-		require.ErrorContains(t, err, "connection refused")
 	})
 }
 

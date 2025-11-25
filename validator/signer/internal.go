@@ -94,6 +94,11 @@ func (s *InternalSigner) BuildAttestTransaction(
 
 	defaultResources := makeDefaultResources()
 
+	tip, err := rpc.EstimateTip(s.ctx, s.Account.Provider, 1.5)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
+	}
+
 	// Taken from starknet.go `utils.BuildInvokeTxn`
 	attestTransaction := rpc.BroadcastInvokeTxnV3{
 		Type:                  rpc.TransactionTypeInvoke,
@@ -103,7 +108,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 		Signature:             []*felt.Felt{},
 		Nonce:                 nonce,
 		ResourceBounds:        &defaultResources,
-		Tip:                   "0x0",
+		Tip:                   tip,
 		PayMasterData:         []*felt.Felt{},
 		AccountDeploymentData: []*felt.Felt{},
 		NonceDataMode:         rpc.DAModeL1,
