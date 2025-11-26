@@ -135,6 +135,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		)
 		if err != nil {
 			if retries.IsZero() {
+				logger.Debug("max retries reached, returning error")
 				return err
 			}
 			logger.Errorf("cannot connect to ws provider, %s retries left.", &retries)
@@ -167,7 +168,13 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			return nil
 		case err := <-clientSubscription.Err():
 			logger.Errorw("client subscription error", "error", err.Error())
-			logger.Debug("ending headers subscription, closing websocket connection and retrying...")
+			cleanUp(wsProvider, headersFeed)
+		case reorgEvent := <-clientSubscription.Reorg():
+			logger.Infof(
+				"a reorg is happening from block %d to block %d. Restarting the process...",
+				reorgEvent.StartBlockNum,
+				reorgEvent.EndBlockNum,
+			)
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
 			logger.Errorw("processing block headers", "error", err.Error())
