@@ -77,7 +77,7 @@ func MockRPCServer(
 		case "starknet_chainId":
 			const SNSepoliaID = "0x534e5f5345504f4c4941"
 			chainIDResponse := fmt.Sprintf(
-				`{"jsonrpc": "2.0", "result": "%q", "id": 1}`, SNSepoliaID,
+				`{"jsonrpc": "2.0", "result": %q, "id": 1}`, SNSepoliaID,
 			)
 			w.WriteHeader(http.StatusOK)
 			_, err = w.Write([]byte(chainIDResponse))
