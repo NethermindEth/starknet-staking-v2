@@ -8,6 +8,7 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
+	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
@@ -45,17 +46,17 @@ func NewInternalSigner(
 	ks := account.SetNewMemKeystore(publicKeyStr, privateKey)
 
 	accountAddr := types.AddressFromString(signer.OperationalAddress)
-	account, err := account.NewAccount(provider, accountAddr.Felt(), publicKeyStr, ks, 2)
+	acc, err := account.NewAccount(provider, accountAddr.Felt(), publicKeyStr, ks, 2)
 	if err != nil {
 		return InternalSigner{}, errors.Errorf("cannot create internal signer: %w", err)
 	}
 
-	chainIdStr, err := provider.ChainID(ctx)
+	chainIDStr, err := provider.ChainID(ctx)
 	if err != nil {
 		return InternalSigner{}, err
 	}
 	validationContracts := types.ValidationContractsFromAddresses(
-		addresses.SetDefaults(chainIdStr),
+		addresses.SetDefaults(chainIDStr),
 	)
 	logger.Infof("Validation contracts: %s", validationContracts.String())
 
@@ -63,7 +64,7 @@ func NewInternalSigner(
 
 	return InternalSigner{
 		ctx:                 ctx,
-		Account:             *account,
+		Account:             *acc,
 		braavos:             braavos,
 		validationContracts: validationContracts,
 	}, nil
@@ -95,7 +96,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 
 	defaultResources := makeDefaultResources()
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Account.Provider, 1.5)
+	tip, err := rpc.EstimateTip(s.ctx, s.Account.Provider, constants.FeeEstimationMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
@@ -127,7 +128,7 @@ func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEsti
 		txn.Version = rpc.TransactionV3WithQueryBit
 		_, err := s.SignTransaction(txn)
 		if err != nil {
-			return rpc.FeeEstimation{}, nil
+			return rpc.FeeEstimation{}, err
 		}
 	}
 
@@ -162,9 +163,9 @@ func (s *InternalSigner) InvokeTransaction(
 }
 
 func (s *InternalSigner) Call(
-	call rpc.FunctionCall, blockId rpc.BlockID,
+	call rpc.FunctionCall, blockID rpc.BlockID,
 ) ([]*felt.Felt, error) {
-	return s.Account.Provider.Call(s.ctx, call, blockId)
+	return s.Account.Provider.Call(s.ctx, call, blockID)
 }
 
 func (s *InternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {

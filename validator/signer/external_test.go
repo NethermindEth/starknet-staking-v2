@@ -28,10 +28,10 @@ func TestExternalSignerAddress(t *testing.T) {
 	t.Run("Return signer address", func(t *testing.T) {
 		operationalAddress := utils.HexToFelt(t, "0x123")
 
-		mockRpc := validator.MockRPCServer(t, operationalAddress, "")
-		defer mockRpc.Close()
+		mockRPC := validator.MockRPCServer(t, operationalAddress, "")
+		defer mockRPC.Close()
 
-		provider, err := rpc.NewProvider(t.Context(), mockRpc.URL)
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
 		require.NoError(t, err)
 
 		externalSigner, err := signer.NewExternalSigner(

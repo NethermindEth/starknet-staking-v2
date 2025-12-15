@@ -23,7 +23,7 @@ type Signer interface {
 	SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error)
 	InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (rpc.AddInvokeTransactionResponse, error)
 
-	Call(call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
+	Call(call rpc.FunctionCall, blockID rpc.BlockID) ([]*felt.Felt, error)
 	BlockWithTxHashes(blockID rpc.BlockID) (any, error)
 
 	// Property Access
@@ -44,13 +44,13 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 		Calldata: []*felt.Felt{signer.Address().Felt()},
 	}
 
-	result, err := signer.Call(functionCall, rpc.BlockID{Tag: "latest"})
+	result, err := signer.Call(functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
 		return types.EpochInfo{},
 			entrypointInternalError("get_attestation_info_by_operational_address", err)
 	}
 
-	if len(result) != 5 {
+	if len(result) != 5 { //nolint:mnd // The expected result length
 		return types.EpochInfo{},
 			entrypointResponseError("get_attestation_info_by_operational_address", result)
 	}
@@ -73,7 +73,7 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 			EntryPointSelector: utils.GetSelectorFromNameFelt("attestation_window"),
 			Calldata:           []*felt.Felt{},
 		},
-		rpc.BlockID{Tag: "latest"},
+		rpc.WithBlockTag(rpc.BlockTagLatest),
 	)
 	if err != nil {
 		return 0, entrypointInternalError("attestation_window", err)
@@ -95,7 +95,7 @@ func FetchValidatorBalance[S Signer](signer S) (types.Balance, error) {
 			EntryPointSelector: utils.GetSelectorFromNameFelt("balance_of"),
 			Calldata:           []*felt.Felt{signer.Address().Felt()},
 		},
-		rpc.BlockID{Tag: "latest"},
+		rpc.WithBlockTag(rpc.BlockTagLatest),
 	)
 	if err != nil {
 		return types.Balance{}, entrypointInternalError("balance_of", err)
@@ -130,6 +130,7 @@ func FetchEpochAndAttestInfo[S Signer](
 
 	blockNum := ComputeBlockNumberToAttestTo(&epochInfo, attestWindow)
 
+	//nolint:exhaustruct // Purposely not using the block hash
 	attestInfo := types.AttestInfo{
 		TargetBlock: blockNum,
 		WindowStart: blockNum + types.BlockNumber(constants.MinAttestationWindow),
@@ -189,7 +190,10 @@ func ComputeBlockNumberToAttestTo(
 	hashBigInt = hash.BigInt(hashBigInt)
 
 	blockOffset := new(big.Int)
-	blockOffset = blockOffset.Mod(hashBigInt, big.NewInt(int64(epochInfo.EpochLen-attestWindow)))
+	blockOffset = blockOffset.Mod(
+		hashBigInt,
+		new(big.Int).SetUint64(epochInfo.EpochLen-attestWindow),
+	)
 
 	return types.BlockNumber(epochInfo.StartingBlock.Uint64() + blockOffset.Uint64())
 }
