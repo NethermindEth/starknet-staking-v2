@@ -59,7 +59,7 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 
 	return types.EpochInfo{
 		StakerAddress: types.Address(*result[0]),
-		Stake:         uint128.New(stake[0], stake[1]),
+		Stake:         uint128.New(stake[0], stake[1]), //nolint:gosec // Bits returns [4]uint64
 		EpochLen:      result[2].Uint64(),
 		EpochID:       result[3].Uint64(),
 		StartingBlock: types.BlockNumber(result[4].Uint64()),
