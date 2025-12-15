@@ -28,9 +28,8 @@ func TestConfigFromFile(t *testing.T) {
 		invalidJSON := `{"someField": 1,}` // Trailing comma makes it invalid
 
 		// Write invalid JSON content to the file
-		if _, err := tmpFile.WriteString(invalidJSON); err != nil {
-			require.NoError(t, err)
-		}
+		_, err = tmpFile.WriteString(invalidJSON)
+		require.NoError(t, err)
 		require.NoError(t, tmpFile.Close())
 
 		config, err := FromFile(tmpFile.Name())
@@ -57,8 +56,8 @@ func TestConfigFromFile(t *testing.T) {
 
 		expectedConfig := Config{
 			Provider: Provider{
-				Http: "http://localhost:1234",
-				Ws:   "ws://localhost:1235",
+				HTTP: "http://localhost:1234",
+				WS:   "ws://localhost:1235",
 			},
 			Signer: Signer{
 				ExternalURL:        "http://localhost:5678",
@@ -79,8 +78,8 @@ func TestConfigFromEnv(t *testing.T) {
 
 	provider := ProviderFromEnv()
 	expectedProvider := Provider{
-		Http: http,
-		Ws:   ws,
+		HTTP: http,
+		WS:   ws,
 	}
 	require.Equal(
 		t,

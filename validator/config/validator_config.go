@@ -7,22 +7,22 @@ import (
 )
 
 type Provider struct {
-	Http string `json:"http"`
-	Ws   string `json:"ws"`
+	HTTP string `json:"http"`
+	WS   string `json:"ws"`
 }
 
 func ProviderFromEnv() Provider {
 	return Provider{
-		Http: os.Getenv("PROVIDER_HTTP_URL"),
-		Ws:   os.Getenv("PROVIDER_WS_URL"),
+		HTTP: os.Getenv("PROVIDER_HTTP_URL"),
+		WS:   os.Getenv("PROVIDER_WS_URL"),
 	}
 }
 
 func (p *Provider) Check() error {
-	if p.Http == "" {
+	if p.HTTP == "" {
 		return errors.New("http provider url not set in provider configuration")
 	}
-	if p.Ws == "" {
+	if p.WS == "" {
 		return errors.New("ws provider url not set in provider configuration")
 	}
 
@@ -31,11 +31,11 @@ func (p *Provider) Check() error {
 
 // Merge its missing fields with data from other provider
 func (p *Provider) Fill(other *Provider) {
-	if isZero(p.Http) {
-		p.Http = other.Http
+	if isZero(p.HTTP) {
+		p.HTTP = other.HTTP
 	}
-	if isZero(p.Ws) {
-		p.Ws = other.Ws
+	if isZero(p.WS) {
+		p.WS = other.WS
 	}
 }
 

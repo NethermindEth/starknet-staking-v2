@@ -163,8 +163,8 @@ func NewCommand() cobra.Command {
 	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to JSON config file")
 
 	// Config provider flags
-	cmd.Flags().StringVar(&config.Provider.Http, "provider-http", "", "Provider http address")
-	cmd.Flags().StringVar(&config.Provider.Ws, "provider-ws", "", "Provider ws address")
+	cmd.Flags().StringVar(&config.Provider.HTTP, "provider-http", "", "Provider http address")
+	cmd.Flags().StringVar(&config.Provider.WS, "provider-ws", "", "Provider ws address")
 
 	// Config signer flags
 	cmd.Flags().StringVar(

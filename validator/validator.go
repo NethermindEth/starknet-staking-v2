@@ -35,7 +35,7 @@ func New(
 	logger utils.ZapLogger,
 	braavos bool,
 ) (Validator, error) {
-	provider, err := NewProvider(ctx, config.Provider.Http, &logger)
+	provider, err := NewProvider(ctx, config.Provider.HTTP, &logger)
 	if err != nil {
 		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
 	}
@@ -75,7 +75,7 @@ func New(
 		provider:   provider,
 		signer:     signer,
 		logger:     logger,
-		wsProvider: config.Provider.Ws,
+		wsProvider: config.Provider.WS,
 	}, nil
 }
 

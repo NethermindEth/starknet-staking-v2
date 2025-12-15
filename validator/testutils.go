@@ -94,7 +94,7 @@ func MockRPCServer(
 
 			// Just making sure it's the call expected
 			expectedEpochInfoFnCall := rpc.FunctionCall{
-				ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+				ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 				EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 					"get_attestation_info_by_operational_address",
 				),

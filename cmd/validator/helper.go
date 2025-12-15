@@ -30,7 +30,7 @@ func tryNewValidator(
 			logger.Warnf(
 				"couldn't connect with RPC Provider at %s (attempts left: %s)."+
 					" Retrying in 3s...",
-				conf.Provider.Http,
+				conf.Provider.HTTP,
 				retries.String(),
 			)
 			time.Sleep(3 * time.Second)
@@ -43,7 +43,7 @@ func tryNewValidator(
 		if retries.IsZero() {
 			return validator.Validator{},
 				fmt.Errorf(
-					"RPC provider unreachable at %s", conf.Provider.Http,
+					"RPC provider unreachable at %s", conf.Provider.HTTP,
 				)
 		}
 	}

@@ -88,7 +88,7 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 
 // For near future when tracking validator's balance
 func FetchValidatorBalance[S Signer](signer S) (types.Balance, error) {
-	StrkTokenContract := types.AddressFromString(constants.STRK_CONTRACT_ADDRESS)
+	StrkTokenContract := types.AddressFromString(constants.StrkContractAddress)
 	result, err := signer.Call(
 		rpc.FunctionCall{
 			ContractAddress:    StrkTokenContract.Felt(),
@@ -132,7 +132,7 @@ func FetchEpochAndAttestInfo[S Signer](
 
 	attestInfo := types.AttestInfo{
 		TargetBlock: blockNum,
-		WindowStart: blockNum + types.BlockNumber(constants.MIN_ATTESTATION_WINDOW),
+		WindowStart: blockNum + types.BlockNumber(constants.MinAttestationWindow),
 		WindowEnd:   blockNum + types.BlockNumber(attestWindow),
 	}
 

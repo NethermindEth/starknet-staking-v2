@@ -279,7 +279,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		).Times(1)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: expectedAttestInfoEntrypointHash,
 			Calldata:           []*felt.Felt{validatorOperationalAddress.Felt()},
 		}
@@ -301,7 +301,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: expectedAttestInfoEntrypointHash,
 			Calldata:           []*felt.Felt{validatorOperationalAddress.Felt()},
 		}
@@ -335,7 +335,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		).Times(1)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: expectedAttestInfoEntrypointHash,
 			Calldata:           []*felt.Felt{validatorOperationalAddress.Felt()},
 		}
@@ -386,7 +386,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 	t.Run("Return error: contract internal error", func(t *testing.T) {
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: expectedAttestWindowEntrypointHash,
 			Calldata:           []*felt.Felt{},
 		}
@@ -412,7 +412,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 	t.Run("Return error: wrong contract response length", func(t *testing.T) {
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: expectedAttestWindowEntrypointHash,
 			Calldata:           []*felt.Felt{},
 		}
@@ -438,7 +438,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 	t.Run("Successful contract call", func(t *testing.T) {
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: expectedAttestWindowEntrypointHash,
 			Calldata:           []*felt.Felt{},
 		}
@@ -550,7 +550,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 				"get_attestation_info_by_operational_address",
 			),
@@ -583,7 +583,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		).Times(2)
 
 		expectedEpochInfoFnCall := rpc.FunctionCall{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 				"get_attestation_info_by_operational_address",
 			),
@@ -605,7 +605,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			}, nil)
 
 		expectedWindowFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt("attestation_window"),
 			Calldata:           []*felt.Felt{},
 		}
@@ -646,7 +646,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		epochStartingBlock := uint64(639270)
 
 		expectedEpochInfoFnCall := rpc.FunctionCall{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 				"get_attestation_info_by_operational_address",
 			),
@@ -669,7 +669,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		// Mock fetchAttestWindow call
 		expectedWindowFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt("attestation_window"),
 			Calldata:           []*felt.Felt{},
 		}
@@ -696,7 +696,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		expectedTargetBlock := types.BlockNumber(639276)
 		expectedAttestInfo := types.AttestInfo{
 			TargetBlock: expectedTargetBlock,
-			WindowStart: expectedTargetBlock + types.BlockNumber(constants.MIN_ATTESTATION_WINDOW),
+			WindowStart: expectedTargetBlock + types.BlockNumber(constants.MinAttestationWindow),
 			WindowEnd:   expectedTargetBlock + types.BlockNumber(attestWindow),
 		}
 		require.Equal(t, expectedAttestInfo, attestInfo)

@@ -25,8 +25,8 @@ func TestNewCommand(t *testing.T) {
 
 		conf := config.Config{
 			Provider: config.Provider{
-				Http: "http://localhost:1234",
-				Ws:   "ws://localhost:1235",
+				HTTP: "http://localhost:1234",
+				WS:   "ws://localhost:1235",
 			},
 			Signer: config.Signer{
 				OperationalAddress: "0x456",
@@ -44,8 +44,8 @@ func TestNewCommand(t *testing.T) {
 	t.Run("Full command setup works with config file", func(t *testing.T) {
 		conf := config.Config{
 			Provider: config.Provider{
-				Http: "http://localhost:1234",
-				Ws:   "ws://localhost:1235",
+				HTTP: "http://localhost:1234",
+				WS:   "ws://localhost:1235",
 			},
 			Signer: config.Signer{
 				OperationalAddress: "0x456",
