@@ -21,11 +21,16 @@ func NewProvider[Logger utils.Logger](
 	}
 
 	logger.Infof("connected to RPC at %s", providerUrl)
+
 	return provider, nil
 }
 
 // Returns a Go channel where BlockHeaders are received
-func SubscribeToBlockHeaders[Logger utils.Logger](ctx context.Context, wsProviderUrl string, logger Logger) (
+func SubscribeToBlockHeaders[Logger utils.Logger](
+	ctx context.Context,
+	wsProviderUrl string,
+	logger Logger,
+) (
 	*rpc.WsProvider,
 	chan *rpc.BlockHeader,
 	*client.ClientSubscription,
@@ -48,5 +53,6 @@ func SubscribeToBlockHeaders[Logger utils.Logger](ctx context.Context, wsProvide
 	}
 
 	logger.Infof("subscribed to new block header. Subscription ID: %s", clientSubscription.ID())
+
 	return wsProvider, headersFeed, clientSubscription, nil
 }

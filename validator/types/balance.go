@@ -35,5 +35,6 @@ func (b *Balance) Strk() float64 {
 	bigF = bigF.Quo(bigF, weiUnit)
 
 	f, _ := bigF.Float64()
+
 	return f
 }

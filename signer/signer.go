@@ -78,18 +78,21 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body: "+err.Error(), http.StatusBadRequest)
+
 		return
 	}
 
 	var req Request
 	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
+
 		return
 	}
 
 	signature, err := s.hashAndSign(req.InvokeTxnV3, req.ChainId)
 	if err != nil {
 		http.Error(w, "failed to sign tx: "+err.Error(), http.StatusInternalServerError)
+
 		return
 	}
 
@@ -98,6 +101,7 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		s.logger.Errorf("encoding response %s: %s", resp, err)
+
 		return
 	}
 

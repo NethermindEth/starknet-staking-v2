@@ -1,7 +1,6 @@
 package validator_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils"
@@ -22,7 +21,7 @@ func TestNewProvider(t *testing.T) {
 		provider, err := validator.NewProvider(t.Context(), providerURL, logger)
 
 		require.Nil(t, provider)
-		expectedErrorMsg := fmt.Sprintf(`cannot create RPC provider at %s`, providerURL)
+		expectedErrorMsg := "cannot create RPC provider at " + providerURL
 		require.ErrorContains(t, err, expectedErrorMsg)
 	})
 
@@ -59,7 +58,7 @@ func TestBlockHeaderSubscription(t *testing.T) {
 		require.Nil(t, wsProvider)
 		require.Nil(t, headerFeed)
 		require.Nil(t, clientSubscription)
-		expectedErrorMsg := fmt.Sprintf(`dialling WS provider at %s`, wsProviderURL)
+		expectedErrorMsg := "dialling WS provider at " + wsProviderURL
 		require.ErrorContains(t, err, expectedErrorMsg)
 	})
 

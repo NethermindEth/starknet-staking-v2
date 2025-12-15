@@ -73,7 +73,11 @@ func (s *ExternalSigner) BuildAttestTransaction(
 	calldata := account.FmtCallDataCairo2(call)
 	defaultResources := makeDefaultResources()
 
-	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
+	nonce, err := s.Provider.Nonce(
+		s.ctx,
+		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
+		s.Address().Felt(),
+	)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
@@ -98,8 +102,8 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		NonceDataMode:         rpc.DAModeL1,
 		FeeMode:               rpc.DAModeL1,
 	}
-	return attestTransaction, nil
 
+	return attestTransaction, nil
 }
 
 func (s *ExternalSigner) EstimateFee(
@@ -130,6 +134,7 @@ func (s *ExternalSigner) EstimateFee(
 	if err != nil {
 		return rpc.FeeEstimation{}, err
 	}
+
 	return estimateFee[0], nil
 }
 
@@ -173,7 +178,11 @@ func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
 	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 }
 
-func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
+func SignInvokeTx(
+	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
+	chainId *felt.Felt,
+	externalSignerUrl string,
+) error {
 	signResp, err := HashAndSignTx(invokeTxnV3, chainId, externalSignerUrl)
 	if err != nil {
 		return err
@@ -187,7 +196,11 @@ func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, ext
 	return nil
 }
 
-func HashAndSignTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) (signer.Response, error) {
+func HashAndSignTx(
+	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
+	chainId *felt.Felt,
+	externalSignerUrl string,
+) (signer.Response, error) {
 	// Create request body
 	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainId: chainId}
 	jsonData, err := json.Marshal(&reqBody)
@@ -215,6 +228,7 @@ func HashAndSignTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, ex
 	}
 
 	var signResp signer.Response
+
 	return signResp, json.Unmarshal(body, &signResp)
 }
 

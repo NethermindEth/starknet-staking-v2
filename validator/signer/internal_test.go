@@ -403,7 +403,11 @@ func TestFetchAttestWindow(t *testing.T) {
 		window, err := signer.FetchAttestWindow(mockSigner)
 
 		require.Equal(t, uint64(0), window)
-		require.Equal(t, errors.New("Error when calling entrypoint `attestation_window`: some contract error"), err)
+		require.Equal(
+			t,
+			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
+			err,
+		)
 	})
 
 	t.Run("Return error: wrong contract response length", func(t *testing.T) {
@@ -615,7 +619,11 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
-		require.Equal(t, errors.New("Error when calling entrypoint `attestation_window`: some contract error"), err)
+		require.Equal(
+			t,
+			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
+			err,
+		)
 	})
 
 	t.Run("Successfully fetch & compute info", func(t *testing.T) {
@@ -765,7 +773,10 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	t.Run("Correct target block number computation - example 1", func(t *testing.T) {
-		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := utils.HexToFelt(
+			t,
+			"0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
+		)
 		epochInfo := types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
@@ -781,7 +792,10 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	})
 
 	t.Run("Correct target block number computation - example 2", func(t *testing.T) {
-		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := utils.HexToFelt(
+			t,
+			"0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
+		)
 		epochInfo := types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
@@ -796,7 +810,10 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	})
 
 	t.Run("Correct target block number computation - example 3", func(t *testing.T) {
-		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := utils.HexToFelt(
+			t,
+			"0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
+		)
 		epochInfo := types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),

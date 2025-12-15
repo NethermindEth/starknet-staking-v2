@@ -18,6 +18,7 @@ func CheckBalance[S signerP.Signer](
 	balanceWei, err := signerP.FetchValidatorBalance(signer)
 	if err != nil {
 		logger.Warnf("Unable to get STRK balance of account %s: %s", signer.Address(), err.Error())
+
 		return
 	}
 	balance := balanceWei.Strk()
@@ -39,6 +40,7 @@ func CheckBalance[S signerP.Signer](
 			balanceWei.Text(10),
 			balance,
 		)
+
 		return
 	}
 	tracer.UpdateSignerBalance(balance)

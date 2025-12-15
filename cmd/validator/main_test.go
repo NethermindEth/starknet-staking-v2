@@ -157,5 +157,6 @@ func newTestCommandWithArgs(t *testing.T, args ...string) cobra.Command {
 	args = append(args, "--max-retries", "1")
 	cmd := main.NewCommand()
 	cmd.SetArgs(args)
+
 	return cmd
 }

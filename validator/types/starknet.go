@@ -31,6 +31,7 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*a = Address(f)
+
 	return nil
 }
 

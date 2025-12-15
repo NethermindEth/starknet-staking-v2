@@ -75,6 +75,7 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 			latestVersion, err := getLatestRelease()
 			if err != nil {
 				logger.Debugf("cannot get latest release: %w", err)
+
 				continue
 			}
 
@@ -82,6 +83,7 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 			needsUpdate, err := needsUpdate(currentVersion, latestVersion)
 			if err != nil {
 				logger.Debug(err.Error())
+
 				continue
 			}
 

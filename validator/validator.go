@@ -65,7 +65,7 @@ func New(
 			braavos,
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to initialize internal signer: %w", err)
+			return Validator{}, fmt.Errorf("failed to initialise internal signer: %w", err)
 		}
 		signer = &internalSigner
 		logger.Info("using internal signer")
@@ -87,6 +87,7 @@ func (v *Validator) ChainID(ctx context.Context) string {
 	if err != nil {
 		panic(err)
 	}
+
 	return chainID
 }
 
@@ -141,6 +142,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			logger.Debug(err.Error())
 			retries.Sub()
 			Sleep(5 * time.Second)
+
 			continue
 		}
 		retries = maxRetries
@@ -164,6 +166,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		select {
 		case <-ctx.Done():
 			wg.Wait()
+
 			return nil
 		case err := <-clientSubscription.Err():
 			logger.Errorw("client subscription error", "error", err.Error())
@@ -178,6 +181,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		case err := <-stopProcessingHeaders:
 			logger.Errorw("processing block headers", "error", err.Error())
 			cleanUp(wsProvider, headersFeed)
+
 			return err
 		}
 	}

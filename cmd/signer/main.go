@@ -45,6 +45,7 @@ func NewCommand() cobra.Command {
 		if err != nil {
 			return err
 		}
+
 		return remoteSigner.Listen(address)
 	}
 

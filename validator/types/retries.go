@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 )
@@ -33,9 +34,10 @@ func RetriesFromString(s string) (Retries, error) {
 			)
 	}
 	if val == 0 {
-		return Retries{}, fmt.Errorf("retries value should be greater or equal than one")
+		return Retries{}, errors.New("retries value should be greater or equal than one")
 	}
 	r.Set(val)
+
 	return r, nil
 }
 
@@ -62,5 +64,6 @@ func (r *Retries) String() string {
 	if r.infinite {
 		return "infinite"
 	}
+
 	return strconv.FormatUint(r.value, 10)
 }

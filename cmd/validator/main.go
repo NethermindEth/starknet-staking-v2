@@ -94,6 +94,7 @@ func NewCommand() cobra.Command {
 		)
 		if err != nil {
 			logger.Error(err)
+
 			return
 		}
 

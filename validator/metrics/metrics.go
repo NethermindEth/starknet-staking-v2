@@ -156,12 +156,14 @@ func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *
 // Start starts the metrics server
 func (m *Metrics) Start() error {
 	m.logger.Infof("Starting metrics server on %s", m.server.Addr)
+
 	return m.server.ListenAndServe()
 }
 
 // Stop stops the metrics server
 func (m *Metrics) Stop(ctx context.Context) error {
 	m.logger.Info("Stopping metrics server")
+
 	return m.server.Shutdown(ctx)
 }
 

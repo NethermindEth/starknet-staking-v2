@@ -69,6 +69,7 @@ func (ca *ContractAddresses) Check() error {
 	if isZero(ca.Attest) {
 		return errors.New("attest contract address is not set")
 	}
+
 	return nil
 }
 
@@ -89,6 +90,7 @@ type StarknetConfig struct {
 
 func (c *StarknetConfig) SetDefaults(chainID string) *StarknetConfig {
 	c.ContractAddresses.SetDefaults(chainID)
+
 	return c
 }
 

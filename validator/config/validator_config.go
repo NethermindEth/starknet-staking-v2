@@ -25,6 +25,7 @@ func (p *Provider) Check() error {
 	if p.Ws == "" {
 		return errors.New("ws provider url not set in provider configuration")
 	}
+
 	return nil
 }
 
@@ -54,6 +55,7 @@ func (s *Signer) Check() error {
 	if s.PrivKey == "" {
 		return errors.New("neither private key nor external url set in signer configuration")
 	}
+
 	return nil
 }
 
@@ -100,6 +102,7 @@ func FromFile(filePath string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+
 	return FromData(data)
 }
 
@@ -108,6 +111,7 @@ func FromData(data []byte) (Config, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return Config{}, err
 	}
+
 	return config, nil
 }
 
@@ -125,10 +129,12 @@ func (c *Config) Check() error {
 	if err := c.Signer.Check(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func isZero[T comparable](v T) bool {
 	var x T
+
 	return v == x
 }

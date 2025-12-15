@@ -14,7 +14,7 @@ func logNewEpoch(
 ) {
 	logger.Infow(
 		fmt.Sprintf("epoch %d started", epochInfo.EpochId+1),
-		"epoch lenght", epochInfo.EpochLen,
+		"epoch length", epochInfo.EpochLen,
 		"start block", epochInfo.StartingBlock,
 		"end block", epochInfo.StartingBlock+types.BlockNumber(epochInfo.EpochLen),
 	)

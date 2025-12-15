@@ -49,6 +49,7 @@ func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockH
 	}
 
 	t.valid = true
+
 	return nil
 }
 
@@ -99,6 +100,7 @@ func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
 			return fmt.Errorf("signer failed to sign the transaction: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -142,12 +144,12 @@ func (a *AttestTracker) setStatus(status AttestStatus) {
 }
 
 type EventDispatcher[S signerP.Signer] struct {
-	// Current epoch attest-related fields
-	CurrentAttest AttestTracker
 	// Event channels
 	DoAttest      chan types.DoAttest
 	PrepareAttest chan types.PrepareAttest
 	EndOfWindow   chan struct{}
+	// Current epoch attest-related fields
+	CurrentAttest AttestTracker
 }
 
 func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
@@ -182,6 +184,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
+
 				continue
 			}
 			logger.Debug("attest transaction built successfully")
@@ -215,6 +218,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
+
 					continue
 				}
 				logger.Debug("attest transaction built successfully")
@@ -225,6 +229,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
 				if err != nil {
 					logger.Errorf("failed to update transaction nonce: %s", err.Error())
+
 					continue
 				}
 			}
@@ -237,6 +242,7 @@ func (d *EventDispatcher[S]) Dispatch(
 						"attestation is already done for this epoch",
 					)
 					d.CurrentAttest.setStatus(Successful)
+
 					continue
 				}
 
@@ -245,6 +251,7 @@ func (d *EventDispatcher[S]) Dispatch(
 					"error", err.Error(),
 				)
 				d.CurrentAttest.setStatus(Failed)
+
 				continue
 			}
 
@@ -292,6 +299,7 @@ func TrackAttest[S signerP.Signer](
 				"attest transaction status was not found. Will wait.",
 				"transaction hash", txHash,
 			)
+
 			return Ongoing
 		} else {
 			logger.Errorw(
@@ -299,6 +307,7 @@ func TrackAttest[S signerP.Signer](
 				"transaction hash", txHash,
 				"error", err,
 			)
+
 			return Failed
 		}
 	}
@@ -309,6 +318,7 @@ func TrackAttest[S signerP.Signer](
 			"transaction hash", txHash,
 			"failure reason", txStatus.FailureReason,
 		)
+
 		return Failed
 	}
 
@@ -318,6 +328,7 @@ func TrackAttest[S signerP.Signer](
 			fmt.Sprintf("attest transaction %s. Will wait.", txStatus.FinalityStatus),
 			"hash", txHash,
 		)
+
 		return Ongoing
 	default:
 		logger.Infow(
@@ -326,6 +337,7 @@ func TrackAttest[S signerP.Signer](
 			"finality status", txStatus.FinalityStatus,
 			"execution status", txStatus.ExecutionStatus,
 		)
+
 		return Successful
 	}
 }

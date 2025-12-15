@@ -56,6 +56,7 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 	}
 
 	stake := result[1].Bits()
+
 	return types.EpochInfo{
 		StakerAddress: types.Address(*result[0]),
 		Stake:         uint128.New(stake[0], stake[1]),
@@ -140,6 +141,7 @@ func FetchEpochAndAttestInfo[S Signer](
 		"epoch", epochInfo,
 		"attestation", attestInfo,
 	)
+
 	return epochInfo, attestInfo, nil
 }
 
@@ -173,7 +175,10 @@ func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier floa
 	return txn, nil
 }
 
-func ComputeBlockNumberToAttestTo(epochInfo *types.EpochInfo, attestWindow uint64) types.BlockNumber {
+func ComputeBlockNumberToAttestTo(
+	epochInfo *types.EpochInfo,
+	attestWindow uint64,
+) types.BlockNumber {
 	hash := crypto.PoseidonArray(
 		new(felt.Felt).SetBigInt(epochInfo.Stake.Big()),
 		new(felt.Felt).SetUint64(epochInfo.EpochId),

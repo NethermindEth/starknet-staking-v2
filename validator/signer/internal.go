@@ -60,6 +60,7 @@ func NewInternalSigner(
 	logger.Infof("Validation contracts: %s", validationContracts.String())
 
 	logger.Debugw("internal signer has been set up", "address", accountAddr.String())
+
 	return InternalSigner{
 		ctx:                 ctx,
 		Account:             *account,
@@ -114,6 +115,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 		NonceDataMode:         rpc.DAModeL1,
 		FeeMode:               rpc.DAModeL1,
 	}
+
 	return attestTransaction, nil
 }
 
@@ -143,6 +145,7 @@ func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEsti
 	if err != nil {
 		return rpc.FeeEstimation{}, err
 	}
+
 	return estimateFee[0], nil
 }
 
