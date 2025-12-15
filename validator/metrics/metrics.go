@@ -33,9 +33,10 @@ type Metrics struct {
 }
 
 // NewMetrics creates a new metrics server
-func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *Metrics {
+func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics {
 	registry := prometheus.NewRegistry()
 
+	//nolint:exhaustruct,lll // Only specifying used fields // We can't break the lines since it'll show in the output
 	m := &Metrics{
 		logger:   logger,
 		network:  chainID,
@@ -143,11 +144,16 @@ func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *
 			m.logger.Errorf("Failed to write health check response: %v", err)
 		}
 	})
+	//nolint:exhaustruct // Using default values
 	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
+	//nolint:exhaustruct // Only specifying used fields
 	m.server = &http.Server{
-		Addr:    serverAddress,
-		Handler: mux,
+		Addr:              serverAddress,
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	return m
