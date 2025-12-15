@@ -9,7 +9,7 @@ Staking on Starknet provides an opportunity to contribute to network security an
 ## Prerequisites
 
 - **STRK Tokens**: At least 20,000 STRK is required for staking on mainnet (1 STRK on Sepolia testnet). For the latest details, check out the [Staking Protocol Details](https://docs.starknet.io/staking/overview/#protocol_details).
-- **Node Setup**: A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) with support for the JSON-RPC 0.8.1 API specification. For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/eqlabs/pathfinder).
+- **Node Setup**: A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) with support for the JSON-RPC 0.9.0 API specification. For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/eqlabs/pathfinder).
 - **Starknet Wallet**: A compatible wallet, like [Braavos](https://braavos.app/wallet-features/ledger-on-braavos/) or [Argent](https://www.argent.xyz/blog/how-to-use-your-hardware-wallet-with-argent).
 - **Access to CLI/Block Explorer**: Tools like [Voyager](https://voyager.online) for interacting with contracts.
 - **An account with enough funds** to pay for the attestation transactions.
@@ -39,8 +39,8 @@ The configuration file properties for internal signing will look like:
 ```json
 {
   "provider": {
-      "http": "http://localhost:6060/v0_8",
-      "ws": "ws://localhost:6061/v0_8"
+      "http": "http://localhost:6060/v0_9",
+      "ws": "ws://localhost:6061/v0_9"
   },
   "signer": {
       "operationalAddress": "your operational address",

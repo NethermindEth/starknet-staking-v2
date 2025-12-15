@@ -29,9 +29,13 @@ type Validator struct {
 }
 
 func New(
-	config *config.Config, snConfig *config.StarknetConfig, logger utils.ZapLogger, braavos bool,
+	ctx context.Context,
+	config *config.Config,
+	snConfig *config.StarknetConfig,
+	logger utils.ZapLogger,
+	braavos bool,
 ) (Validator, error) {
-	provider, err := NewProvider(config.Provider.Http, &logger)
+	provider, err := NewProvider(ctx, config.Provider.Http, &logger)
 	if err != nil {
 		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
 	}
@@ -39,7 +43,7 @@ func New(
 	var signer signerP.Signer
 	if config.Signer.External() {
 		externalSigner, err := signerP.NewExternalSigner(
-			context.Background(),
+			ctx,
 			provider,
 			&logger,
 			&config.Signer,
@@ -53,7 +57,7 @@ func New(
 		logger.Infof("using external signer at %s", config.Signer.ExternalURL)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
-			context.Background(),
+			ctx,
 			provider,
 			&logger,
 			&config.Signer,
@@ -75,8 +79,8 @@ func New(
 	}, nil
 }
 
-func (v *Validator) ChainID() string {
-	chainID, err := v.provider.ChainID(context.Background())
+func (v *Validator) ChainID(ctx context.Context) string {
+	chainID, err := v.provider.ChainID(ctx)
 	// This shouldn't ever happened because the chainID query is done during the validator
 	// initialization with `New`. After that the value is cached, so we are just accessing
 	// a property at this point
@@ -163,7 +167,13 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			return nil
 		case err := <-clientSubscription.Err():
 			logger.Errorw("client subscription error", "error", err.Error())
-			logger.Debug("ending headers subscription, closing websocket connection and retrying...")
+			cleanUp(wsProvider, headersFeed)
+		case reorgEvent := <-clientSubscription.Reorg():
+			logger.Infof(
+				"reorg detected from block %d to block %d. Restarting WS subscription...",
+				reorgEvent.StartBlockNum,
+				reorgEvent.EndBlockNum,
+			)
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
 			logger.Errorw("processing block headers", "error", err.Error())

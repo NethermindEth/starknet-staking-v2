@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/NethermindEth/juno v0.15.7
-	github.com/NethermindEth/starknet.go v0.16.0
+	github.com/NethermindEth/starknet.go v0.17.0
 	github.com/cockroachdb/errors v1.12.0
 	github.com/joho/godotenv v1.5.1
 	github.com/prometheus/client_golang v1.23.0
