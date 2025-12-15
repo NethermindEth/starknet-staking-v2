@@ -13,4 +13,5 @@ const (
 	MinAttestationWindow    = 11
 	DefaultMaxRetries       = 10
 	FeeEstimationMultiplier = 1.5
+	TipMultiplier           = 1.5
 )

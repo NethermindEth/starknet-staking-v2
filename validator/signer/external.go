@@ -83,7 +83,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Provider, constants.FeeEstimationMultiplier)
+	tip, err := rpc.EstimateTip(s.ctx, s.Provider, constants.TipMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}

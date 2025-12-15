@@ -96,7 +96,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 
 	defaultResources := makeDefaultResources()
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Account.Provider, constants.FeeEstimationMultiplier)
+	tip, err := rpc.EstimateTip(s.ctx, s.Account.Provider, constants.TipMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
