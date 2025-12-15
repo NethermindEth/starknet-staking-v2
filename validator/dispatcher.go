@@ -8,6 +8,7 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
@@ -67,7 +68,7 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	if err != nil {
 		return resp, fmt.Errorf("signer failed to estimate fee: %w", err)
 	}
-	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, 1.5)
+	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, constants.FeeEstimationMultiplier)
 
 	// patch for making sure txn.Version is correct
 	t.txn.Version = rpc.TransactionV3
@@ -116,6 +117,7 @@ type AttestTracker struct {
 }
 
 func NewAttestTracker() AttestTracker {
+	//nolint:exhaustruct // Using default values
 	return AttestTracker{
 		Transaction: AttestTransaction{},
 		Status:      Iddle,
@@ -161,6 +163,7 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	}
 }
 
+//nolint:gocyclo // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
 	signer S, balanceThreshold float64, logger *junoUtils.ZapLogger, tracer metrics.Tracer,
 ) {

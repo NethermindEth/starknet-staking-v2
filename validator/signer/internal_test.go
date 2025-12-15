@@ -43,7 +43,7 @@ func TestNewInternalSigner(t *testing.T) {
 			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
 		}
 
-		provider, providerErr := rpc.NewProvider(t.Context(), envVars.HttpProviderUrl)
+		provider, providerErr := rpc.NewProvider(t.Context(), envVars.HTTPProviderURL)
 		require.NoError(t, providerErr)
 
 		validatorAccount, err := signer.NewInternalSigner(
@@ -66,7 +66,7 @@ func TestNewInternalSigner(t *testing.T) {
 			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
 		}
 
-		provider, err := rpc.NewProvider(t.Context(), envVars.HttpProviderUrl)
+		provider, err := rpc.NewProvider(t.Context(), envVars.HTTPProviderURL)
 		require.NoError(t, err)
 
 		configSigner := config.Signer{

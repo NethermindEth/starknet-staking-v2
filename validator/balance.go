@@ -26,7 +26,7 @@ func CheckBalance[S signerP.Signer](
 		"Account balance",
 		"address", signer.Address(),
 		"STRK", balance,
-		"WEI", balanceWei.Text(10),
+		"WEI", balanceWei.Text(10), //nolint:mnd // Decimal base
 	)
 
 	if math.IsInf(balance, 1) {
@@ -37,7 +37,7 @@ func CheckBalance[S signerP.Signer](
 	} else if math.IsInf(balance, -1) || math.IsNaN(balance) {
 		logger.Error(
 			"Unexpected balance conversion value from WEI: %s to STRK: %f",
-			balanceWei.Text(10),
+			balanceWei.Text(10), //nolint:mnd // Decimal base
 			balance,
 		)
 

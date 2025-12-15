@@ -94,6 +94,10 @@ linters:
           - mnd
         path: _test\.go
       - linters:
+          - gocritic
+        text: "commentedOutCode"
+        path: _test\.go
+      - linters:
           - lll
         source: '^//go:generate '
 formatters:

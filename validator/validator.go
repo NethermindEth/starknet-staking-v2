@@ -30,23 +30,23 @@ type Validator struct {
 
 func New(
 	ctx context.Context,
-	config *config.Config,
+	conf *config.Config,
 	snConfig *config.StarknetConfig,
 	logger utils.ZapLogger,
 	braavos bool,
 ) (Validator, error) {
-	provider, err := NewProvider(ctx, config.Provider.HTTP, &logger)
+	provider, err := NewProvider(ctx, conf.Provider.HTTP, &logger)
 	if err != nil {
 		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
 	}
 
 	var signer signerP.Signer
-	if config.Signer.External() {
+	if conf.Signer.External() {
 		externalSigner, err := signerP.NewExternalSigner(
 			ctx,
 			provider,
 			&logger,
-			&config.Signer,
+			&conf.Signer,
 			&snConfig.ContractAddresses,
 			braavos,
 		)
@@ -54,13 +54,13 @@ func New(
 			return Validator{}, fmt.Errorf("failed to connect to external signer: %w", err)
 		}
 		signer = &externalSigner
-		logger.Infof("using external signer at %s", config.Signer.ExternalURL)
+		logger.Infof("using external signer at %s", conf.Signer.ExternalURL)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
 			ctx,
 			provider,
 			&logger,
-			&config.Signer,
+			&conf.Signer,
 			&snConfig.ContractAddresses,
 			braavos,
 		)
@@ -75,7 +75,7 @@ func New(
 		provider:   provider,
 		signer:     signer,
 		logger:     logger,
-		wsProvider: config.Provider.WS,
+		wsProvider: conf.Provider.WS,
 	}, nil
 }
 
@@ -141,7 +141,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			logger.Errorf("cannot connect to ws provider, %s retries left.", &retries)
 			logger.Debug(err.Error())
 			retries.Sub()
-			Sleep(5 * time.Second)
+			Sleep(5 * time.Second) //nolint:mnd // Number of seconds to sleep
 
 			continue
 		}
@@ -242,19 +242,21 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			}
 		}
 
-		if types.BlockNumber(block.Number) >= attestInfo.TargetBlock &&
+		blockNum := types.BlockNumber(block.Number)
+		switch {
+		case blockNum >= attestInfo.TargetBlock &&
 			// From [target block, window start), make sure to prepare the transaction
-			types.BlockNumber(block.Number) < attestInfo.WindowStart-1 {
+			blockNum < attestInfo.WindowStart-1:
 			dispatcher.PrepareAttest <- types.PrepareAttest{
 				BlockHash: attestInfo.TargetBlockHash,
 			}
-		} else if types.BlockNumber(block.Number) >= attestInfo.WindowStart-1 &&
+		case blockNum >= attestInfo.WindowStart-1 &&
 			// from [window start, window end), make sure the attestation is done
-			types.BlockNumber(block.Number) < attestInfo.WindowEnd {
+			blockNum < attestInfo.WindowEnd:
 			dispatcher.DoAttest <- types.DoAttest{
 				BlockHash: attestInfo.TargetBlockHash,
 			}
-		} else if types.BlockNumber(block.Number) == attestInfo.WindowEnd {
+		case blockNum == attestInfo.WindowEnd:
 			dispatcher.EndOfWindow <- struct{}{}
 		}
 	}
@@ -268,7 +270,7 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 	attestInfo *types.AttestInfo,
 ) {
 	targetBlockNumber := attestInfo.TargetBlock.Uint64()
-	res, err := account.BlockWithTxHashes(rpc.BlockID{Number: &targetBlockNumber})
+	res, err := account.BlockWithTxHashes(rpc.WithBlockNumber(targetBlockNumber))
 
 	// If no error, then target block already exists
 	if err == nil {
@@ -288,7 +290,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	prevEpoch *types.EpochInfo,
 	isEpochSwitchCorrect func(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool,
 	maxRetries types.Retries,
-	newEpochId string,
+	newEpochID string,
 ) (types.EpochInfo, types.AttestInfo, error) {
 	// storing the initial value for error reporting
 	totalRetryAmount := maxRetries.String()
@@ -298,7 +300,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	for (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && !maxRetries.IsZero() {
 		if err != nil {
 			logger.Debugw("failed to fetch epoch info",
-				"epoch id", newEpochId,
+				"epoch id", newEpochID,
 				"error", err.Error(),
 			)
 		} else {
@@ -322,7 +324,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 			errors.Errorf(
 				"failed to fetch epoch info after %s retries. Epoch id: %s. Error: %w",
 				totalRetryAmount,
-				newEpochId,
+				newEpochID,
 				err,
 			)
 	}
@@ -339,7 +341,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	return newEpoch, newAttestInfo, nil
 }
 
-func CorrectEpochSwitch(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool {
+func CorrectEpochSwitch(prevEpoch, newEpoch *types.EpochInfo) bool {
 	return newEpoch.EpochID == prevEpoch.EpochID+1 &&
 		newEpoch.StartingBlock.Uint64() == prevEpoch.StartingBlock.Uint64()+prevEpoch.EpochLen
 }

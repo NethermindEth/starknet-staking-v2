@@ -28,8 +28,8 @@ type Method struct {
 }
 
 type EnvVariable struct {
-	HttpProviderUrl string
-	WsProviderUrl   string
+	HTTPProviderURL string
+	WSProviderURL   string
 }
 
 func LoadEnv(t *testing.T) (EnvVariable, error) {
@@ -47,12 +47,12 @@ func LoadEnv(t *testing.T) (EnvVariable, error) {
 		return EnvVariable{}, errors.New("failed to load HTTP_PROVIDER_URL, empty string")
 	}
 
-	wsProviderUrl := os.Getenv("WS_PROVIDER_URL")
-	if wsProviderUrl == "" {
+	wsProviderURL := os.Getenv("WS_PROVIDER_URL")
+	if wsProviderURL == "" {
 		return EnvVariable{}, errors.New("failed to load WS_PROVIDER_URL, empty string")
 	}
 
-	return EnvVariable{base, wsProviderUrl}, nil
+	return EnvVariable{base, wsProviderURL}, nil
 }
 
 func MockRPCServer(
@@ -60,12 +60,12 @@ func MockRPCServer(
 ) *httptest.Server {
 	t.Helper()
 
-	mockRpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockRPC := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Read and decode JSON body
 		bodyBytes, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 		defer func() {
-			err := r.Body.Close()
+			err = r.Body.Close()
 			require.NoError(t, err)
 		}()
 
@@ -75,16 +75,17 @@ func MockRPCServer(
 
 		switch req.Name {
 		case "starknet_chainId":
-			const SN_SEPOLIA_ID = "0x534e5f5345504f4c4941"
-			chainIdResponse := fmt.Sprintf(
-				`{"jsonrpc": "2.0", "result": "%s", "id": 1}`, SN_SEPOLIA_ID,
+			const SNSepoliaID = "0x534e5f5345504f4c4941"
+			chainIDResponse := fmt.Sprintf(
+				`{"jsonrpc": "2.0", "result": "%q", "id": 1}`, SNSepoliaID,
 			)
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte(chainIdResponse))
+			_, err = w.Write([]byte(chainIDResponse))
 			require.NoError(t, err)
 		case "starknet_call":
 			// Marshal the `Params` back into JSON
-			paramsBytes, err := json.Marshal(req.Params[0])
+			var paramsBytes []byte
+			paramsBytes, err = json.Marshal(req.Params[0])
 			require.NoError(t, err)
 
 			// Unmarshal `Params` into `FunctionCall`
@@ -110,7 +111,7 @@ func MockRPCServer(
 		// Called when calling `rpc.NewProvider` in Starknet.Go
 		case "starknet_specVersion":
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte(`{"jsonrpc": "2.0", "result": "v0.9.0", "id": 1}`))
+			_, err = w.Write([]byte(`{"jsonrpc": "2.0", "result": "v0.9.0", "id": 1}`))
 			require.NoError(t, err)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -119,7 +120,7 @@ func MockRPCServer(
 		}
 	}))
 
-	return mockRpc
+	return mockRPC
 }
 
 func SepoliaValidationContracts(t *testing.T) *types.ValidationContracts {
