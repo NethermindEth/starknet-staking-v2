@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils"
@@ -17,11 +18,11 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-const SIGN_ENDPOINT = "/sign"
+const SignEndpoint = "/sign"
 
 type Request struct {
 	*rpc.InvokeTxnV3 `json:"transaction"`
-	ChainId          *felt.Felt `json:"chain_id"`
+	ChainID          *felt.Felt `json:"chain_id"`
 }
 
 type Response struct {
@@ -62,11 +63,21 @@ func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
 // Listen for requests of the type `POST` at `<address>/sign`. The request
 // should include the hash of the transaction being signed.
 func (s *Signer) Listen(address string) error {
-	http.HandleFunc(SIGN_ENDPOINT, s.handler)
+	mux := http.NewServeMux()
+	mux.HandleFunc(SignEndpoint, s.handler)
+
+	//nolint:exhaustruct // Only specifying used fields
+	server := &http.Server{
+		Addr:         address,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		Handler:      mux,
+	}
 
 	s.logger.Infof("server running at %s", address)
 
-	return http.ListenAndServe(address, nil)
+	return server.ListenAndServe()
 }
 
 // Decodes the request and returns ECDSA `r` and `s` signature values via http
@@ -83,13 +94,14 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req Request
-	if err := json.Unmarshal(body, &req); err != nil {
+	err = json.Unmarshal(body, &req)
+	if err != nil {
 		http.Error(w, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
 
 		return
 	}
 
-	signature, err := s.hashAndSign(req.InvokeTxnV3, req.ChainId)
+	signature, err := s.hashAndSign(req.InvokeTxnV3, req.ChainID)
 	if err != nil {
 		http.Error(w, "failed to sign tx: "+err.Error(), http.StatusInternalServerError)
 
@@ -111,16 +123,16 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 // Given a transaction hash returns the ECDSA `r` and `s` signature values
 func (s *Signer) hashAndSign(
 	invokeTxnV3 *rpc.InvokeTxnV3,
-	chainId *felt.Felt,
+	chainID *felt.Felt,
 ) ([2]*felt.Felt, error) {
-	s.logger.Infow("Signing transaction", "transaction", invokeTxnV3, "chainId", chainId)
+	s.logger.Infow("Signing transaction", "transaction", invokeTxnV3, "chainId", chainID)
 
-	hash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainId)
+	txnHash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainID)
 	if err != nil {
 		return [2]*felt.Felt{}, err
 	}
 
-	hashBig := hash.BigInt(new(big.Int))
+	hashBig := txnHash.BigInt(new(big.Int))
 
 	s1, s2, err := s.keyStore.Sign(context.Background(), s.publicKey, hashBig)
 	if err != nil {

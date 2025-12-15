@@ -242,7 +242,7 @@ func TestSignInvokeTx(t *testing.T) {
 
 					// Making sure received tx and chainId are the expected ones
 					require.Equal(t, &invokeTx, req.InvokeTxnV3)
-					require.Equal(t, chainID, req.ChainId)
+					require.Equal(t, chainID, req.ChainID)
 
 					_, err = fmt.Fprintf(w, `{"signature": ["%s", "%s"]}`, sigR, sigS)
 					require.NoError(t, err)

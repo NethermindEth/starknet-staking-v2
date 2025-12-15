@@ -202,13 +202,13 @@ func HashAndSignTx(
 	externalSignerUrl string,
 ) (signer.Response, error) {
 	// Create request body
-	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainId: chainId}
+	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainID: chainId}
 	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
 		return signer.Response{}, err
 	}
 
-	signEndPoint := externalSignerUrl + signer.SIGN_ENDPOINT
+	signEndPoint := externalSignerUrl + signer.SignEndpoint
 	resp, err := http.Post(signEndPoint, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return signer.Response{}, err
