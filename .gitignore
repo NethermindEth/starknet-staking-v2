@@ -34,3 +34,4 @@ config.json
 config-mainnet.json
 config-external.json
 
+.vscode/
