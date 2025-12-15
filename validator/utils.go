@@ -13,7 +13,7 @@ func logNewEpoch(
 	logger *utils.ZapLogger,
 ) {
 	logger.Infow(
-		fmt.Sprintf("epoch %d started", epochInfo.EpochId+1),
+		fmt.Sprintf("epoch %d started", epochInfo.EpochID+1),
 		"epoch length", epochInfo.EpochLen,
 		"start block", epochInfo.StartingBlock,
 		"end block", epochInfo.StartingBlock+types.BlockNumber(epochInfo.EpochLen),

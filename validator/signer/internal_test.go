@@ -365,7 +365,7 @@ func TestFetchEpochInfo(t *testing.T) {
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.New(0, 1), // the 1st 64 bits are all 0 as it's MaxUint64 + 1
 			EpochLen:      40,
-			EpochId:       1516,
+			EpochID:       1516,
 			StartingBlock: types.BlockNumber(639270),
 		}, epochInfo)
 
@@ -688,7 +688,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(stake),
 			EpochLen:      epochLen,
-			EpochId:       epochID,
+			EpochID:       epochID,
 			StartingBlock: types.BlockNumber(epochStartingBlock),
 		}
 		require.Equal(t, expectedEpochInfo, epochInfo)
@@ -781,7 +781,7 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
 			EpochLen:      40,
-			EpochId:       1516,
+			EpochID:       1516,
 			StartingBlock: types.BlockNumber(639270),
 		}
 		attestationWindow := uint64(16)
@@ -800,7 +800,7 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
 			EpochLen:      40,
-			EpochId:       1517,
+			EpochID:       1517,
 			StartingBlock: types.BlockNumber(639310),
 		}
 		attestationWindow := uint64(16)
@@ -818,7 +818,7 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
 			EpochLen:      40,
-			EpochId:       1518,
+			EpochID:       1518,
 			StartingBlock: types.BlockNumber(639350),
 		}
 		attestationWindow := uint64(16)

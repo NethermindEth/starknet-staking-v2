@@ -182,7 +182,7 @@ func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
 // UpdateEpochInfo updates the epoch-related metrics
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
 	m.logger.Debugw("UpdateEpochInfo", "epochInfo", epochInfo, "targetBlock", targetBlock)
-	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochId))
+	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochID))
 	m.currentEpochLength.WithLabelValues(m.network).Set(float64(epochInfo.EpochLen))
 	m.currentEpochStartingBlockNumber.
 		WithLabelValues(m.network).

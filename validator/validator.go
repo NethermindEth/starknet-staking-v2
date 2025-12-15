@@ -222,7 +222,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 				&prevEpochInfo,
 				CorrectEpochSwitch,
 				maxRetries,
-				strconv.FormatUint(prevEpochInfo.EpochId+1, 10),
+				strconv.FormatUint(prevEpochInfo.EpochID+1, 10),
 			)
 			if err != nil {
 				return err
@@ -340,6 +340,6 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 }
 
 func CorrectEpochSwitch(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool {
-	return newEpoch.EpochId == prevEpoch.EpochId+1 &&
+	return newEpoch.EpochID == prevEpoch.EpochID+1 &&
 		newEpoch.StartingBlock.Uint64() == prevEpoch.StartingBlock.Uint64()+prevEpoch.EpochLen
 }
