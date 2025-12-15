@@ -26,6 +26,7 @@ Validator program for Starknet stakers created by Nethermind
 
 `
 
+//nolint:funlen // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {
 	var configPath string
 	var logLevelF string
@@ -67,7 +68,8 @@ func NewCommand() cobra.Command {
 		maxRetries = parsedRetries
 
 		logLevel := utils.NewLogLevel(utils.INFO)
-		if err := logLevel.Set(logLevelF); err != nil {
+		err = logLevel.Set(logLevelF)
+		if err != nil {
 			return err
 		}
 
@@ -114,7 +116,7 @@ func NewCommand() cobra.Command {
 			// Graceful shutdown at the end
 			defer func() {
 				shutdownCtx, shutdownCancel := context.WithTimeout(
-					cmd.Context(), 5*time.Second,
+					cmd.Context(), 5*time.Second, //nolint:mnd // Timeout time
 				)
 				defer shutdownCancel()
 				if err := metrics.Stop(shutdownCtx); err != nil {
@@ -147,6 +149,7 @@ func NewCommand() cobra.Command {
 		}
 	}
 
+	//nolint:exhaustruct // Only specifying used fields
 	cmd := cobra.Command{
 		Use:     "validator",
 		Short:   "Validator program for Starknet stakers created by Nethermind",
@@ -210,7 +213,7 @@ func NewCommand() cobra.Command {
 	cmd.Flags().Float64Var(
 		&balanceThreshold,
 		"balance-threshold",
-		100,
+		100, //nolint:mnd // Default balance threshold (100 STRK)
 		"Triggers a warning if it detects the signer account (i.e. operational address)"+
 			" stark balance below the specified threshold. One stark equals 1 << 1e18.",
 	)

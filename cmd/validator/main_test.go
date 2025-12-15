@@ -23,7 +23,7 @@ func TestNewCommand(t *testing.T) {
 	t.Run("PreRunE returns an error: config file verification fails", func(t *testing.T) {
 		command := main.NewCommand()
 
-		config := config.Config{
+		conf := config.Config{
 			Provider: config.Provider{
 				Http: "http://localhost:1234",
 				Ws:   "ws://localhost:1235",
@@ -32,7 +32,7 @@ func TestNewCommand(t *testing.T) {
 				OperationalAddress: "0x456",
 			},
 		}
-		filePath := createTemporaryConfigFile(t, &config)
+		filePath := createTemporaryConfigFile(t, &conf)
 		defer deleteFile(t, filePath)
 
 		command.SetArgs([]string{"--config", filePath})
@@ -42,7 +42,7 @@ func TestNewCommand(t *testing.T) {
 	})
 
 	t.Run("Full command setup works with config file", func(t *testing.T) {
-		config := config.Config{
+		conf := config.Config{
 			Provider: config.Provider{
 				Http: "http://localhost:1234",
 				Ws:   "ws://localhost:1235",
@@ -52,7 +52,7 @@ func TestNewCommand(t *testing.T) {
 				PrivKey:            "0x123",
 			},
 		}
-		filePath := createTemporaryConfigFile(t, &config)
+		filePath := createTemporaryConfigFile(t, &conf)
 		defer deleteFile(t, filePath)
 
 		command := newTestCommandWithArgs(t, "--config", filePath)
@@ -73,7 +73,7 @@ func TestNewCommand(t *testing.T) {
 	})
 
 	t.Run("Full command setup works with config file and with flags", func(t *testing.T) {
-		config, err := config.FromData([]byte(`{
+		conf, err := config.FromData([]byte(`{
             "provider": {
                 "http": "http://localhost:1234"
             },
@@ -83,7 +83,7 @@ func TestNewCommand(t *testing.T) {
         }`),
 		)
 		require.NoError(t, err)
-		filePath := createTemporaryConfigFile(t, &config)
+		filePath := createTemporaryConfigFile(t, &conf)
 		defer deleteFile(t, filePath)
 
 		command := newTestCommandWithArgs(
@@ -97,7 +97,7 @@ func TestNewCommand(t *testing.T) {
 	})
 	t.Run("Priority order is flags -> env vars -> config file", func(t *testing.T) {
 		// Configuration through file
-		config, err := config.FromData([]byte(`{
+		conf, err := config.FromData([]byte(`{
             "provider": {
                 "http": "http://localhost:1234",
                 "ws": "ws://localhost:1235"
@@ -109,7 +109,7 @@ func TestNewCommand(t *testing.T) {
         }`),
 		)
 		require.NoError(t, err)
-		filePath := createTemporaryConfigFile(t, &config)
+		filePath := createTemporaryConfigFile(t, &conf)
 		defer deleteFile(t, filePath)
 
 		// Configuration through env var
@@ -127,7 +127,7 @@ func TestNewCommand(t *testing.T) {
 	})
 }
 
-func createTemporaryConfigFile(t *testing.T, config *config.Config) string {
+func createTemporaryConfigFile(t *testing.T, conf *config.Config) string {
 	t.Helper()
 
 	// Create a temporary file
@@ -135,7 +135,7 @@ func createTemporaryConfigFile(t *testing.T, config *config.Config) string {
 	require.NoError(t, err)
 
 	// Encode the mocked config to JSON and write to the file
-	jsonData, err := json.Marshal(config)
+	jsonData, err := json.Marshal(conf)
 	require.NoError(t, err)
 	_, err = tmpFile.Write(jsonData)
 	require.NoError(t, err)
