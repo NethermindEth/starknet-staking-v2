@@ -19,7 +19,7 @@ type EventDispatcher[S signerP.Signer] struct {
 	PrepareAttest chan types.PrepareAttest
 	EndOfWindow   chan struct{}
 	// Current epoch attest-related fields
-	CurrentAttest AttestTracker
+	CurrentAttest MainAttestTracker
 }
 
 func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {

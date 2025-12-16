@@ -13,21 +13,26 @@ import (
 	"github.com/NethermindEth/starknet.go/utils"
 )
 
-type AttestTracker struct {
+type AttestTracker interface {
+	UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger)
+	SetStatus(status AttestStatus)
+}
+
+type MainAttestTracker struct {
 	Transaction AttestTransaction
 	Hash        felt.Felt
 	Status      AttestStatus
 }
 
-func NewAttestTracker() AttestTracker {
+func NewAttestTracker() MainAttestTracker {
 	//nolint:exhaustruct // Using default values
-	return AttestTracker{
+	return MainAttestTracker{
 		Transaction: AttestTransaction{},
 		Status:      Iddle,
 	}
 }
 
-func (a *AttestTracker) UpdateStatus(
+func (a *MainAttestTracker) UpdateStatus(
 	signer signerP.Signer,
 	logger *junoUtils.ZapLogger,
 ) {
@@ -35,7 +40,7 @@ func (a *AttestTracker) UpdateStatus(
 	a.SetStatus(status)
 }
 
-func (a *AttestTracker) SetStatus(status AttestStatus) {
+func (a *MainAttestTracker) SetStatus(status AttestStatus) {
 	a.Status = status
 	switch status {
 	case Ongoing, Successful:
