@@ -3,6 +3,7 @@ package feederbackup
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/NethermindEth/juno/clients/feeder"
 	"github.com/NethermindEth/juno/starknet"
@@ -19,12 +20,15 @@ type Feeder struct {
 	client            *Client
 	latestBlock       *starknet.Block
 	latestBlockNumber uint64
+
+	pollingTicker *time.Ticker
 }
 
 // Create a new Feeder instance using the feeder URL.
 func NewFeeder(clientURL string, logger *junoUtils.ZapLogger) *Feeder {
 	return &Feeder{ //nolint:exhaustruct // Using default values
-		client: feeder.NewClient(clientURL).WithLogger(logger),
+		client:        feeder.NewClient(clientURL).WithLogger(logger),
+		pollingTicker: time.NewTicker(constants.FeederPollingInterval),
 	}
 }
 
@@ -76,4 +80,10 @@ func (f *Feeder) LatestBlock() *starknet.Block {
 // Does not reset the latest block number.
 func (f *Feeder) CleanBlock() {
 	f.latestBlock = nil
+}
+
+// Get the channel of the polling ticker.
+// It should return every [constants.FeederPollingInterval] seconds.
+func (f *Feeder) Tick() <-chan time.Time {
+	return f.pollingTicker.C
 }

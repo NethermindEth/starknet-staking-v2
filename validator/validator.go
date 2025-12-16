@@ -241,9 +241,6 @@ func ProcessBlockHeaders[Account signerP.Signer](
 		account.ValidationContracts(),
 		logger,
 	)
-	feederPooling := time.NewTicker(
-		30 * time.Second, //nolint:mnd // Number of seconds to poll the feeder
-	)
 
 	var block *rpc.BlockHeader
 	for {
@@ -252,7 +249,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			return ctx.Err()
 
 		// Back up plan to attest if the node is not correctly syncing the chain
-		case <-feederPooling.C:
+		case <-feeder.Tick():
 			logger.Debug("polling the feeder to confirm the node is synced")
 			err = feeder.Fetch(ctx)
 			if err != nil {
