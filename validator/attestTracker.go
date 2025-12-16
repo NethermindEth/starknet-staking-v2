@@ -13,22 +13,58 @@ import (
 	"github.com/NethermindEth/starknet.go/utils"
 )
 
+// AttestTracker is the interface that wraps the basic methods for an attest tracker.
 type AttestTracker interface {
-	UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger)
+	Hash() felt.Felt
+	NewAttestTracker() AttestTracker
+	Status() AttestStatus
+	SetHash(hash felt.Felt)
 	SetStatus(status AttestStatus)
+	UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger)
+
+	// From the AttestTransaction type
+	Build(signer signerP.Signer, blockHash *types.BlockHash) error
+	Invoke(signer signerP.Signer) (rpc.AddInvokeTransactionResponse, error)
+	UpdateNonce(signer signerP.Signer) error
+	Valid() bool
 }
 
 type MainAttestTracker struct {
 	Transaction AttestTransaction
-	Hash        felt.Felt
-	Status      AttestStatus
+	hash        felt.Felt
+	status      AttestStatus
 }
 
-func NewAttestTracker() MainAttestTracker {
+func (a *MainAttestTracker) NewAttestTracker() AttestTracker {
 	//nolint:exhaustruct // Using default values
-	return MainAttestTracker{
+	return &MainAttestTracker{
 		Transaction: AttestTransaction{},
-		Status:      Iddle,
+		status:      Iddle,
+	}
+}
+
+func (a *MainAttestTracker) Hash() felt.Felt {
+	return a.hash
+}
+
+func (a *MainAttestTracker) SetHash(hash felt.Felt) {
+	a.hash = hash
+}
+
+func (a *MainAttestTracker) Status() AttestStatus {
+	return a.status
+}
+
+func (a *MainAttestTracker) SetStatus(status AttestStatus) {
+	a.status = status
+	switch status {
+	case Ongoing, Successful:
+	case Failed:
+		a.hash = felt.Zero
+	case Iddle:
+		panic("status cannot be change to iddle")
+	default:
+		panic(fmt.Sprintf("unknown tracker status %d", status))
 	}
 }
 
@@ -36,21 +72,28 @@ func (a *MainAttestTracker) UpdateStatus(
 	signer signerP.Signer,
 	logger *junoUtils.ZapLogger,
 ) {
-	status := TrackAttest(signer, logger, &a.Hash)
+	status := TrackAttest(signer, logger, &a.hash)
 	a.SetStatus(status)
 }
 
-func (a *MainAttestTracker) SetStatus(status AttestStatus) {
-	a.Status = status
-	switch status {
-	case Ongoing, Successful:
-	case Failed:
-		a.Hash = felt.Zero
-	case Iddle:
-		panic("status cannot be change to iddle")
-	default:
-		panic(fmt.Sprintf("unknown tracker status %d", status))
-	}
+// From the AttestTransaction type, implementing the AttestTracker interface
+
+func (a *MainAttestTracker) Build(signer signerP.Signer, blockHash *types.BlockHash) error {
+	return a.Transaction.Build(signer, blockHash)
+}
+
+func (a *MainAttestTracker) Invoke(
+	signer signerP.Signer,
+) (rpc.AddInvokeTransactionResponse, error) {
+	return a.Transaction.Invoke(signer)
+}
+
+func (a *MainAttestTracker) UpdateNonce(signer signerP.Signer) error {
+	return a.Transaction.UpdateNonce(signer)
+}
+
+func (a *MainAttestTracker) Valid() bool {
+	return a.Transaction.Valid()
 }
 
 type AttestStatus uint8

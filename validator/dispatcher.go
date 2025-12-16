@@ -19,12 +19,12 @@ type EventDispatcher[S signerP.Signer] struct {
 	PrepareAttest chan types.PrepareAttest
 	EndOfWindow   chan struct{}
 	// Current epoch attest-related fields
-	CurrentAttest MainAttestTracker
+	CurrentAttest AttestTracker
 }
 
-func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
+func NewEventDispatcher[S signerP.Signer](attestTracker AttestTracker) EventDispatcher[S] {
 	return EventDispatcher[S]{
-		CurrentAttest: NewAttestTracker(),
+		CurrentAttest: attestTracker,
 		DoAttest:      make(chan types.DoAttest),
 		PrepareAttest: make(chan types.PrepareAttest),
 		EndOfWindow:   make(chan struct{}),
@@ -43,16 +43,16 @@ func (d *EventDispatcher[S]) Dispatch(
 			if !ok {
 				return
 			}
-			if d.CurrentAttest.Status != Iddle {
+			if d.CurrentAttest.Status() != Iddle {
 				logger.Error("receiveing prepare attest info while doing attest")
 			}
-			if d.CurrentAttest.Transaction.Valid() {
+			if d.CurrentAttest.Valid() {
 				continue
 			}
 
 			targetBlockHash = attest.BlockHash
 			logger.Debugf("building attest transaction for blockhash: %s", targetBlockHash.String())
-			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+			err := d.CurrentAttest.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 
@@ -66,13 +66,13 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			// if the attest event is already being tracked by the tool
-			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
+			if d.CurrentAttest.Status() != Iddle && d.CurrentAttest.Status() != Failed {
 				// If  status is still not successful, check for it
-				if d.CurrentAttest.Status != Successful {
+				if d.CurrentAttest.Status() != Successful {
 					d.CurrentAttest.UpdateStatus(signer, logger)
 				}
 				// If status is status is already successful or ongoing, do nothing.
-				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
+				if d.CurrentAttest.Status() == Successful || d.CurrentAttest.Status() == Ongoing {
 					continue
 				}
 			}
@@ -80,13 +80,13 @@ func (d *EventDispatcher[S]) Dispatch(
 
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
-			if !d.CurrentAttest.Transaction.Valid() {
+			if !d.CurrentAttest.Valid() {
 				targetBlockHash = attest.BlockHash
 				logger.Debugf(
 					"building attest transaction (in `do` stage) for blockhash: %s",
 					&targetBlockHash,
 				)
-				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+				err := d.CurrentAttest.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 
@@ -97,7 +97,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
 				logger.Debug("updating attest transaction nonce")
-				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
+				err := d.CurrentAttest.UpdateNonce(signer)
 				if err != nil {
 					logger.Errorf("failed to update transaction nonce: %s", err.Error())
 
@@ -106,7 +106,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			logger.Infof("invoking attest; target block hash: %s", targetBlockHash.String())
-			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
+			resp, err := d.CurrentAttest.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
 					logger.Infow(
@@ -127,16 +127,16 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			logger.Debugw("attest transaction sent", "hash", resp.Hash)
-			d.CurrentAttest.Hash = *resp.Hash
+			d.CurrentAttest.SetHash(*resp.Hash)
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
 		case <-d.EndOfWindow:
 			logger.Info("end of window reached")
-			if d.CurrentAttest.Status != Successful {
+			if d.CurrentAttest.Status() != Successful {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
-			if d.CurrentAttest.Status == Successful {
+			if d.CurrentAttest.Status() == Successful {
 				logger.Infow(
 					"successfully attested to target block",
 					"target block hash", targetBlockHash.String(),
@@ -146,12 +146,12 @@ func (d *EventDispatcher[S]) Dispatch(
 				logger.Warnw(
 					"failed to attest to target block",
 					"target block hash", targetBlockHash.String(),
-					"latest attest status", d.CurrentAttest.Status,
+					"latest attest status", d.CurrentAttest.Status(),
 				)
 				tracer.RecordAttestationFailure()
 			}
-			// clean slate for the next window
-			d.CurrentAttest = NewAttestTracker()
+			// clean state for the next window
+			d.CurrentAttest = d.CurrentAttest.NewAttestTracker()
 			// check the account balance
 			go CheckBalance(signer, balanceThreshold, logger, tracer)
 		}

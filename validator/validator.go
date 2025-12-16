@@ -100,7 +100,8 @@ func (v *Validator) Attest(
 	go CheckBalance(v.signer, balanceThreshold, &v.logger, tracer)
 
 	// Create the event dispatcher
-	dispatcher := NewEventDispatcher[signerP.Signer]()
+	var mainAttest MainAttestTracker
+	dispatcher := NewEventDispatcher[signerP.Signer](&mainAttest)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
