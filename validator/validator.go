@@ -8,6 +8,7 @@ import (
 
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
+	"github.com/NethermindEth/starknet-staking-v2/validator/feederbackup"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
@@ -207,6 +208,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 	}
 }
 
+//nolint:gocyclo // Necessary to handle both the main dispatcher and the feeder dispatcher
 func ProcessBlockHeaders[Account signerP.Signer](
 	ctx context.Context,
 	headersFeed chan *rpc.BlockHeader,
@@ -235,59 +237,93 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	if false {
 		dispatcher = feederDispatcher
 	}
-	for block := range headersFeed {
-		logBlock(block.Number, &epochInfo, &attestInfo, logger)
-		tracer.UpdateLatestBlockNumber(block.Number)
+	feeder := feederbackup.NewFeeder(
+		"https://feeder.alpha-sepolia.starknet.io/feeder_gateway/",
+		logger,
+	)
+	feederPooling := time.NewTicker(
+		30 * time.Second, //nolint:mnd // Number of seconds to poll the feeder
+	)
 
-		// todo(rdr): look for some nice way of refactoring this if/else blocks
-		if block.Number >= uint64(epochInfo.StartingBlock)+epochInfo.EpochLen {
-			prevEpochInfo := epochInfo
-			epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
-				account,
-				logger,
-				&prevEpochInfo,
-				CorrectEpochSwitch,
-				maxRetries,
-				strconv.FormatUint(prevEpochInfo.EpochID+1, 10),
-			)
+	var block *rpc.BlockHeader
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		// Back up plan to attest if the node is not correctly syncing the chain
+		case <-feederPooling.C:
+			logger.Debug("polling the feeder to confirm the node is synced")
+			err = feeder.Fetch(ctx)
 			if err != nil {
-				return err
-			}
-			logNewEpoch(&epochInfo, &attestInfo, logger)
-			// Update epoch info metrics
-			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
-		}
-		if uint64(attestInfo.TargetBlock) == block.Number {
-			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
-			logger.Infow(
-				"Target block reached",
-				"block hash", block.Hash,
-			)
-			dispatcher.PrepareAttest <- types.PrepareAttest{
-				BlockHash: attestInfo.TargetBlockHash,
-			}
-		}
+				logger.Errorw("failed to fetch feeder", "error", err.Error())
 
-		blockNum := types.BlockNumber(block.Number)
-		switch {
-		case blockNum >= attestInfo.TargetBlock &&
-			// From [target block, window start), make sure to prepare the transaction
-			blockNum < attestInfo.WindowStart-1:
-			dispatcher.PrepareAttest <- types.PrepareAttest{
-				BlockHash: attestInfo.TargetBlockHash,
+				continue
 			}
-		case blockNum >= attestInfo.WindowStart-1 &&
-			// from [window start, window end), make sure the attestation is done
-			blockNum < attestInfo.WindowEnd:
-			dispatcher.DoAttest <- types.DoAttest{
-				BlockHash: attestInfo.TargetBlockHash,
+			// random threshold of 10 blocks of difference between the node and the feeder
+			if block.Number+10 < feeder.LatestBlockNumber() {
+				logger.Debugw("node is behind the chain, using the feeder to attest",
+					"feeder latest block", feeder.LatestBlockNumber(),
+					"blocks behind", feeder.LatestBlockNumber()-block.Number,
+				)
 			}
-		case blockNum == attestInfo.WindowEnd:
-			dispatcher.EndOfWindow <- struct{}{}
+			logger.Debugw("node is synced",
+				"feeder latest block", feeder.LatestBlockNumber())
+			feeder.CleanBlock()
+
+		// Main case to process the block headers returned by the node subscription
+		case block = <-headersFeed:
+			logBlock(block.Number, &epochInfo, &attestInfo, logger)
+			tracer.UpdateLatestBlockNumber(block.Number)
+
+			// todo(rdr): look for some nice way of refactoring this if/else blocks
+			if block.Number >= uint64(epochInfo.StartingBlock)+epochInfo.EpochLen {
+				prevEpochInfo := epochInfo
+				epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
+					account,
+					logger,
+					&prevEpochInfo,
+					CorrectEpochSwitch,
+					maxRetries,
+					strconv.FormatUint(prevEpochInfo.EpochID+1, 10),
+				)
+				if err != nil {
+					return err
+				}
+				logNewEpoch(&epochInfo, &attestInfo, logger)
+				// Update epoch info metrics
+				tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
+			}
+			if uint64(attestInfo.TargetBlock) == block.Number {
+				attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
+				logger.Infow(
+					"Target block reached",
+					"block hash", block.Hash,
+				)
+				dispatcher.PrepareAttest <- types.PrepareAttest{
+					BlockHash: attestInfo.TargetBlockHash,
+				}
+			}
+
+			blockNum := types.BlockNumber(block.Number)
+			switch {
+			case blockNum >= attestInfo.TargetBlock &&
+				// From [target block, window start), make sure to prepare the transaction
+				blockNum < attestInfo.WindowStart-1:
+				dispatcher.PrepareAttest <- types.PrepareAttest{
+					BlockHash: attestInfo.TargetBlockHash,
+				}
+			case blockNum >= attestInfo.WindowStart-1 &&
+				// from [window start, window end), make sure the attestation is done
+				blockNum < attestInfo.WindowEnd:
+				dispatcher.DoAttest <- types.DoAttest{
+					BlockHash: attestInfo.TargetBlockHash,
+				}
+			case blockNum == attestInfo.WindowEnd:
+				dispatcher.EndOfWindow <- struct{}{}
+			}
 		}
 	}
-
-	return nil
 }
 
 func SetTargetBlockHashIfExists[Account signerP.Signer](
