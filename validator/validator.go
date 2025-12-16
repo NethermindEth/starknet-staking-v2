@@ -99,19 +99,36 @@ func (v *Validator) Run(
 	// Initial check of the account balance
 	go CheckBalance(v.signer, balanceThreshold, &v.logger, tracer)
 
-	// Create the event dispatcher
+	// Create the main event dispatcher
 	var mainAttest MainAttestTracker
 	dispatcher := NewEventDispatcher[signerP.Signer](&mainAttest)
+	defer close(dispatcher.PrepareAttest)
+	// Create the feeder backup event dispatcher
+	var feederAttest FeederAttestTracker
+	feederDispatcher := NewEventDispatcher[signerP.Signer](&feederAttest)
+	defer close(feederDispatcher.PrepareAttest)
+
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
+	wg.Go(func() {
+		feederDispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
+		v.logger.Debug("Feeder dispatch method finished")
+	})
 	defer wg.Wait()
-	defer close(dispatcher.PrepareAttest)
 
 	return RunBlockHeaderWatcher(
-		ctx, v.wsProvider, &v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
+		ctx,
+		v.wsProvider,
+		&v.logger,
+		v.signer,
+		&dispatcher,
+		&feederDispatcher,
+		maxRetries,
+		wg,
+		tracer,
 	)
 }
 
@@ -121,6 +138,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 	logger *utils.ZapLogger,
 	signer S,
 	dispatcher *EventDispatcher[S],
+	feederDispatcher *EventDispatcher[S],
 	maxRetries types.Retries,
 	wg *conc.WaitGroup,
 	tracer metrics.Tracer,
@@ -156,6 +174,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				signer,
 				logger,
 				dispatcher,
+				feederDispatcher,
 				maxRetries,
 				tracer,
 			)
@@ -193,7 +212,8 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	headersFeed chan *rpc.BlockHeader,
 	account Account,
 	logger *utils.ZapLogger,
-	dispatcher *EventDispatcher[Account],
+	mainDispatcher *EventDispatcher[Account],
+	feederDispatcher *EventDispatcher[Account],
 	maxRetries types.Retries,
 	tracer metrics.Tracer,
 ) error {
@@ -210,6 +230,11 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	logNewEpoch(&epochInfo, &attestInfo, logger)
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
+	// TODO: implement the feeder backup dispatcher
+	dispatcher := mainDispatcher
+	if false {
+		dispatcher = feederDispatcher
+	}
 	for block := range headersFeed {
 		logBlock(block.Number, &epochInfo, &attestInfo, logger)
 		tracer.UpdateLatestBlockNumber(block.Number)

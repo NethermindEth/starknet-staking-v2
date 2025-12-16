@@ -1,27 +1,27 @@
-package feederbackup
+package validator
 
 import (
 	"github.com/NethermindEth/juno/core/felt"
 	junoUtils "github.com/NethermindEth/juno/utils"
-	"github.com/NethermindEth/starknet-staking-v2/validator"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 )
 
-var _ validator.AttestTracker = (*FeederAttestTracker)(nil)
+var _ AttestTracker = (*FeederAttestTracker)(nil)
 
 type FeederAttestTracker struct {
-	Transaction validator.AttestTransaction
+	Transaction AttestTransaction
 	hash        felt.Felt
-	status      validator.AttestStatus
+	status      AttestStatus
 }
 
-func (a *FeederAttestTracker) NewAttestTracker() validator.AttestTracker {
+func (a *FeederAttestTracker) NewAttestTracker() AttestTracker {
+	//nolint:exhaustruct // Using default values
 	return &FeederAttestTracker{
-		Transaction: validator.AttestTransaction{},
+		Transaction: AttestTransaction{},
 		hash:        felt.Zero,
-		status:      validator.Iddle,
+		status:      Iddle,
 	}
 }
 
@@ -33,16 +33,16 @@ func (a *FeederAttestTracker) SetHash(hash felt.Felt) {
 	a.hash = hash
 }
 
-func (a *FeederAttestTracker) Status() validator.AttestStatus {
+func (a *FeederAttestTracker) Status() AttestStatus {
 	return a.status
 }
 
-func (a *FeederAttestTracker) SetStatus(status validator.AttestStatus) {
+func (a *FeederAttestTracker) SetStatus(status AttestStatus) {
 	a.status = status
 }
 
 func (a *FeederAttestTracker) UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger) {
-	status := validator.TrackAttest(signer, logger, &a.hash)
+	status := TrackAttest(signer, logger, &a.hash)
 	a.SetStatus(status)
 }
 
