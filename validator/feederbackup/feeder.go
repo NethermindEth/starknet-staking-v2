@@ -7,6 +7,8 @@ import (
 	"github.com/NethermindEth/juno/clients/feeder"
 	"github.com/NethermindEth/juno/starknet"
 	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
+	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 )
 
 type Client = feeder.Client
@@ -19,10 +21,33 @@ type Feeder struct {
 	latestBlockNumber uint64
 }
 
-// Create a new Feeder instance.
+// Create a new Feeder instance using the feeder URL.
 func NewFeeder(clientURL string, logger *junoUtils.ZapLogger) *Feeder {
 	return &Feeder{ //nolint:exhaustruct // Using default values
 		client: feeder.NewClient(clientURL).WithLogger(logger),
+	}
+}
+
+// Create a new Feeder instance using the [types.ValidationContracts] type
+// to determine the feeder URL.
+func NewFeederFromContracts(
+	contracts *types.ValidationContracts,
+	logger *junoUtils.ZapLogger,
+) *Feeder {
+	switch contracts.Attest.String() {
+	case constants.SepoliaAttestContractAddress:
+		logger.Debug("creating feeder for sepolia")
+
+		return NewFeeder(constants.SepoliaFeederURL, logger)
+	case constants.MainnetAttestContractAddress:
+		logger.Debug("creating feeder for mainnet")
+
+		return NewFeeder(constants.MainnetFeederURL, logger)
+	default:
+		logger.Errorw("unknown attest contract address, defaulting to mainnet feeder",
+			"address", contracts.Attest.String())
+
+		return NewFeeder(constants.MainnetFeederURL, logger) // Default to mainnet feeder
 	}
 }
 

@@ -237,8 +237,8 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	if false {
 		dispatcher = feederDispatcher
 	}
-	feeder := feederbackup.NewFeeder(
-		"https://feeder.alpha-sepolia.starknet.io/feeder_gateway/",
+	feeder := feederbackup.NewFeederFromContracts(
+		account.ValidationContracts(),
 		logger,
 	)
 	feederPooling := time.NewTicker(
