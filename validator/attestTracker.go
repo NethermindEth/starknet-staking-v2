@@ -23,10 +23,10 @@ type AttestTracker interface {
 	UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger)
 
 	// From the AttestTransaction type
-	Build(signer signerP.Signer, blockHash *types.BlockHash) error
-	Invoke(signer signerP.Signer) (rpc.AddInvokeTransactionResponse, error)
+	BuildTxn(signer signerP.Signer, blockHash *types.BlockHash) error
+	Attest(signer signerP.Signer) (rpc.AddInvokeTransactionResponse, error)
 	UpdateNonce(signer signerP.Signer) error
-	Valid() bool
+	IsTxnReady() bool
 }
 
 type MainAttestTracker struct {
@@ -78,11 +78,11 @@ func (a *MainAttestTracker) UpdateStatus(
 
 // From the AttestTransaction type, implementing the AttestTracker interface
 
-func (a *MainAttestTracker) Build(signer signerP.Signer, blockHash *types.BlockHash) error {
+func (a *MainAttestTracker) BuildTxn(signer signerP.Signer, blockHash *types.BlockHash) error {
 	return a.Transaction.Build(signer, blockHash)
 }
 
-func (a *MainAttestTracker) Invoke(
+func (a *MainAttestTracker) Attest(
 	signer signerP.Signer,
 ) (rpc.AddInvokeTransactionResponse, error) {
 	return a.Transaction.Invoke(signer)
@@ -92,7 +92,7 @@ func (a *MainAttestTracker) UpdateNonce(signer signerP.Signer) error {
 	return a.Transaction.UpdateNonce(signer)
 }
 
-func (a *MainAttestTracker) Valid() bool {
+func (a *MainAttestTracker) IsTxnReady() bool {
 	return a.Transaction.Valid()
 }
 

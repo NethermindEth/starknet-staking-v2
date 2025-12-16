@@ -93,7 +93,7 @@ func (v *Validator) ChainID(ctx context.Context) string {
 
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
-func (v *Validator) Attest(
+func (v *Validator) Run(
 	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance

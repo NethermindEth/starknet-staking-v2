@@ -46,13 +46,13 @@ func (d *EventDispatcher[S]) Dispatch(
 			if d.CurrentAttest.Status() != Iddle {
 				logger.Error("receiveing prepare attest info while doing attest")
 			}
-			if d.CurrentAttest.Valid() {
+			if d.CurrentAttest.IsTxnReady() {
 				continue
 			}
 
 			targetBlockHash = attest.BlockHash
 			logger.Debugf("building attest transaction for blockhash: %s", targetBlockHash.String())
-			err := d.CurrentAttest.Build(signer, &targetBlockHash)
+			err := d.CurrentAttest.BuildTxn(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 
@@ -80,13 +80,13 @@ func (d *EventDispatcher[S]) Dispatch(
 
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
-			if !d.CurrentAttest.Valid() {
+			if !d.CurrentAttest.IsTxnReady() {
 				targetBlockHash = attest.BlockHash
 				logger.Debugf(
 					"building attest transaction (in `do` stage) for blockhash: %s",
 					&targetBlockHash,
 				)
-				err := d.CurrentAttest.Build(signer, &targetBlockHash)
+				err := d.CurrentAttest.BuildTxn(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 
@@ -106,7 +106,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			logger.Infof("invoking attest; target block hash: %s", targetBlockHash.String())
-			resp, err := d.CurrentAttest.Invoke(signer)
+			resp, err := d.CurrentAttest.Attest(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
 					logger.Infow(
