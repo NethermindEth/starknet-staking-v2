@@ -105,8 +105,13 @@ func (v *Validator) Run(
 	dispatcher := NewEventDispatcher[signerP.Signer](&mainAttest)
 	defer close(dispatcher.PrepareAttest)
 	// Create the feeder backup event dispatcher
-	var feederAttest FeederAttestTracker
-	feederDispatcher := NewEventDispatcher[signerP.Signer](&feederAttest)
+	feederAttest := NewFeederAttestTracker(
+		ctx,
+		v.provider,
+		&v.logger,
+		v.signer.ValidationContracts(),
+	)
+	feederDispatcher := NewEventDispatcher[signerP.Signer](feederAttest)
 	defer close(feederDispatcher.PrepareAttest)
 
 	wg := conc.NewWaitGroup()
@@ -259,10 +264,18 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			}
 			// random threshold of 10 blocks of difference between the node and the feeder
 			if block.Number+10 < feeder.LatestBlockNumber() {
-				logger.Debugw("node is behind the chain, using the feeder to attest",
+				logger.Infow("node is behind the chain",
 					"feeder latest block", feeder.LatestBlockNumber(),
 					"blocks behind", feeder.LatestBlockNumber()-block.Number,
 				)
+				logger.Debug("calculating the target block")
+				feederTracker := feederDispatcher.CurrentAttest.(*FeederAttestTracker)
+				err = feederTracker.Sync()
+				if err != nil {
+					logger.Errorw("failed to sync backup tracker", "error", err.Error())
+
+					continue
+				}
 			}
 			logger.Debugw("node is synced",
 				"feeder latest block", feeder.LatestBlockNumber())
