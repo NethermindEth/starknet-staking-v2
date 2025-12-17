@@ -33,9 +33,10 @@ type Metrics struct {
 }
 
 // NewMetrics creates a new metrics server
-func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *Metrics {
+func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics {
 	registry := prometheus.NewRegistry()
 
+	//nolint:exhaustruct,lll // Only specifying used fields // We can't break the lines since it'll show in the output
 	m := &Metrics{
 		logger:   logger,
 		network:  chainID,
@@ -143,11 +144,16 @@ func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *
 			m.logger.Errorf("Failed to write health check response: %v", err)
 		}
 	})
+	//nolint:exhaustruct // Using default values
 	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
+	//nolint:exhaustruct // Only specifying used fields
 	m.server = &http.Server{
-		Addr:    serverAddress,
-		Handler: mux,
+		Addr:              serverAddress,
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	return m
@@ -156,12 +162,14 @@ func NewMetrics(serverAddress string, chainID string, logger *utils.ZapLogger) *
 // Start starts the metrics server
 func (m *Metrics) Start() error {
 	m.logger.Infof("Starting metrics server on %s", m.server.Addr)
+
 	return m.server.ListenAndServe()
 }
 
 // Stop stops the metrics server
 func (m *Metrics) Stop(ctx context.Context) error {
 	m.logger.Info("Stopping metrics server")
+
 	return m.server.Shutdown(ctx)
 }
 
@@ -174,7 +182,7 @@ func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
 // UpdateEpochInfo updates the epoch-related metrics
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
 	m.logger.Debugw("UpdateEpochInfo", "epochInfo", epochInfo, "targetBlock", targetBlock)
-	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochId))
+	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochID))
 	m.currentEpochLength.WithLabelValues(m.network).Set(float64(epochInfo.EpochLen))
 	m.currentEpochStartingBlockNumber.
 		WithLabelValues(m.network).

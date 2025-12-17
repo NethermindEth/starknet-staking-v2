@@ -23,7 +23,7 @@ type Signer interface {
 	SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error)
 	InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (rpc.AddInvokeTransactionResponse, error)
 
-	Call(call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error)
+	Call(call rpc.FunctionCall, blockID rpc.BlockID) ([]*felt.Felt, error)
 	BlockWithTxHashes(blockID rpc.BlockID) (any, error)
 
 	// Property Access
@@ -44,23 +44,24 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 		Calldata: []*felt.Felt{signer.Address().Felt()},
 	}
 
-	result, err := signer.Call(functionCall, rpc.BlockID{Tag: "latest"})
+	result, err := signer.Call(functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
 		return types.EpochInfo{},
 			entrypointInternalError("get_attestation_info_by_operational_address", err)
 	}
 
-	if len(result) != 5 {
+	if len(result) != 5 { //nolint:mnd // The expected result length
 		return types.EpochInfo{},
 			entrypointResponseError("get_attestation_info_by_operational_address", result)
 	}
 
 	stake := result[1].Bits()
+
 	return types.EpochInfo{
 		StakerAddress: types.Address(*result[0]),
-		Stake:         uint128.New(stake[0], stake[1]),
+		Stake:         uint128.New(stake[0], stake[1]), //nolint:gosec // Bits returns [4]uint64
 		EpochLen:      result[2].Uint64(),
-		EpochId:       result[3].Uint64(),
+		EpochID:       result[3].Uint64(),
 		StartingBlock: types.BlockNumber(result[4].Uint64()),
 	}, nil
 }
@@ -72,7 +73,7 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 			EntryPointSelector: utils.GetSelectorFromNameFelt("attestation_window"),
 			Calldata:           []*felt.Felt{},
 		},
-		rpc.BlockID{Tag: "latest"},
+		rpc.WithBlockTag(rpc.BlockTagLatest),
 	)
 	if err != nil {
 		return 0, entrypointInternalError("attestation_window", err)
@@ -87,14 +88,14 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 
 // For near future when tracking validator's balance
 func FetchValidatorBalance[S Signer](signer S) (types.Balance, error) {
-	StrkTokenContract := types.AddressFromString(constants.STRK_CONTRACT_ADDRESS)
+	StrkTokenContract := types.AddressFromString(constants.StrkContractAddress)
 	result, err := signer.Call(
 		rpc.FunctionCall{
 			ContractAddress:    StrkTokenContract.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("balance_of"),
 			Calldata:           []*felt.Felt{signer.Address().Felt()},
 		},
-		rpc.BlockID{Tag: "latest"},
+		rpc.WithBlockTag(rpc.BlockTagLatest),
 	)
 	if err != nil {
 		return types.Balance{}, entrypointInternalError("balance_of", err)
@@ -116,7 +117,7 @@ func FetchEpochAndAttestInfo[S Signer](
 	}
 	logger.Debugw(
 		"fetched epoch info",
-		"epoch ID", epochInfo.EpochId,
+		"epoch ID", epochInfo.EpochID,
 		"epoch starting block", epochInfo.StartingBlock,
 		"epoch ending block", epochInfo.StartingBlock+
 			types.BlockNumber(epochInfo.EpochLen),
@@ -129,9 +130,10 @@ func FetchEpochAndAttestInfo[S Signer](
 
 	blockNum := ComputeBlockNumberToAttestTo(&epochInfo, attestWindow)
 
+	//nolint:exhaustruct // Purposely not using the block hash
 	attestInfo := types.AttestInfo{
 		TargetBlock: blockNum,
-		WindowStart: blockNum + types.BlockNumber(constants.MIN_ATTESTATION_WINDOW),
+		WindowStart: blockNum + types.BlockNumber(constants.MinAttestationWindow),
 		WindowEnd:   blockNum + types.BlockNumber(attestWindow),
 	}
 
@@ -140,6 +142,7 @@ func FetchEpochAndAttestInfo[S Signer](
 		"epoch", epochInfo,
 		"attestation", attestInfo,
 	)
+
 	return epochInfo, attestInfo, nil
 }
 
@@ -173,10 +176,13 @@ func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier floa
 	return txn, nil
 }
 
-func ComputeBlockNumberToAttestTo(epochInfo *types.EpochInfo, attestWindow uint64) types.BlockNumber {
+func ComputeBlockNumberToAttestTo(
+	epochInfo *types.EpochInfo,
+	attestWindow uint64,
+) types.BlockNumber {
 	hash := crypto.PoseidonArray(
 		new(felt.Felt).SetBigInt(epochInfo.Stake.Big()),
-		new(felt.Felt).SetUint64(epochInfo.EpochId),
+		new(felt.Felt).SetUint64(epochInfo.EpochID),
 		epochInfo.StakerAddress.Felt(),
 	)
 
@@ -184,7 +190,10 @@ func ComputeBlockNumberToAttestTo(epochInfo *types.EpochInfo, attestWindow uint6
 	hashBigInt = hash.BigInt(hashBigInt)
 
 	blockOffset := new(big.Int)
-	blockOffset = blockOffset.Mod(hashBigInt, big.NewInt(int64(epochInfo.EpochLen-attestWindow)))
+	blockOffset = blockOffset.Mod(
+		hashBigInt,
+		new(big.Int).SetUint64(epochInfo.EpochLen-attestWindow),
+	)
 
 	return types.BlockNumber(epochInfo.StartingBlock.Uint64() + blockOffset.Uint64())
 }

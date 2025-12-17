@@ -8,6 +8,7 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
@@ -49,6 +50,7 @@ func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockH
 	}
 
 	t.valid = true
+
 	return nil
 }
 
@@ -66,7 +68,7 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	if err != nil {
 		return resp, fmt.Errorf("signer failed to estimate fee: %w", err)
 	}
-	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, 1.5)
+	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, constants.FeeEstimationMultiplier)
 
 	// patch for making sure txn.Version is correct
 	t.txn.Version = rpc.TransactionV3
@@ -99,6 +101,7 @@ func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
 			return fmt.Errorf("signer failed to sign the transaction: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -114,6 +117,7 @@ type AttestTracker struct {
 }
 
 func NewAttestTracker() AttestTracker {
+	//nolint:exhaustruct // Using default values
 	return AttestTracker{
 		Transaction: AttestTransaction{},
 		Status:      Iddle,
@@ -142,12 +146,12 @@ func (a *AttestTracker) setStatus(status AttestStatus) {
 }
 
 type EventDispatcher[S signerP.Signer] struct {
-	// Current epoch attest-related fields
-	CurrentAttest AttestTracker
 	// Event channels
 	DoAttest      chan types.DoAttest
 	PrepareAttest chan types.PrepareAttest
 	EndOfWindow   chan struct{}
+	// Current epoch attest-related fields
+	CurrentAttest AttestTracker
 }
 
 func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
@@ -159,6 +163,7 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	}
 }
 
+//nolint:gocyclo // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
 	signer S, balanceThreshold float64, logger *junoUtils.ZapLogger, tracer metrics.Tracer,
 ) {
@@ -182,6 +187,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
+
 				continue
 			}
 			logger.Debug("attest transaction built successfully")
@@ -215,6 +221,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
+
 					continue
 				}
 				logger.Debug("attest transaction built successfully")
@@ -225,6 +232,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
 				if err != nil {
 					logger.Errorf("failed to update transaction nonce: %s", err.Error())
+
 					continue
 				}
 			}
@@ -237,6 +245,7 @@ func (d *EventDispatcher[S]) Dispatch(
 						"attestation is already done for this epoch",
 					)
 					d.CurrentAttest.setStatus(Successful)
+
 					continue
 				}
 
@@ -245,6 +254,7 @@ func (d *EventDispatcher[S]) Dispatch(
 					"error", err.Error(),
 				)
 				d.CurrentAttest.setStatus(Failed)
+
 				continue
 			}
 
@@ -292,6 +302,7 @@ func TrackAttest[S signerP.Signer](
 				"attest transaction status was not found. Will wait.",
 				"transaction hash", txHash,
 			)
+
 			return Ongoing
 		} else {
 			logger.Errorw(
@@ -299,6 +310,7 @@ func TrackAttest[S signerP.Signer](
 				"transaction hash", txHash,
 				"error", err,
 			)
+
 			return Failed
 		}
 	}
@@ -309,6 +321,7 @@ func TrackAttest[S signerP.Signer](
 			"transaction hash", txHash,
 			"failure reason", txStatus.FailureReason,
 		)
+
 		return Failed
 	}
 
@@ -318,6 +331,7 @@ func TrackAttest[S signerP.Signer](
 			fmt.Sprintf("attest transaction %s. Will wait.", txStatus.FinalityStatus),
 			"hash", txHash,
 		)
+
 		return Ongoing
 	default:
 		logger.Infow(
@@ -326,6 +340,7 @@ func TrackAttest[S signerP.Signer](
 			"finality status", txStatus.FinalityStatus,
 			"execution status", txStatus.ExecutionStatus,
 		)
+
 		return Successful
 	}
 }

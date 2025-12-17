@@ -13,6 +13,7 @@ import (
 	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
+	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -26,7 +27,7 @@ type ExternalSigner struct {
 	ctx                 context.Context
 	Provider            *rpc.Provider
 	operationalAddress  types.Address
-	chainId             felt.Felt
+	chainID             felt.Felt
 	url                 string
 	validationContracts types.ValidationContracts
 	// If the account used represents a braavos account
@@ -37,25 +38,25 @@ func NewExternalSigner(
 	ctx context.Context,
 	provider *rpc.Provider,
 	logger *junoUtils.ZapLogger,
-	signer *config.Signer,
+	sig *config.Signer,
 	addresses *config.ContractAddresses,
 	braavos bool,
 ) (ExternalSigner, error) {
-	chainIdStr, err := provider.ChainID(context.Background())
+	chainIDStr, err := provider.ChainID(ctx)
 	if err != nil {
 		return ExternalSigner{}, err
 	}
-	chainId := new(felt.Felt).SetBytes([]byte(chainIdStr))
+	chainID := new(felt.Felt).SetBytes([]byte(chainIDStr))
 
-	validationContracts := types.ValidationContractsFromAddresses(addresses.SetDefaults(chainIdStr))
+	validationContracts := types.ValidationContractsFromAddresses(addresses.SetDefaults(chainIDStr))
 	logger.Infof("validation contracts: %s", validationContracts.String())
 
 	return ExternalSigner{
 		ctx:                 ctx,
 		Provider:            provider,
-		operationalAddress:  types.AddressFromString(signer.OperationalAddress),
-		url:                 signer.ExternalURL,
-		chainId:             *chainId,
+		operationalAddress:  types.AddressFromString(sig.OperationalAddress),
+		url:                 sig.ExternalURL,
+		chainID:             *chainID,
 		validationContracts: validationContracts,
 		braavos:             braavos,
 	}, nil
@@ -73,12 +74,16 @@ func (s *ExternalSigner) BuildAttestTransaction(
 	calldata := account.FmtCallDataCairo2(call)
 	defaultResources := makeDefaultResources()
 
-	nonce, err := s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
+	nonce, err := s.Provider.Nonce(
+		s.ctx,
+		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
+		s.Address().Felt(),
+	)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Provider, 1.5)
+	tip, err := rpc.EstimateTip(s.ctx, s.Provider, constants.TipMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
@@ -98,8 +103,8 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		NonceDataMode:         rpc.DAModeL1,
 		FeeMode:               rpc.DAModeL1,
 	}
-	return attestTransaction, nil
 
+	return attestTransaction, nil
 }
 
 func (s *ExternalSigner) EstimateFee(
@@ -112,7 +117,7 @@ func (s *ExternalSigner) EstimateFee(
 		txn.Version = rpc.TransactionV3WithQueryBit
 		_, err := s.SignTransaction(txn)
 		if err != nil {
-			return rpc.FeeEstimation{}, nil
+			return rpc.FeeEstimation{}, err
 		}
 	}
 
@@ -130,13 +135,14 @@ func (s *ExternalSigner) EstimateFee(
 	if err != nil {
 		return rpc.FeeEstimation{}, err
 	}
+
 	return estimateFee[0], nil
 }
 
 func (s *ExternalSigner) SignTransaction(
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (*rpc.BroadcastInvokeTxnV3, error) {
-	return txn, SignInvokeTx(txn, &s.chainId, s.url)
+	return txn, SignInvokeTx(txn, &s.chainID, s.url)
 }
 
 func (s *ExternalSigner) InvokeTransaction(
@@ -156,9 +162,9 @@ func (s *ExternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
 }
 
 func (s *ExternalSigner) Call(
-	call rpc.FunctionCall, blockId rpc.BlockID,
+	call rpc.FunctionCall, blockID rpc.BlockID,
 ) ([]*felt.Felt, error) {
-	return s.Provider.Call(s.ctx, call, blockId)
+	return s.Provider.Call(s.ctx, call, blockID)
 }
 
 func (s *ExternalSigner) Address() *types.Address {
@@ -173,8 +179,12 @@ func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
 	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 }
 
-func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) error {
-	signResp, err := HashAndSignTx(invokeTxnV3, chainId, externalSignerUrl)
+func SignInvokeTx(
+	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
+	chainID *felt.Felt,
+	externalSignerURL string,
+) error {
+	signResp, err := HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
 	if err != nil {
 		return err
 	}
@@ -187,16 +197,21 @@ func SignInvokeTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, ext
 	return nil
 }
 
-func HashAndSignTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, externalSignerUrl string) (signer.Response, error) {
+func HashAndSignTx(
+	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
+	chainID *felt.Felt,
+	externalSignerURL string,
+) (signer.Response, error) {
 	// Create request body
-	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainId: chainId}
+	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainID: chainID}
 	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
 		return signer.Response{}, err
 	}
 
-	signEndPoint := externalSignerUrl + signer.SIGN_ENDPOINT
-	resp, err := http.Post(signEndPoint, "application/json", bytes.NewBuffer(jsonData))
+	signEndpoint := externalSignerURL + signer.SignEndpoint
+	//nolint:gosec,noctx // Trusting the configured external signer URL // TODO: Context not configured
+	resp, err := http.Post(signEndpoint, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return signer.Response{}, err
 	}
@@ -215,7 +230,12 @@ func HashAndSignTx(invokeTxnV3 *rpc.BroadcastInvokeTxnV3, chainId *felt.Felt, ex
 	}
 
 	var signResp signer.Response
-	return signResp, json.Unmarshal(body, &signResp)
+	err = json.Unmarshal(body, &signResp)
+	if err != nil {
+		return signer.Response{}, err
+	}
+
+	return signResp, nil
 }
 
 func makeDefaultResources() rpc.ResourceBoundsMapping {

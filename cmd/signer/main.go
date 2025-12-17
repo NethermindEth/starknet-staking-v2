@@ -24,7 +24,8 @@ func NewCommand() cobra.Command {
 		var err error
 
 		logLevel := utils.NewLogLevel(utils.INFO)
-		if err := logLevel.Set(logLevelF); err != nil {
+		err = logLevel.Set(logLevelF)
+		if err != nil {
 			return err
 		}
 		logger, err = utils.NewZapLogger(logLevel, true)
@@ -45,9 +46,11 @@ func NewCommand() cobra.Command {
 		if err != nil {
 			return err
 		}
+
 		return remoteSigner.Listen(address)
 	}
 
+	//nolint:exhaustruct // Only specifying used fields
 	cmd := cobra.Command{
 		Use:     "signer",
 		Short:   "Program that signs transactions received by http request",

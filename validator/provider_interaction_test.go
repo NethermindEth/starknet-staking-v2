@@ -1,7 +1,6 @@
 package validator_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils"
@@ -22,7 +21,7 @@ func TestNewProvider(t *testing.T) {
 		provider, err := validator.NewProvider(t.Context(), providerURL, logger)
 
 		require.Nil(t, provider)
-		expectedErrorMsg := fmt.Sprintf(`cannot create RPC provider at %s`, providerURL)
+		expectedErrorMsg := "cannot create RPC provider at " + providerURL
 		require.ErrorContains(t, err, expectedErrorMsg)
 	})
 
@@ -34,9 +33,9 @@ func TestNewProvider(t *testing.T) {
 				t.Skip(err)
 			}
 
-			provider, err := validator.NewProvider(t.Context(), envVars.HttpProviderUrl, logger)
+			provider, inErr := validator.NewProvider(t.Context(), envVars.HTTPProviderURL, logger)
 
-			require.NoError(t, err)
+			require.NoError(t, inErr)
 			require.NotNil(t, provider)
 		})
 	} else {
@@ -59,7 +58,7 @@ func TestBlockHeaderSubscription(t *testing.T) {
 		require.Nil(t, wsProvider)
 		require.Nil(t, headerFeed)
 		require.Nil(t, clientSubscription)
-		expectedErrorMsg := fmt.Sprintf(`dialling WS provider at %s`, wsProviderURL)
+		expectedErrorMsg := "dialling WS provider at " + wsProviderURL
 		require.ErrorContains(t, err, expectedErrorMsg)
 	})
 
@@ -68,14 +67,16 @@ func TestBlockHeaderSubscription(t *testing.T) {
 	envVars, err := validator.LoadEnv(t)
 	if loadedEnvVars := err == nil; loadedEnvVars {
 		t.Run("Successfully subscribing to new block headers", func(t *testing.T) {
-			wsProvider, headerChannel, clientSubscription, err := validator.SubscribeToBlockHeaders(
-				t.Context(), envVars.WsProviderUrl, logger,
+			wsProvider, headerChannel, clientSubscription, inErr := validator.SubscribeToBlockHeaders(
+				t.Context(),
+				envVars.WSProviderURL,
+				logger,
 			)
 
 			require.NotNil(t, wsProvider)
 			require.NotNil(t, headerChannel)
 			require.NotNil(t, clientSubscription)
-			require.Nil(t, err)
+			require.Nil(t, inErr)
 
 			wsProvider.Close()
 			close(headerChannel)

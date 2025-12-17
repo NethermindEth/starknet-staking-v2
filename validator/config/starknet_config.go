@@ -19,13 +19,13 @@ const (
 var defaults = [2]ContractAddresses{
 	// Mainnet default values
 	{
-		Staking: constants.MAINNET_STAKING_CONTRACT_ADDRESS,
-		Attest:  constants.MAINNET_ATTEST_CONTRACT_ADDRESS,
+		Staking: constants.MainnetStakingContractAddress,
+		Attest:  constants.MainnetAttestContractAddress,
 	},
 	// Sepolia default values
 	{
-		Staking: constants.SEPOLIA_STAKING_CONTRACT_ADDRESS,
-		Attest:  constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS,
+		Staking: constants.SepoliaStakingContractAddress,
+		Attest:  constants.SepoliaAttestContractAddress,
 	},
 }
 
@@ -69,6 +69,7 @@ func (ca *ContractAddresses) Check() error {
 	if isZero(ca.Attest) {
 		return errors.New("attest contract address is not set")
 	}
+
 	return nil
 }
 
@@ -89,6 +90,7 @@ type StarknetConfig struct {
 
 func (c *StarknetConfig) SetDefaults(chainID string) *StarknetConfig {
 	c.ContractAddresses.SetDefaults(chainID)
+
 	return c
 }
 

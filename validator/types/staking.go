@@ -31,7 +31,7 @@ type EpochInfo struct {
 	StakerAddress Address         `json:"staker_address"`
 	Stake         uint128.Uint128 `json:"stake"`
 	EpochLen      uint64          `json:"epoch_len"`
-	EpochId       uint64          `json:"epoch_id"`
+	EpochID       uint64          `json:"epoch_id"`
 	StartingBlock BlockNumber     `json:"current_epoch_starting_block"`
 }
 

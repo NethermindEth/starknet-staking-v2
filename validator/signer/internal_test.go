@@ -43,7 +43,7 @@ func TestNewInternalSigner(t *testing.T) {
 			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
 		}
 
-		provider, providerErr := rpc.NewProvider(t.Context(), envVars.HttpProviderUrl)
+		provider, providerErr := rpc.NewProvider(t.Context(), envVars.HTTPProviderURL)
 		require.NoError(t, providerErr)
 
 		validatorAccount, err := signer.NewInternalSigner(
@@ -66,7 +66,7 @@ func TestNewInternalSigner(t *testing.T) {
 			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
 		}
 
-		provider, err := rpc.NewProvider(t.Context(), envVars.HttpProviderUrl)
+		provider, err := rpc.NewProvider(t.Context(), envVars.HTTPProviderURL)
 		require.NoError(t, err)
 
 		configSigner := config.Signer{
@@ -242,7 +242,7 @@ func TestSignInvokeTx(t *testing.T) {
 
 					// Making sure received tx and chainId are the expected ones
 					require.Equal(t, &invokeTx, req.InvokeTxnV3)
-					require.Equal(t, chainID, req.ChainId)
+					require.Equal(t, chainID, req.ChainID)
 
 					_, err = fmt.Fprintf(w, `{"signature": ["%s", "%s"]}`, sigR, sigS)
 					require.NoError(t, err)
@@ -279,7 +279,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		).Times(1)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: expectedAttestInfoEntrypointHash,
 			Calldata:           []*felt.Felt{validatorOperationalAddress.Felt()},
 		}
@@ -301,7 +301,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: expectedAttestInfoEntrypointHash,
 			Calldata:           []*felt.Felt{validatorOperationalAddress.Felt()},
 		}
@@ -335,7 +335,7 @@ func TestFetchEpochInfo(t *testing.T) {
 		).Times(1)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: expectedAttestInfoEntrypointHash,
 			Calldata:           []*felt.Felt{validatorOperationalAddress.Felt()},
 		}
@@ -365,7 +365,7 @@ func TestFetchEpochInfo(t *testing.T) {
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.New(0, 1), // the 1st 64 bits are all 0 as it's MaxUint64 + 1
 			EpochLen:      40,
-			EpochId:       1516,
+			EpochID:       1516,
 			StartingBlock: types.BlockNumber(639270),
 		}, epochInfo)
 
@@ -386,7 +386,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 	t.Run("Return error: contract internal error", func(t *testing.T) {
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: expectedAttestWindowEntrypointHash,
 			Calldata:           []*felt.Felt{},
 		}
@@ -403,12 +403,16 @@ func TestFetchAttestWindow(t *testing.T) {
 		window, err := signer.FetchAttestWindow(mockSigner)
 
 		require.Equal(t, uint64(0), window)
-		require.Equal(t, errors.New("Error when calling entrypoint `attestation_window`: some contract error"), err)
+		require.Equal(
+			t,
+			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
+			err,
+		)
 	})
 
 	t.Run("Return error: wrong contract response length", func(t *testing.T) {
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: expectedAttestWindowEntrypointHash,
 			Calldata:           []*felt.Felt{},
 		}
@@ -434,7 +438,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 	t.Run("Successful contract call", func(t *testing.T) {
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: expectedAttestWindowEntrypointHash,
 			Calldata:           []*felt.Felt{},
 		}
@@ -546,7 +550,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
 		expectedFnCall := rpc.FunctionCall{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 				"get_attestation_info_by_operational_address",
 			),
@@ -579,7 +583,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		).Times(2)
 
 		expectedEpochInfoFnCall := rpc.FunctionCall{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 				"get_attestation_info_by_operational_address",
 			),
@@ -601,7 +605,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			}, nil)
 
 		expectedWindowFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt("attestation_window"),
 			Calldata:           []*felt.Felt{},
 		}
@@ -615,7 +619,11 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
-		require.Equal(t, errors.New("Error when calling entrypoint `attestation_window`: some contract error"), err)
+		require.Equal(
+			t,
+			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
+			err,
+		)
 	})
 
 	t.Run("Successfully fetch & compute info", func(t *testing.T) {
@@ -638,7 +646,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		epochStartingBlock := uint64(639270)
 
 		expectedEpochInfoFnCall := rpc.FunctionCall{
-			ContractAddress: utils.HexToFelt(t, constants.SEPOLIA_STAKING_CONTRACT_ADDRESS),
+			ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 				"get_attestation_info_by_operational_address",
 			),
@@ -661,7 +669,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		// Mock fetchAttestWindow call
 		expectedWindowFnCall := rpc.FunctionCall{
-			ContractAddress:    utils.HexToFelt(t, constants.SEPOLIA_ATTEST_CONTRACT_ADDRESS),
+			ContractAddress:    utils.HexToFelt(t, constants.SepoliaAttestContractAddress),
 			EntryPointSelector: snGoUtils.GetSelectorFromNameFelt("attestation_window"),
 			Calldata:           []*felt.Felt{},
 		}
@@ -680,7 +688,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(stake),
 			EpochLen:      epochLen,
-			EpochId:       epochID,
+			EpochID:       epochID,
 			StartingBlock: types.BlockNumber(epochStartingBlock),
 		}
 		require.Equal(t, expectedEpochInfo, epochInfo)
@@ -688,7 +696,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		expectedTargetBlock := types.BlockNumber(639276)
 		expectedAttestInfo := types.AttestInfo{
 			TargetBlock: expectedTargetBlock,
-			WindowStart: expectedTargetBlock + types.BlockNumber(constants.MIN_ATTESTATION_WINDOW),
+			WindowStart: expectedTargetBlock + types.BlockNumber(constants.MinAttestationWindow),
 			WindowEnd:   expectedTargetBlock + types.BlockNumber(attestWindow),
 		}
 		require.Equal(t, expectedAttestInfo, attestInfo)
@@ -765,12 +773,15 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	t.Run("Correct target block number computation - example 1", func(t *testing.T) {
-		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := utils.HexToFelt(
+			t,
+			"0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
+		)
 		epochInfo := types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
 			EpochLen:      40,
-			EpochId:       1516,
+			EpochID:       1516,
 			StartingBlock: types.BlockNumber(639270),
 		}
 		attestationWindow := uint64(16)
@@ -781,12 +792,15 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	})
 
 	t.Run("Correct target block number computation - example 2", func(t *testing.T) {
-		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := utils.HexToFelt(
+			t,
+			"0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
+		)
 		epochInfo := types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
 			EpochLen:      40,
-			EpochId:       1517,
+			EpochID:       1517,
 			StartingBlock: types.BlockNumber(639310),
 		}
 		attestationWindow := uint64(16)
@@ -796,12 +810,15 @@ func TestComputeBlockNumberToAttestTo(t *testing.T) {
 	})
 
 	t.Run("Correct target block number computation - example 3", func(t *testing.T) {
-		stakerAddress := utils.HexToFelt(t, "0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e")
+		stakerAddress := utils.HexToFelt(
+			t,
+			"0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
+		)
 		epochInfo := types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
 			Stake:         uint128.From64(1000000000000000000),
 			EpochLen:      40,
-			EpochId:       1518,
+			EpochID:       1518,
 			StartingBlock: types.BlockNumber(639350),
 		}
 		attestationWindow := uint64(16)

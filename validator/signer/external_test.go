@@ -28,10 +28,10 @@ func TestExternalSignerAddress(t *testing.T) {
 	t.Run("Return signer address", func(t *testing.T) {
 		operationalAddress := utils.HexToFelt(t, "0x123")
 
-		mockRpc := validator.MockRPCServer(t, operationalAddress, "")
-		defer mockRpc.Close()
+		mockRPC := validator.MockRPCServer(t, operationalAddress, "")
+		defer mockRPC.Close()
 
-		provider, err := rpc.NewProvider(t.Context(), mockRpc.URL)
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
 		require.NoError(t, err)
 
 		externalSigner, err := signer.NewExternalSigner(
@@ -371,7 +371,11 @@ func TestHashAndSignTx(t *testing.T) {
 		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
-		expectedErrorMsg := fmt.Sprintf("server error %d: %s", http.StatusInternalServerError, serverError)
+		expectedErrorMsg := fmt.Sprintf(
+			"server error %d: %s",
+			http.StatusInternalServerError,
+			serverError,
+		)
 		require.EqualError(t, err, expectedErrorMsg)
 	})
 

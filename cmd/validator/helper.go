@@ -14,14 +14,14 @@ import (
 
 func tryNewValidator(
 	ctx context.Context,
-	config *config.Config,
+	conf *config.Config,
 	snConfig *config.StarknetConfig,
 	retries types.Retries,
 	logger utils.ZapLogger,
 	braavosAccount bool,
 ) (validator.Validator, error) {
 	for {
-		v, err := validator.New(ctx, config, snConfig, logger, braavosAccount)
+		v, err := validator.New(ctx, conf, snConfig, logger, braavosAccount)
 		if err == nil {
 			return v, nil
 		}
@@ -30,7 +30,7 @@ func tryNewValidator(
 			logger.Warnf(
 				"couldn't connect with RPC Provider at %s (attempts left: %s)."+
 					" Retrying in 3s...",
-				config.Provider.Http,
+				conf.Provider.HTTP,
 				retries.String(),
 			)
 			time.Sleep(3 * time.Second)
@@ -43,7 +43,7 @@ func tryNewValidator(
 		if retries.IsZero() {
 			return validator.Validator{},
 				fmt.Errorf(
-					"RPC provider unreachable at %s", config.Provider.Http,
+					"RPC provider unreachable at %s", conf.Provider.HTTP,
 				)
 		}
 	}

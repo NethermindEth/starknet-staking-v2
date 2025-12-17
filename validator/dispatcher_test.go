@@ -11,12 +11,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	/*
-		"math"
-		"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
-		"github.com/NethermindEth/starknet-staking-v2/validator/types"
-		"github.com/sourcegraph/conc"
-	*/)
+)
 
 // type EndOfWindow = struct{}
 //
