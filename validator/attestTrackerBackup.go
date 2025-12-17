@@ -2,14 +2,12 @@ package validator
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/NethermindEth/juno/core/felt"
 	junoUtils "github.com/NethermindEth/juno/utils"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
-	"github.com/NethermindEth/starknet.go/utils"
 )
 
 var _ AttestTracker = (*BackupAttestTracker)(nil)
@@ -41,10 +39,8 @@ type epochInfo struct {
 
 type AttestAndEpochInfo struct {
 	types.AttestInfo
-	CurrentBlockNumber uint64
-	EpochID            uint64
-	EpochStartingBlock uint64
-	EpochEndingBlock   uint64
+	types.EpochInfo
+	CurrentEndingBlock uint64
 }
 
 // NewBackupAttestTracker creates a new BackupAttestTracker.
@@ -62,109 +58,62 @@ func NewBackupAttestTracker(
 	}
 }
 
-func (a *BackupAttestTracker) Refresh(currentBlockNumber uint64) error {
-	if a.originalEpochInfo.StartingEpoch == 0 {
-		a.logger.Debug("no original epoch info found, fetching from contract")
-		epochInfoResp, err := a.getEpochInfo()
-		if err != nil {
-			return fmt.Errorf("failed to get original epoch info: %w", err)
+func (a *BackupAttestTracker) Refresh(
+	currentBlockNumber uint64,
+	epochInfo types.EpochInfo,
+	attestInfo types.AttestInfo,
+) error {
+	epochEndingBlock := epochInfo.StartingBlock.Uint64() + epochInfo.EpochLen
+	if currentBlockNumber < epochEndingBlock {
+		a.logger.Debug(
+			"current block number is within the current attest info. Existing attest info will be used.",
+		)
+		a.currentAttestInfo = AttestAndEpochInfo{
+			AttestInfo:         attestInfo,
+			EpochInfo:          epochInfo,
+			CurrentEndingBlock: epochInfo.StartingBlock.Uint64() + epochInfo.EpochLen,
 		}
-		a.originalEpochInfo = epochInfoResp
+
+		return nil
 	}
-
-	a.logger.Debugw("epoch info synced", "epoch info", a.originalEpochInfo)
-
-	if a.attestationWindow == 0 {
-		a.logger.Debug("no attestation window found, fetching from contract")
-		attestationWindow, err := a.getAttestationWindow()
-		if err != nil {
-			return fmt.Errorf("failed to get attestation window: %w", err)
-		}
-		a.attestationWindow = attestationWindow
-	}
-
-	a.logger.Debugw("attestation window synced", "attestation window", a.attestationWindow)
 
 	a.currentAttestInfo = calculateCurrentAttestInfo(
-		a.originalEpochInfo,
-		a.attestationWindow,
+		epochInfo,
+		attestInfo.WindowLength,
 		currentBlockNumber,
 	)
-	a.logger.Debugw("current attest info calculated", "current attest info", a.currentAttestInfo)
+	a.logger.Debugw("resfresh done", "current attest info", a.currentAttestInfo)
 
 	return nil
 }
 
-// getEpochInfo fetches the epoch info from the staking contract.
-// Since this value almost never changes, we should be able to fetch it
-// even from a lagging node.
-func (a *BackupAttestTracker) getEpochInfo() (epochInfo, error) {
-	epochInfoReq := rpc.FunctionCall{
-		ContractAddress:    a.contracts.Staking.Felt(),
-		EntryPointSelector: utils.GetSelectorFromNameFelt("get_epoch_info"),
-		Calldata:           []*felt.Felt{},
-	}
-
-	resp, err := a.provider.Call(
-		a.ctx,
-		epochInfoReq,
-		rpc.WithBlockTag(rpc.BlockTagLatest),
-	)
-	if err != nil {
-		return epochInfo{}, err
-	}
-
-	return epochInfo{
-		Length:        resp[1].Uint64(),
-		StartingBlock: resp[2].Uint64(),
-		StartingEpoch: resp[3].Uint64(),
-	}, nil
-}
-
-// getAttestationWindow fetches the attestation window from the attest contract.
-// Since this value almost never changes, we should be able to fetch it
-// even from a lagging node.
-func (a *BackupAttestTracker) getAttestationWindow() (uint64, error) {
-	attestationWindowReq := rpc.FunctionCall{
-		ContractAddress:    a.contracts.Attest.Felt(),
-		EntryPointSelector: utils.GetSelectorFromNameFelt("attestation_window"),
-		Calldata:           []*felt.Felt{},
-	}
-
-	resp, err := a.provider.Call(
-		a.ctx,
-		attestationWindowReq,
-		rpc.WithBlockTag(rpc.BlockTagLatest),
-	)
-	if err != nil {
-		return 0, err
-	}
-
-	return resp[0].Uint64(), nil
-}
-
 func calculateCurrentAttestInfo(
-	epochInfo epochInfo,
+	epochInfo types.EpochInfo,
 	attestationWindow uint64,
 	currentBlockNumber uint64,
 ) AttestAndEpochInfo {
-	epochsPassed := (currentBlockNumber - epochInfo.StartingBlock) / epochInfo.Length
-	currentEpoch := epochInfo.StartingEpoch + epochsPassed
-	epochStartingBlock := epochInfo.StartingBlock + (epochsPassed * epochInfo.Length)
-	epochEndingBlock := epochStartingBlock + epochInfo.Length
+	epochsPassed := (currentBlockNumber - epochInfo.StartingBlock.Uint64()) / epochInfo.EpochLen
+	currentEpoch := epochInfo.EpochID + epochsPassed
+	currentStartingBlock := epochInfo.StartingBlock.Uint64() + (epochsPassed * epochInfo.EpochLen)
+	currentEndingBlock := currentStartingBlock + epochInfo.EpochLen
 
 	// @todo finish this
 	return AttestAndEpochInfo{
 		AttestInfo: types.AttestInfo{
-			TargetBlock:     types.BlockNumber(epochInfo.StartingBlock),
+			WindowLength:    attestationWindow,
+			TargetBlock:     types.BlockNumber(123),
 			TargetBlockHash: types.BlockHash{},
-			WindowStart:     types.BlockNumber(epochInfo.StartingBlock),
-			WindowEnd:       types.BlockNumber(epochInfo.StartingBlock + epochInfo.Length),
+			WindowStart:     types.BlockNumber(123),
+			WindowEnd:       types.BlockNumber(123),
 		},
-		CurrentBlockNumber: currentBlockNumber,
-		EpochID:            currentEpoch,
-		EpochStartingBlock: epochStartingBlock,
-		EpochEndingBlock:   epochEndingBlock,
+		EpochInfo: types.EpochInfo{
+			StakerAddress: epochInfo.StakerAddress,
+			Stake:         epochInfo.Stake,
+			EpochLen:      epochInfo.EpochLen,
+			EpochID:       currentEpoch,
+			StartingBlock: types.BlockNumber(currentStartingBlock),
+		},
+		CurrentEndingBlock: currentEndingBlock,
 	}
 }
 

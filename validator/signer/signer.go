@@ -132,9 +132,10 @@ func FetchEpochAndAttestInfo[S Signer](
 
 	//nolint:exhaustruct // Purposely not using the block hash
 	attestInfo := types.AttestInfo{
-		TargetBlock: blockNum,
-		WindowStart: blockNum + types.BlockNumber(constants.MinAttestationWindow),
-		WindowEnd:   blockNum + types.BlockNumber(attestWindow),
+		WindowLength: attestWindow,
+		TargetBlock:  blockNum,
+		WindowStart:  blockNum + types.BlockNumber(constants.MinAttestationWindow),
+		WindowEnd:    blockNum + types.BlockNumber(attestWindow),
 	}
 
 	logger.Debugw(

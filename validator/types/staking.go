@@ -20,6 +20,7 @@ type DoAttest struct {
 
 // Used by the validator to keep track of the starknet attestation window
 type AttestInfo struct {
+	WindowLength    uint64
 	TargetBlock     BlockNumber
 	TargetBlockHash BlockHash
 	WindowStart     BlockNumber

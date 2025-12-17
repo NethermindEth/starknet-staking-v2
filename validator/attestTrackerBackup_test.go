@@ -5,6 +5,7 @@ import (
 
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/stretchr/testify/assert"
+	"lukechampine.com/uint128"
 )
 
 func TestBackupAttestTracker_Sync(t *testing.T) {
@@ -15,32 +16,43 @@ func TestBackupAttestTracker_Sync(t *testing.T) {
 func TestCalculateCurrentAttestInfo(t *testing.T) {
 	type testCase struct {
 		description                 string
-		epochInfo                   epochInfo
+		epochInfo                   types.EpochInfo
 		attestationWindow           uint64
 		currentBlockNumber          uint64
 		expectedAttestInfoWithEpoch AttestAndEpochInfo
 	}
 
+	epochInfo := types.EpochInfo{
+		StakerAddress: types.AddressFromString(
+			"0x11efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
+		),
+		Stake:         uint128.New(659767778871346152, 3),
+		EpochLen:      231,
+		EpochID:       20318,
+		StartingBlock: types.BlockNumber(4118792),
+	}
+
 	testCases := []testCase{
 		{
-			description: "original data from sepolia, block in the middle of the epoch",
-			epochInfo: epochInfo{
-				Length:        231,
-				StartingBlock: 924293,
-				StartingEpoch: 6489,
-			},
+			description:        "original data from sepolia, block in the middle of the epoch",
+			epochInfo:          epochInfo,
 			attestationWindow:  40,
-			currentBlockNumber: 4114200,
+			currentBlockNumber: 4118800,
 			expectedAttestInfoWithEpoch: AttestAndEpochInfo{
 				AttestInfo: types.AttestInfo{
-					TargetBlock: types.BlockNumber(4114196),
-					WindowStart: types.BlockNumber(4114207),
-					WindowEnd:   types.BlockNumber(4114236),
+					WindowLength: 40,
+					TargetBlock:  types.BlockNumber(4118838),
+					WindowStart:  types.BlockNumber(4118849),
+					WindowEnd:    types.BlockNumber(4118878),
 				},
-				CurrentBlockNumber: 4114200,
-				EpochID:            20298,
-				EpochStartingBlock: 4114172,
-				EpochEndingBlock:   4114403,
+				EpochInfo: types.EpochInfo{
+					StakerAddress: epochInfo.StakerAddress,
+					Stake:         epochInfo.Stake,
+					EpochLen:      epochInfo.EpochLen,
+					EpochID:       20318,
+					StartingBlock: types.BlockNumber(4118792),
+				},
+				CurrentEndingBlock: 4119023,
 			},
 		},
 	}

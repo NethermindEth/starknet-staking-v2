@@ -271,7 +271,11 @@ func ProcessBlockHeaders[Account signerP.Signer](
 				)
 				logger.Debug("calculating the target block")
 				backupTracker := backupDispatcher.CurrentAttest.(*BackupAttestTracker)
-				err = backupTracker.Refresh(feeder.LatestBlockNumber())
+				err = backupTracker.Refresh(
+					feeder.LatestBlockNumber(),
+					epochInfo,
+					attestInfo,
+				)
 				if err != nil {
 					logger.Errorw("failed to sync backup tracker", "error", err.Error())
 
