@@ -5,6 +5,7 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -20,21 +21,8 @@ type BackupAttestTracker struct {
 	ctx               context.Context
 	logger            *junoUtils.ZapLogger
 	provider          *rpc.Provider
-	originalEpochInfo epochInfo
-	attestationWindow uint64
 	currentAttestInfo AttestAndEpochInfo
 	contracts         *types.ValidationContracts
-}
-
-// epochInfo is a struct representing the epoch info configured in
-// the staking contract, used to calculate the next epochs
-// https://github.com/starkware-libs/starknet-staking/blob/bd3cec884b465c2edc8b43012135d01500c27e5b/src/staking/objects.cairo#L153
-//
-//nolint:lll // The link would be invalid if we break the line
-type epochInfo struct {
-	Length        uint64
-	StartingBlock uint64
-	StartingEpoch uint64
 }
 
 type AttestAndEpochInfo struct {
@@ -71,7 +59,7 @@ func (a *BackupAttestTracker) Refresh(
 		a.currentAttestInfo = AttestAndEpochInfo{
 			AttestInfo:         attestInfo,
 			EpochInfo:          epochInfo,
-			CurrentEndingBlock: epochInfo.StartingBlock.Uint64() + epochInfo.EpochLen,
+			CurrentEndingBlock: epochEndingBlock,
 		}
 
 		return nil
@@ -87,6 +75,8 @@ func (a *BackupAttestTracker) Refresh(
 	return nil
 }
 
+// calculateCurrentAttestInfo calculates the current attest and epoch info
+// based on the current block number and the last epoch info.
 func calculateCurrentAttestInfo(
 	epochInfo types.EpochInfo,
 	attestationWindow uint64,
@@ -97,22 +87,25 @@ func calculateCurrentAttestInfo(
 	currentStartingBlock := epochInfo.StartingBlock.Uint64() + (epochsPassed * epochInfo.EpochLen)
 	currentEndingBlock := currentStartingBlock + epochInfo.EpochLen
 
-	// @todo finish this
+	newEpochInfo := types.EpochInfo{
+		StakerAddress: epochInfo.StakerAddress,
+		Stake:         epochInfo.Stake,
+		EpochLen:      epochInfo.EpochLen,
+		EpochID:       currentEpoch,
+		StartingBlock: types.BlockNumber(currentStartingBlock),
+	}
+
+	targerBlockNumber := signerP.ComputeBlockNumberToAttestTo(&newEpochInfo, attestationWindow)
+
+	//nolint:exhaustruct // Purposely not using the block hash
 	return AttestAndEpochInfo{
 		AttestInfo: types.AttestInfo{
-			WindowLength:    attestationWindow,
-			TargetBlock:     types.BlockNumber(123),
-			TargetBlockHash: types.BlockHash{},
-			WindowStart:     types.BlockNumber(123),
-			WindowEnd:       types.BlockNumber(123),
+			WindowLength: attestationWindow,
+			TargetBlock:  targerBlockNumber,
+			WindowStart:  targerBlockNumber + types.BlockNumber(constants.MinAttestationWindow),
+			WindowEnd:    targerBlockNumber + types.BlockNumber(attestationWindow),
 		},
-		EpochInfo: types.EpochInfo{
-			StakerAddress: epochInfo.StakerAddress,
-			Stake:         epochInfo.Stake,
-			EpochLen:      epochInfo.EpochLen,
-			EpochID:       currentEpoch,
-			StartingBlock: types.BlockNumber(currentStartingBlock),
-		},
+		EpochInfo:          newEpochInfo,
 		CurrentEndingBlock: currentEndingBlock,
 	}
 }
@@ -123,13 +116,12 @@ func calculateCurrentAttestInfo(
 func (a *BackupAttestTracker) NewAttestTracker() AttestTracker {
 	//nolint:exhaustruct // Using default values
 	return &BackupAttestTracker{
-		Transaction:       AttestTransaction{},
-		hash:              felt.Zero,
-		status:            Iddle,
-		ctx:               a.ctx,
-		provider:          a.provider,
-		originalEpochInfo: a.originalEpochInfo,
-		contracts:         a.contracts,
+		Transaction: AttestTransaction{},
+		hash:        felt.Zero,
+		status:      Iddle,
+		ctx:         a.ctx,
+		provider:    a.provider,
+		contracts:   a.contracts,
 	}
 }
 
