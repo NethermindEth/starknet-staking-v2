@@ -27,8 +27,9 @@ type Feeder struct {
 // Create a new Feeder instance using the feeder URL.
 func NewFeeder(clientURL string, logger *junoUtils.ZapLogger) *Feeder {
 	return &Feeder{ //nolint:exhaustruct // Using default values
-		client:        feeder.NewClient(clientURL).WithLogger(logger),
-		pollingTicker: time.NewTicker(constants.FeederPollingInterval),
+		client: feeder.NewClient(clientURL).WithLogger(logger),
+		// @todo I'll edit this to test. Remember to revert this before merging.
+		pollingTicker: time.NewTicker(5 * time.Second),
 	}
 }
 

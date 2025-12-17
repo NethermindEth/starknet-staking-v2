@@ -263,14 +263,15 @@ func ProcessBlockHeaders[Account signerP.Signer](
 				continue
 			}
 			// random threshold of 10 blocks of difference between the node and the feeder
-			if block.Number+10 < feeder.LatestBlockNumber() {
+			// @todo I'll edit this to test. Remember to revert this before merging.
+			if block.Number-10 < feeder.LatestBlockNumber() {
 				logger.Infow("node is behind the chain",
 					"feeder latest block", feeder.LatestBlockNumber(),
 					"blocks behind", feeder.LatestBlockNumber()-block.Number,
 				)
 				logger.Debug("calculating the target block")
 				backupTracker := backupDispatcher.CurrentAttest.(*BackupAttestTracker)
-				err = backupTracker.Sync()
+				err = backupTracker.Refresh(feeder.LatestBlockNumber())
 				if err != nil {
 					logger.Errorw("failed to sync backup tracker", "error", err.Error())
 
