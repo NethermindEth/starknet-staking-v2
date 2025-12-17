@@ -105,14 +105,14 @@ func (v *Validator) Run(
 	dispatcher := NewEventDispatcher[signerP.Signer](&mainAttest)
 	defer close(dispatcher.PrepareAttest)
 	// Create the feeder backup event dispatcher
-	feederAttest := NewFeederAttestTracker(
+	backupAttest := NewBackupAttestTracker(
 		ctx,
 		v.provider,
 		&v.logger,
 		v.signer.ValidationContracts(),
 	)
-	feederDispatcher := NewEventDispatcher[signerP.Signer](feederAttest)
-	defer close(feederDispatcher.PrepareAttest)
+	backupDispatcher := NewEventDispatcher[signerP.Signer](backupAttest)
+	defer close(backupDispatcher.PrepareAttest)
 
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
@@ -120,8 +120,8 @@ func (v *Validator) Run(
 		v.logger.Debug("Dispatch method finished")
 	})
 	wg.Go(func() {
-		feederDispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
-		v.logger.Debug("Feeder dispatch method finished")
+		backupDispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
+		v.logger.Debug("Backup dispatch method finished")
 	})
 	defer wg.Wait()
 
@@ -131,7 +131,7 @@ func (v *Validator) Run(
 		&v.logger,
 		v.signer,
 		&dispatcher,
-		&feederDispatcher,
+		&backupDispatcher,
 		maxRetries,
 		wg,
 		tracer,
@@ -144,7 +144,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 	logger *utils.ZapLogger,
 	signer S,
 	dispatcher *EventDispatcher[S],
-	feederDispatcher *EventDispatcher[S],
+	backupDispatcher *EventDispatcher[S],
 	maxRetries types.Retries,
 	wg *conc.WaitGroup,
 	tracer metrics.Tracer,
@@ -180,7 +180,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				signer,
 				logger,
 				dispatcher,
-				feederDispatcher,
+				backupDispatcher,
 				maxRetries,
 				tracer,
 			)
@@ -220,7 +220,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	account Account,
 	logger *utils.ZapLogger,
 	mainDispatcher *EventDispatcher[Account],
-	feederDispatcher *EventDispatcher[Account],
+	backupDispatcher *EventDispatcher[Account],
 	maxRetries types.Retries,
 	tracer metrics.Tracer,
 ) error {
@@ -240,7 +240,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	// TODO: implement the feeder backup dispatcher
 	dispatcher := mainDispatcher
 	if false {
-		dispatcher = feederDispatcher
+		dispatcher = backupDispatcher
 	}
 	feeder := feederbackup.NewFeederFromContracts(
 		account.ValidationContracts(),
@@ -269,8 +269,8 @@ func ProcessBlockHeaders[Account signerP.Signer](
 					"blocks behind", feeder.LatestBlockNumber()-block.Number,
 				)
 				logger.Debug("calculating the target block")
-				feederTracker := feederDispatcher.CurrentAttest.(*FeederAttestTracker)
-				err = feederTracker.Sync()
+				backupTracker := backupDispatcher.CurrentAttest.(*BackupAttestTracker)
+				err = backupTracker.Sync()
 				if err != nil {
 					logger.Errorw("failed to sync backup tracker", "error", err.Error())
 

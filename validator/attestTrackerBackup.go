@@ -11,9 +11,9 @@ import (
 	"github.com/NethermindEth/starknet.go/utils"
 )
 
-var _ AttestTracker = (*FeederAttestTracker)(nil)
+var _ AttestTracker = (*BackupAttestTracker)(nil)
 
-type FeederAttestTracker struct {
+type BackupAttestTracker struct {
 	Transaction AttestTransaction
 	hash        felt.Felt
 	status      AttestStatus
@@ -31,15 +31,15 @@ type epochInfo struct {
 	startingEpoch uint64
 }
 
-// NewFeederAttestTracker creates a new FeederAttestTracker.
+// NewBackupAttestTracker creates a new BackupAttestTracker.
 
-func NewFeederAttestTracker(
+func NewBackupAttestTracker(
 	ctx context.Context,
 	provider *rpc.Provider,
 	logger *junoUtils.ZapLogger,
 	contracts *types.ValidationContracts,
-) *FeederAttestTracker {
-	return &FeederAttestTracker{
+) *BackupAttestTracker {
+	return &BackupAttestTracker{
 		ctx:       ctx,
 		logger:    logger,
 		provider:  provider,
@@ -47,7 +47,7 @@ func NewFeederAttestTracker(
 	}
 }
 
-func (a *FeederAttestTracker) Sync() error {
+func (a *BackupAttestTracker) Sync() error {
 	if a.originalEpochInfo.startingEpoch == 0 {
 		a.logger.Debug("no epoch info found, fetching from contract")
 		epochInfoResp, err := a.getEpochInfo()
@@ -62,7 +62,7 @@ func (a *FeederAttestTracker) Sync() error {
 	return nil
 }
 
-func (a *FeederAttestTracker) getEpochInfo() (epochInfo, error) {
+func (a *BackupAttestTracker) getEpochInfo() (epochInfo, error) {
 	epochInfoReq := rpc.FunctionCall{
 		ContractAddress:    a.contracts.Staking.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt("get_epoch_info"),
@@ -88,9 +88,9 @@ func (a *FeederAttestTracker) getEpochInfo() (epochInfo, error) {
 // //////////////////////////////////////////////////////////////
 // Implement the AttestTracker interface
 // //////////////////////////////////////////////////////////////
-func (a *FeederAttestTracker) NewAttestTracker() AttestTracker {
+func (a *BackupAttestTracker) NewAttestTracker() AttestTracker {
 	//nolint:exhaustruct // Using default values
-	return &FeederAttestTracker{
+	return &BackupAttestTracker{
 		Transaction:       AttestTransaction{},
 		hash:              felt.Zero,
 		status:            Iddle,
@@ -101,41 +101,41 @@ func (a *FeederAttestTracker) NewAttestTracker() AttestTracker {
 	}
 }
 
-func (a *FeederAttestTracker) Hash() felt.Felt {
+func (a *BackupAttestTracker) Hash() felt.Felt {
 	return a.hash
 }
 
-func (a *FeederAttestTracker) SetHash(hash felt.Felt) {
+func (a *BackupAttestTracker) SetHash(hash felt.Felt) {
 	a.hash = hash
 }
 
-func (a *FeederAttestTracker) Status() AttestStatus {
+func (a *BackupAttestTracker) Status() AttestStatus {
 	return a.status
 }
 
-func (a *FeederAttestTracker) SetStatus(status AttestStatus) {
+func (a *BackupAttestTracker) SetStatus(status AttestStatus) {
 	a.status = status
 }
 
-func (a *FeederAttestTracker) UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger) {
+func (a *BackupAttestTracker) UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger) {
 	status := TrackAttest(signer, logger, &a.hash)
 	a.SetStatus(status)
 }
 
-func (a *FeederAttestTracker) BuildTxn(signer signerP.Signer, blockHash *types.BlockHash) error {
+func (a *BackupAttestTracker) BuildTxn(signer signerP.Signer, blockHash *types.BlockHash) error {
 	return a.Transaction.Build(signer, blockHash)
 }
 
-func (a *FeederAttestTracker) Attest(
+func (a *BackupAttestTracker) Attest(
 	signer signerP.Signer,
 ) (rpc.AddInvokeTransactionResponse, error) {
 	return a.Transaction.Invoke(signer)
 }
 
-func (a *FeederAttestTracker) UpdateNonce(signer signerP.Signer) error {
+func (a *BackupAttestTracker) UpdateNonce(signer signerP.Signer) error {
 	return a.Transaction.UpdateNonce(signer)
 }
 
-func (a *FeederAttestTracker) IsTxnReady() bool {
+func (a *BackupAttestTracker) IsTxnReady() bool {
 	return a.Transaction.Valid()
 }
