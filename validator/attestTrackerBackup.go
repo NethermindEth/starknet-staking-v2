@@ -11,7 +11,7 @@ import (
 	"github.com/NethermindEth/starknet.go/rpc"
 )
 
-var _ AttestTracker = (*BackupAttestTracker)(nil)
+var _ AttestTrackerI = (*BackupAttestTracker)(nil)
 
 type BackupAttestTracker struct {
 	Transaction AttestTransaction
@@ -113,7 +113,7 @@ func calculateCurrentAttestInfo(
 // //////////////////////////////////////////////////////////////
 // Implement the AttestTracker interface
 // //////////////////////////////////////////////////////////////
-func (a *BackupAttestTracker) NewAttestTracker() AttestTracker {
+func (a *BackupAttestTracker) NewAttestTracker() AttestTrackerI {
 	//nolint:exhaustruct // Using default values
 	return &BackupAttestTracker{
 		Transaction: AttestTransaction{},

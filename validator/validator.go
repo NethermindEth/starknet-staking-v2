@@ -101,7 +101,7 @@ func (v *Validator) Run(
 	go CheckBalance(v.signer, balanceThreshold, &v.logger, tracer)
 
 	// Create the main event dispatcher
-	var mainAttest MainAttestTracker
+	var mainAttest AttestTracker
 	dispatcher := NewEventDispatcher[signerP.Signer](&mainAttest)
 	defer close(dispatcher.PrepareAttest)
 	// Create the feeder backup event dispatcher
