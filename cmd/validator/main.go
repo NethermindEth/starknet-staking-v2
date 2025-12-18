@@ -131,7 +131,7 @@ func NewCommand() cobra.Command {
 		// Start validator in a goroutine
 		errCh := make(chan error, 1)
 		go func() {
-			err := v.Run(cmd.Context(), maxRetries, balanceThreshold, tracer)
+			err := v.Attest(cmd.Context(), maxRetries, balanceThreshold, tracer)
 			if err != nil {
 				errCh <- err
 			}

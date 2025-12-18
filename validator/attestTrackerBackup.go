@@ -11,8 +11,6 @@ import (
 	"github.com/NethermindEth/starknet.go/rpc"
 )
 
-var _ AttestTrackerI = (*BackupAttestTracker)(nil)
-
 type BackupAttestTracker struct {
 	Transaction AttestTransaction
 	hash        felt.Felt
@@ -108,58 +106,4 @@ func calculateCurrentAttestInfo(
 		EpochInfo:          newEpochInfo,
 		CurrentEndingBlock: currentEndingBlock,
 	}
-}
-
-// //////////////////////////////////////////////////////////////
-// Implement the AttestTracker interface
-// //////////////////////////////////////////////////////////////
-func (a *BackupAttestTracker) NewAttestTracker() AttestTrackerI {
-	//nolint:exhaustruct // Using default values
-	return &BackupAttestTracker{
-		Transaction: AttestTransaction{},
-		hash:        felt.Zero,
-		status:      Iddle,
-		ctx:         a.ctx,
-		provider:    a.provider,
-		contracts:   a.contracts,
-	}
-}
-
-func (a *BackupAttestTracker) Hash() felt.Felt {
-	return a.hash
-}
-
-func (a *BackupAttestTracker) SetHash(hash felt.Felt) {
-	a.hash = hash
-}
-
-func (a *BackupAttestTracker) Status() AttestStatus {
-	return a.status
-}
-
-func (a *BackupAttestTracker) SetStatus(status AttestStatus) {
-	a.status = status
-}
-
-func (a *BackupAttestTracker) UpdateStatus(signer signerP.Signer, logger *junoUtils.ZapLogger) {
-	status := TrackAttest(signer, logger, &a.hash)
-	a.SetStatus(status)
-}
-
-func (a *BackupAttestTracker) BuildTxn(signer signerP.Signer, blockHash *types.BlockHash) error {
-	return a.Transaction.Build(signer, blockHash)
-}
-
-func (a *BackupAttestTracker) Attest(
-	signer signerP.Signer,
-) (rpc.AddInvokeTransactionResponse, error) {
-	return a.Transaction.Invoke(signer)
-}
-
-func (a *BackupAttestTracker) UpdateNonce(signer signerP.Signer) error {
-	return a.Transaction.UpdateNonce(signer)
-}
-
-func (a *BackupAttestTracker) IsTxnReady() bool {
-	return a.Transaction.Valid()
 }

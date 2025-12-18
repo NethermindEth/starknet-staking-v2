@@ -94,47 +94,24 @@ func (v *Validator) ChainID(ctx context.Context) string {
 
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
-func (v *Validator) Run(
+func (v *Validator) Attest(
 	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance
 	go CheckBalance(v.signer, balanceThreshold, &v.logger, tracer)
 
-	// Create the main event dispatcher
-	var mainAttest AttestTracker
-	dispatcher := NewEventDispatcher[signerP.Signer](&mainAttest)
-	defer close(dispatcher.PrepareAttest)
-	// Create the feeder backup event dispatcher
-	backupAttest := NewBackupAttestTracker(
-		ctx,
-		v.provider,
-		&v.logger,
-		v.signer.ValidationContracts(),
-	)
-	backupDispatcher := NewEventDispatcher[signerP.Signer](backupAttest)
-	defer close(backupDispatcher.PrepareAttest)
-
+	// Create the event dispatcher
+	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
-	wg.Go(func() {
-		backupDispatcher.Dispatch(v.signer, balanceThreshold, &v.logger, tracer)
-		v.logger.Debug("Backup dispatch method finished")
-	})
 	defer wg.Wait()
+	defer close(dispatcher.PrepareAttest)
 
 	return RunBlockHeaderWatcher(
-		ctx,
-		v.wsProvider,
-		&v.logger,
-		v.signer,
-		&dispatcher,
-		&backupDispatcher,
-		maxRetries,
-		wg,
-		tracer,
+		ctx, v.wsProvider, &v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
 	)
 }
 
@@ -144,7 +121,6 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 	logger *utils.ZapLogger,
 	signer S,
 	dispatcher *EventDispatcher[S],
-	backupDispatcher *EventDispatcher[S],
 	maxRetries types.Retries,
 	wg *conc.WaitGroup,
 	tracer metrics.Tracer,
@@ -180,7 +156,6 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				signer,
 				logger,
 				dispatcher,
-				backupDispatcher,
 				maxRetries,
 				tracer,
 			)
@@ -219,8 +194,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	headersFeed chan *rpc.BlockHeader,
 	account Account,
 	logger *utils.ZapLogger,
-	mainDispatcher *EventDispatcher[Account],
-	backupDispatcher *EventDispatcher[Account],
+	dispatcher *EventDispatcher[Account],
 	maxRetries types.Retries,
 	tracer metrics.Tracer,
 ) error {
@@ -237,11 +211,6 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	logNewEpoch(&epochInfo, &attestInfo, logger)
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
-	// TODO: implement the feeder backup dispatcher
-	dispatcher := mainDispatcher
-	if false {
-		dispatcher = backupDispatcher
-	}
 	feeder := feederbackup.NewFeederFromContracts(
 		account.ValidationContracts(),
 		logger,
@@ -265,22 +234,22 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			// random threshold of 10 blocks of difference between the node and the feeder
 			// @todo I'll edit this to test. Remember to revert this before merging.
 			if block.Number-10 < feeder.LatestBlockNumber() {
-				logger.Infow("node is behind the chain",
-					"feeder latest block", feeder.LatestBlockNumber(),
-					"blocks behind", feeder.LatestBlockNumber()-block.Number,
-				)
-				logger.Debug("calculating the target block")
-				backupTracker := backupDispatcher.CurrentAttest.(*BackupAttestTracker)
-				err = backupTracker.Refresh(
-					feeder.LatestBlockNumber(),
-					epochInfo,
-					attestInfo,
-				)
-				if err != nil {
-					logger.Errorw("failed to sync backup tracker", "error", err.Error())
+				// logger.Infow("node is behind the chain",
+				// 	"feeder latest block", feeder.LatestBlockNumber(),
+				// 	"blocks behind", feeder.LatestBlockNumber()-block.Number,
+				// )
+				// logger.Debug("calculating the target block")
+				// backupTracker := backupDispatcher.CurrentAttest.(*BackupAttestTracker)
+				// err = backupTracker.Refresh(
+				// 	feeder.LatestBlockNumber(),
+				// 	epochInfo,
+				// 	attestInfo,
+				// )
+				// if err != nil {
+				// 	logger.Errorw("failed to sync backup tracker", "error", err.Error())
 
-					continue
-				}
+				// 	continue
+				// }
 			}
 			logger.Debugw("node is synced",
 				"feeder latest block", feeder.LatestBlockNumber())

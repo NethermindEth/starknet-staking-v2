@@ -112,15 +112,15 @@ func (t *AttestTransaction) Valid() bool {
 
 type AttestTracker struct {
 	Transaction AttestTransaction
-	hash        felt.Felt
-	status      AttestStatus
+	Hash        felt.Felt
+	Status      AttestStatus
 }
 
-func (a *AttestTracker) NewAttestTracker() AttestTrackerI {
+func NewAttestTracker() AttestTracker {
 	//nolint:exhaustruct // Using default values
-	return &AttestTracker{
+	return AttestTracker{
 		Transaction: AttestTransaction{},
-		status:      Iddle,
+		Status:      Iddle,
 	}
 }
 
@@ -128,16 +128,16 @@ func (a *AttestTracker) UpdateStatus(
 	signer signerP.Signer,
 	logger *junoUtils.ZapLogger,
 ) {
-	status := TrackAttest(signer, logger, &a.hash)
-	a.SetStatus(status)
+	status := TrackAttest(signer, logger, &a.Hash)
+	a.setStatus(status)
 }
 
-func (a *AttestTracker) SetStatus(status AttestStatus) {
-	a.status = status
+func (a *AttestTracker) setStatus(status AttestStatus) {
+	a.Status = status
 	switch status {
 	case Ongoing, Successful:
 	case Failed:
-		a.hash = felt.Zero
+		a.Hash = felt.Zero
 	case Iddle:
 		panic("status cannot be change to iddle")
 	default:
@@ -151,12 +151,12 @@ type EventDispatcher[S signerP.Signer] struct {
 	PrepareAttest chan types.PrepareAttest
 	EndOfWindow   chan struct{}
 	// Current epoch attest-related fields
-	CurrentAttest AttestTrackerI
+	CurrentAttest AttestTracker
 }
 
-func NewEventDispatcher[S signerP.Signer](attestTracker AttestTrackerI) EventDispatcher[S] {
+func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	return EventDispatcher[S]{
-		CurrentAttest: attestTracker,
+		CurrentAttest: NewAttestTracker(),
 		DoAttest:      make(chan types.DoAttest),
 		PrepareAttest: make(chan types.PrepareAttest),
 		EndOfWindow:   make(chan struct{}),
@@ -175,16 +175,16 @@ func (d *EventDispatcher[S]) Dispatch(
 			if !ok {
 				return
 			}
-			if d.CurrentAttest.Status() != Iddle {
+			if d.CurrentAttest.Status != Iddle {
 				logger.Error("receiveing prepare attest info while doing attest")
 			}
-			if d.CurrentAttest.IsTxnReady() {
+			if d.CurrentAttest.Transaction.Valid() {
 				continue
 			}
 
 			targetBlockHash = attest.BlockHash
 			logger.Debugf("building attest transaction for blockhash: %s", targetBlockHash.String())
-			err := d.CurrentAttest.BuildTxn(signer, &targetBlockHash)
+			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
 				logger.Errorf("failed to build attest transaction: %s", err.Error())
 
@@ -198,27 +198,27 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			// if the attest event is already being tracked by the tool
-			if d.CurrentAttest.Status() != Iddle && d.CurrentAttest.Status() != Failed {
+			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
 				// If  status is still not successful, check for it
-				if d.CurrentAttest.Status() != Successful {
+				if d.CurrentAttest.Status != Successful {
 					d.CurrentAttest.UpdateStatus(signer, logger)
 				}
 				// If status is status is already successful or ongoing, do nothing.
-				if d.CurrentAttest.Status() == Successful || d.CurrentAttest.Status() == Ongoing {
+				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
 					continue
 				}
 			}
-			d.CurrentAttest.SetStatus(Ongoing)
+			d.CurrentAttest.setStatus(Ongoing)
 
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
-			if !d.CurrentAttest.IsTxnReady() {
+			if !d.CurrentAttest.Transaction.Valid() {
 				targetBlockHash = attest.BlockHash
 				logger.Debugf(
 					"building attest transaction (in `do` stage) for blockhash: %s",
 					&targetBlockHash,
 				)
-				err := d.CurrentAttest.BuildTxn(signer, &targetBlockHash)
+				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
 					logger.Errorf("failed to build attest transaction: %s", err.Error())
 
@@ -229,7 +229,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
 				logger.Debug("updating attest transaction nonce")
-				err := d.CurrentAttest.UpdateNonce(signer)
+				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
 				if err != nil {
 					logger.Errorf("failed to update transaction nonce: %s", err.Error())
 
@@ -238,13 +238,13 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			logger.Infof("invoking attest; target block hash: %s", targetBlockHash.String())
-			resp, err := d.CurrentAttest.Attest(signer)
+			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
 					logger.Infow(
 						"attestation is already done for this epoch",
 					)
-					d.CurrentAttest.SetStatus(Successful)
+					d.CurrentAttest.setStatus(Successful)
 
 					continue
 				}
@@ -253,22 +253,22 @@ func (d *EventDispatcher[S]) Dispatch(
 					"failed to attest",
 					"error", err.Error(),
 				)
-				d.CurrentAttest.SetStatus(Failed)
+				d.CurrentAttest.setStatus(Failed)
 
 				continue
 			}
 
 			logger.Debugw("attest transaction sent", "hash", resp.Hash)
-			d.CurrentAttest.SetHash(*resp.Hash)
+			d.CurrentAttest.Hash = *resp.Hash
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
 		case <-d.EndOfWindow:
 			logger.Info("end of window reached")
-			if d.CurrentAttest.Status() != Successful {
+			if d.CurrentAttest.Status != Successful {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
-			if d.CurrentAttest.Status() == Successful {
+			if d.CurrentAttest.Status == Successful {
 				logger.Infow(
 					"successfully attested to target block",
 					"target block hash", targetBlockHash.String(),
@@ -278,12 +278,12 @@ func (d *EventDispatcher[S]) Dispatch(
 				logger.Warnw(
 					"failed to attest to target block",
 					"target block hash", targetBlockHash.String(),
-					"latest attest status", d.CurrentAttest.Status(),
+					"latest attest status", d.CurrentAttest.Status,
 				)
 				tracer.RecordAttestationFailure()
 			}
-			// clean state for the next window
-			d.CurrentAttest = d.CurrentAttest.NewAttestTracker()
+			// clean slate for the next window
+			d.CurrentAttest = NewAttestTracker()
 			// check the account balance
 			go CheckBalance(signer, balanceThreshold, logger, tracer)
 		}
