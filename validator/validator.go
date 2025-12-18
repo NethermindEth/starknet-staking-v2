@@ -253,7 +253,6 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			}
 			logger.Debugw("node is synced",
 				"feeder latest block", feeder.LatestBlockNumber())
-			feeder.CleanBlock()
 
 		// Main case to process the block headers returned by the node subscription
 		case block = <-headersFeed:

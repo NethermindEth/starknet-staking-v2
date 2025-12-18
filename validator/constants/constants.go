@@ -1,7 +1,5 @@
 package constants
 
-import "time"
-
 //nolint:lll //More readable this way
 const (
 	SepoliaStakingContractAddress = "0x03745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1"
@@ -21,5 +19,5 @@ const (
 	DefaultMaxRetries       = 10
 	FeeEstimationMultiplier = 1.5
 	TipMultiplier           = 1.5
-	FeederPollingInterval   = 30 * time.Second
+	FeederPollingInterval   = 30
 )
