@@ -10,8 +10,14 @@ const (
 )
 
 const (
+	SepoliaFeederURL = "https://feeder.alpha-sepolia.starknet.io/feeder_gateway/"
+	MainnetFeederURL = "https://feeder.alpha-mainnet.starknet.io/feeder_gateway/"
+)
+
+const (
 	MinAttestationWindow    = 11
 	DefaultMaxRetries       = 10
 	FeeEstimationMultiplier = 1.5
 	TipMultiplier           = 1.5
+	FeederPollingInterval   = 30
 )
