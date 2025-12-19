@@ -3,7 +3,6 @@ package validator
 import (
 	"context"
 
-	"github.com/NethermindEth/juno/core/felt"
 	junoUtils "github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
@@ -12,15 +11,14 @@ import (
 )
 
 type BackupAttestTracker struct {
-	Transaction AttestTransaction
-	hash        felt.Felt
-	status      AttestStatus
-
 	ctx               context.Context
 	logger            *junoUtils.ZapLogger
 	provider          *rpc.Provider
 	currentAttestInfo AttestAndEpochInfo
 	contracts         *types.ValidationContracts
+
+	nodeBlockNumber   uint64
+	feederBlockNumber uint64
 }
 
 type AttestAndEpochInfo struct {
@@ -36,6 +34,7 @@ func NewBackupAttestTracker(
 	logger *junoUtils.ZapLogger,
 	contracts *types.ValidationContracts,
 ) *BackupAttestTracker {
+	//nolint:exhaustruct // Using default values for `currentAttestInfo`
 	return &BackupAttestTracker{
 		ctx:       ctx,
 		logger:    logger,
@@ -44,13 +43,32 @@ func NewBackupAttestTracker(
 	}
 }
 
-func (a *BackupAttestTracker) Refresh(
-	currentBlockNumber uint64,
+// @todo : both methods are placeholders for now. They need to be implemented.
+// I'm thinkin about, in the ProcessBlockHeaders, use these methods like:
+//
+//	if NodeIsTooFarBehind() {
+//		Attest()
+//	}
+func (a *BackupAttestTracker) NodeIsTooFarBehind() bool {
+	return a.nodeBlockNumber-10 < uint64(a.currentAttestInfo.WindowEnd)
+}
+
+func (a *BackupAttestTracker) Attest() {
+	// let's try to use starkent.go acc.BuildAndInvokeTransaction method
+	// with huge multiplier for the fee and tip estimation (like 3x) since the
+	// estimation will be based on outdated blocks as the node is behind.
+}
+
+// RefreshData refreshes the data (epoch and attest info, block numbers...) for
+// the backup attest tracker.
+func (a *BackupAttestTracker) RefreshData(
+	nodeBlockNumber uint64,
+	feederBlockNumber uint64,
 	epochInfo types.EpochInfo,
 	attestInfo types.AttestInfo,
 ) error {
 	epochEndingBlock := epochInfo.StartingBlock.Uint64() + epochInfo.EpochLen
-	if currentBlockNumber < epochEndingBlock {
+	if feederBlockNumber < epochEndingBlock {
 		a.logger.Debug(
 			"current block number is within the current attest info. Existing attest info will be used.",
 		)
@@ -66,8 +84,10 @@ func (a *BackupAttestTracker) Refresh(
 	a.currentAttestInfo = calculateCurrentAttestInfo(
 		epochInfo,
 		attestInfo.WindowLength,
-		currentBlockNumber,
+		feederBlockNumber,
 	)
+	a.nodeBlockNumber = nodeBlockNumber
+	a.feederBlockNumber = feederBlockNumber
 	a.logger.Debugw("resfresh done", "current attest info", a.currentAttestInfo)
 
 	return nil
