@@ -2,6 +2,9 @@ module github.com/NethermindEth/starknet-staking-v2
 
 go 1.25.0
 
+// TODO: Remove this before merging
+replace github.com/NethermindEth/starknet.go => ../starknet.go-copy
+
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/NethermindEth/juno v0.15.11
