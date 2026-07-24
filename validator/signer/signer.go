@@ -59,7 +59,7 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 
 	return types.EpochInfo{
 		StakerAddress: types.Address(*result[0]),
-		Stake:         uint128.New(stake[0], stake[1]), //nolint:gosec // Bits returns [4]uint64
+		Stake:         uint128.New(stake[0], stake[1]),
 		EpochLen:      result[2].Uint64(),
 		EpochID:       result[3].Uint64(),
 		StartingBlock: types.BlockNumber(result[4].Uint64()),
@@ -196,4 +196,22 @@ func ComputeBlockNumberToAttestTo(
 	)
 
 	return types.BlockNumber(epochInfo.StartingBlock.Uint64() + blockOffset.Uint64())
+}
+
+func BroadcastToInvoke(bInvoke *rpc.BroadcastInvokeTxnV3) *rpc.InvokeTxnV3 {
+	return &rpc.InvokeTxnV3{
+		Type:                  bInvoke.Type,
+		SenderAddress:         bInvoke.SenderAddress,
+		Calldata:              bInvoke.Calldata,
+		Version:               bInvoke.Version,
+		Signature:             bInvoke.Signature,
+		Nonce:                 bInvoke.Nonce,
+		ResourceBounds:        bInvoke.ResourceBounds,
+		Tip:                   bInvoke.Tip,
+		PayMasterData:         bInvoke.PayMasterData,
+		AccountDeploymentData: bInvoke.AccountDeploymentData,
+		NonceDataMode:         bInvoke.NonceDataMode,
+		FeeMode:               bInvoke.FeeMode,
+		ProofFacts:            bInvoke.ProofFacts,
+	}
 }

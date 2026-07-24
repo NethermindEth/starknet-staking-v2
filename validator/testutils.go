@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
@@ -95,7 +94,9 @@ func MockRPCServer(
 
 			// Just making sure it's the call expected
 			expectedEpochInfoFnCall := rpc.FunctionCall{
-				ContractAddress: utils.HexToFelt(t, constants.SepoliaStakingContractAddress),
+				ContractAddress: felt.NewUnsafeFromString[felt.Felt](
+					constants.SepoliaStakingContractAddress,
+				),
 				EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
 					"get_attestation_info_by_operational_address",
 				),

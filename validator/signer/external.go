@@ -124,7 +124,7 @@ func (s *ExternalSigner) EstimateFee(
 	estimateFee, err := s.Provider.EstimateFee(
 		s.ctx,
 		[]rpc.BroadcastTxn{txn},
-		[]rpc.SimulationFlag{},
+		[]rpc.EstimateFeeFlag{},
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 	)
 	if s.braavos {
@@ -198,12 +198,12 @@ func SignInvokeTx(
 }
 
 func HashAndSignTx(
-	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
+	bInvoke *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 	externalSignerURL string,
 ) (signer.Response, error) {
 	// Create request body
-	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainID: chainID}
+	reqBody := signer.Request{InvokeTxnV3: BroadcastToInvoke(bInvoke), ChainID: chainID}
 	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
 		return signer.Response{}, err

@@ -26,7 +26,7 @@ func TestExternalSignerAddress(t *testing.T) {
 	logger := utils.NewNopZapLogger()
 
 	t.Run("Return signer address", func(t *testing.T) {
-		operationalAddress := utils.HexToFelt(t, "0x123")
+		operationalAddress := felt.NewUnsafeFromString[felt.Felt]("0x123")
 
 		mockRPC := validator.MockRPCServer(t, operationalAddress, "")
 		defer mockRPC.Close()
@@ -333,7 +333,7 @@ func TestHashAndSignTx(t *testing.T) {
 		externalSignerURL := "http://localhost:1234"
 
 		invokeTxnV3 := snUtils.BuildInvokeTxn(
-			utils.HexToFelt(t, "0x123"),
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
@@ -361,7 +361,7 @@ func TestHashAndSignTx(t *testing.T) {
 		defer mockServer.Close()
 
 		invokeTxnV3 := snUtils.BuildInvokeTxn(
-			utils.HexToFelt(t, "0x123"),
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
@@ -392,7 +392,7 @@ func TestHashAndSignTx(t *testing.T) {
 		defer mockServer.Close()
 
 		invokeTxnV3 := snUtils.BuildInvokeTxn(
-			utils.HexToFelt(t, "0x123"),
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
@@ -418,7 +418,7 @@ func TestHashAndSignTx(t *testing.T) {
 		defer mockServer.Close()
 
 		invokeTxnV3 := snUtils.BuildInvokeTxn(
-			utils.HexToFelt(t, "0x123"),
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
 			new(felt.Felt).SetUint64(1),
 			[]*felt.Felt{},
 			&rpc.ResourceBoundsMapping{},
