@@ -197,21 +197,3 @@ func ComputeBlockNumberToAttestTo(
 
 	return types.BlockNumber(epochInfo.StartingBlock.Uint64() + blockOffset.Uint64())
 }
-
-func BroadcastToInvoke(bInvoke *rpc.BroadcastInvokeTxnV3) *rpc.InvokeTxnV3 {
-	return &rpc.InvokeTxnV3{
-		Type:                  bInvoke.Type,
-		SenderAddress:         bInvoke.SenderAddress,
-		Calldata:              bInvoke.Calldata,
-		Version:               bInvoke.Version,
-		Signature:             bInvoke.Signature,
-		Nonce:                 bInvoke.Nonce,
-		ResourceBounds:        bInvoke.ResourceBounds,
-		Tip:                   bInvoke.Tip,
-		PayMasterData:         bInvoke.PayMasterData,
-		AccountDeploymentData: bInvoke.AccountDeploymentData,
-		NonceDataMode:         bInvoke.NonceDataMode,
-		FeeMode:               bInvoke.FeeMode,
-		ProofFacts:            bInvoke.ProofFacts,
-	}
-}

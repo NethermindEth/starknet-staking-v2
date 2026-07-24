@@ -198,12 +198,12 @@ func SignInvokeTx(
 }
 
 func HashAndSignTx(
-	bInvoke *rpc.BroadcastInvokeTxnV3,
+	bTx *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 	externalSignerURL string,
 ) (signer.Response, error) {
 	// Create request body
-	reqBody := signer.Request{InvokeTxnV3: BroadcastToInvoke(bInvoke), ChainID: chainID}
+	reqBody := signer.Request{BroadcastInvokeTxnV3: bTx, ChainID: chainID}
 	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
 		return signer.Response{}, err

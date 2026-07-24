@@ -112,7 +112,7 @@ func MockRPCServer(
 		// Called when calling `rpc.NewProvider` in Starknet.Go
 		case "starknet_specVersion":
 			w.WriteHeader(http.StatusOK)
-			_, err = w.Write([]byte(`{"jsonrpc": "2.0", "result": "v0.9.0", "id": 1}`))
+			_, err = w.Write([]byte(`{"jsonrpc": "2.0", "result": "v0.10.0", "id": 1}`))
 			require.NoError(t, err)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)

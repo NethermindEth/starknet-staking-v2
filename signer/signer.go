@@ -21,8 +21,8 @@ import (
 const SignEndpoint = "/sign"
 
 type Request struct {
-	*rpc.InvokeTxnV3 `json:"transaction"`
-	ChainID          *felt.Felt `json:"chain_id"`
+	*rpc.BroadcastInvokeTxnV3 `json:"transaction"`
+	ChainID                   *felt.Felt `json:"chain_id"`
 }
 
 type Response struct {
@@ -101,7 +101,7 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err := s.hashAndSign(req.InvokeTxnV3, req.ChainID)
+	signature, err := s.hashAndSign(req.BroadcastInvokeTxnV3, req.ChainID)
 	if err != nil {
 		http.Error(w, "failed to sign tx: "+err.Error(), http.StatusInternalServerError)
 
@@ -122,12 +122,28 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 
 // Given a transaction hash returns the ECDSA `r` and `s` signature values
 func (s *Signer) hashAndSign(
-	invokeTxnV3 *rpc.InvokeTxnV3,
+	broadcastTx *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 ) ([2]*felt.Felt, error) {
-	s.logger.Infow("Signing transaction", "transaction", invokeTxnV3, "chainId", chainID)
+	s.logger.Infow("Signing transaction", "transaction", broadcastTx, "chainId", chainID)
 
-	txnHash, err := hash.TransactionHashInvokeV3(invokeTxnV3, chainID)
+	tempTx := rpc.InvokeTxnV3{
+		Type:                  broadcastTx.Type,
+		SenderAddress:         broadcastTx.SenderAddress,
+		Calldata:              broadcastTx.Calldata,
+		Version:               broadcastTx.Version,
+		Signature:             broadcastTx.Signature,
+		Nonce:                 broadcastTx.Nonce,
+		ResourceBounds:        broadcastTx.ResourceBounds,
+		Tip:                   broadcastTx.Tip,
+		PayMasterData:         broadcastTx.PayMasterData,
+		AccountDeploymentData: broadcastTx.AccountDeploymentData,
+		NonceDataMode:         broadcastTx.NonceDataMode,
+		FeeMode:               broadcastTx.FeeMode,
+		ProofFacts:            broadcastTx.ProofFacts,
+	}
+
+	txnHash, err := hash.TransactionHashInvokeV3(&tempTx, chainID)
 	if err != nil {
 		return [2]*felt.Felt{}, err
 	}
