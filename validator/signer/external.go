@@ -102,6 +102,8 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		AccountDeploymentData: []*felt.Felt{},
 		NonceDataMode:         rpc.DAModeL1,
 		FeeMode:               rpc.DAModeL1,
+		Proof:                 []string{},
+		ProofFacts:            []*felt.Felt{},
 	}
 
 	return attestTransaction, nil
