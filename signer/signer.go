@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -125,7 +126,8 @@ func (s *Signer) hashAndSign(
 	broadcastTx *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 ) ([2]*felt.Felt, error) {
-	s.logger.Infow("Signing transaction", "transaction", broadcastTx, "chainId", chainID)
+	txJSONStr := sanitizeTx(broadcastTx, s.logger)
+	s.logger.Infow("Signing transaction", "transaction", txJSONStr, "chainId", chainID)
 
 	tempTx := rpc.InvokeTxnV3{
 		Type:                  broadcastTx.Type,
@@ -161,4 +163,17 @@ func (s *Signer) hashAndSign(
 		new(felt.Felt).SetBigInt(s1),
 		new(felt.Felt).SetBigInt(s2),
 	}, nil
+}
+
+func sanitizeTx(tx *rpc.BroadcastInvokeTxnV3, logger *utils.ZapLogger) string {
+	txJSON, err := json.Marshal(tx)
+	if err != nil {
+		logger.Errorw("Failed to marshal transaction", "marshalErr", err)
+
+		return "<marshal failed>"
+	}
+	txJSONStr := strings.ReplaceAll(string(txJSON), "\n", "")
+	txJSONStr = strings.ReplaceAll(txJSONStr, "\r", "")
+
+	return txJSONStr
 }
