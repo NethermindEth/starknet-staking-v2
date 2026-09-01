@@ -2,12 +2,18 @@ package validator
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/starknet.go/client"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
 )
+
+// Starknet.Go only accepts the exact spec version it was built against, 0.10.2.
+// 0.10.3 describes the same node API, so it is accepted too.
+var supportedSpecVersions = []string{"0.10.2", "0.10.3"}
 
 // Returns a new Starknet.Go RPC Provider
 func NewProvider[Logger utils.Logger](
@@ -16,7 +22,23 @@ func NewProvider[Logger utils.Logger](
 	logger Logger,
 ) (*rpc.Provider, error) {
 	provider, err := rpc.NewProvider(ctx, providerURL)
-	if err != nil {
+	if errors.Is(err, rpc.ErrIncompatibleVersion) {
+		nodeSpecVersion, specErr := provider.SpecVersion(ctx)
+		if specErr != nil {
+			return nil, errors.Errorf("cannot read spec version of node at %s: %w", providerURL, specErr)
+		}
+		if !slices.Contains(supportedSpecVersions, nodeSpecVersion) {
+			return nil, errors.Errorf(
+				"node at %s implements JSON-RPC specification %s, this tool requires %s",
+				providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
+			)
+		}
+		logger.Warnw(
+			"node implements a different JSON-RPC specification than Starknet.Go targets",
+			"providerUrl", providerURL,
+			"nodeVersion", nodeSpecVersion,
+		)
+	} else if err != nil {
 		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err)
 	}
 

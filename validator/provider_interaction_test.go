@@ -1,6 +1,8 @@
 package validator_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils"
@@ -8,6 +10,23 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+func mockNodeWithSpecVersion(t *testing.T, specVersion string) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write(
+				[]byte(`{"jsonrpc": "2.0", "result": "` + specVersion + `", "id": 1}`),
+			)
+			require.NoError(t, err)
+		}),
+	)
+	t.Cleanup(server.Close)
+
+	return server
+}
 
 func TestNewProvider(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -23,6 +42,28 @@ func TestNewProvider(t *testing.T) {
 		require.Nil(t, provider)
 		expectedErrorMsg := "cannot create RPC provider at " + providerURL
 		require.ErrorContains(t, err, expectedErrorMsg)
+	})
+
+	t.Run("Supported spec version", func(t *testing.T) {
+		server := mockNodeWithSpecVersion(t, "0.10.3")
+
+		provider, err := validator.NewProvider(t.Context(), server.URL, logger)
+
+		require.NoError(t, err)
+		require.NotNil(t, provider)
+	})
+
+	t.Run("Unsupported spec version", func(t *testing.T) {
+		for _, specVersion := range []string{"0.9.0", "0.10.1", "0.10.4", "0.11.0"} {
+			t.Run(specVersion, func(t *testing.T) {
+				server := mockNodeWithSpecVersion(t, specVersion)
+
+				provider, err := validator.NewProvider(t.Context(), server.URL, logger)
+
+				require.Nil(t, provider)
+				require.ErrorContains(t, err, "implements JSON-RPC specification "+specVersion)
+			})
+		}
 	})
 
 	envVars, err := validator.LoadEnv(t)
