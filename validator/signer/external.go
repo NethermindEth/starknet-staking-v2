@@ -102,6 +102,8 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		AccountDeploymentData: []*felt.Felt{},
 		NonceDataMode:         rpc.DAModeL1,
 		FeeMode:               rpc.DAModeL1,
+		Proof:                 []string{},
+		ProofFacts:            []*felt.Felt{},
 	}
 
 	return attestTransaction, nil
@@ -124,7 +126,7 @@ func (s *ExternalSigner) EstimateFee(
 	estimateFee, err := s.Provider.EstimateFee(
 		s.ctx,
 		[]rpc.BroadcastTxn{txn},
-		[]rpc.SimulationFlag{},
+		[]rpc.EstimateFeeFlag{},
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 	)
 	if s.braavos {
@@ -198,12 +200,12 @@ func SignInvokeTx(
 }
 
 func HashAndSignTx(
-	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
+	bTx *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 	externalSignerURL string,
 ) (signer.Response, error) {
 	// Create request body
-	reqBody := signer.Request{InvokeTxnV3: invokeTxnV3, ChainID: chainID}
+	reqBody := signer.Request{BroadcastInvokeTxnV3: bTx, ChainID: chainID}
 	jsonData, err := json.Marshal(&reqBody)
 	if err != nil {
 		return signer.Response{}, err

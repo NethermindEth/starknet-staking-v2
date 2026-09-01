@@ -115,6 +115,8 @@ func (s *InternalSigner) BuildAttestTransaction(
 		AccountDeploymentData: []*felt.Felt{},
 		NonceDataMode:         rpc.DAModeL1,
 		FeeMode:               rpc.DAModeL1,
+		Proof:                 []string{},
+		ProofFacts:            []*felt.Felt{},
 	}
 
 	return attestTransaction, nil
@@ -135,7 +137,7 @@ func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEsti
 	estimateFee, err := s.Account.Provider.EstimateFee(
 		s.ctx,
 		[]rpc.BroadcastTxn{txn},
-		[]rpc.SimulationFlag{},
+		[]rpc.EstimateFeeFlag{},
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 	)
 	if s.braavos {
