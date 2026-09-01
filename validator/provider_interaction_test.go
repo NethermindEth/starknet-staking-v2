@@ -45,12 +45,16 @@ func TestNewProvider(t *testing.T) {
 	})
 
 	t.Run("Supported spec version", func(t *testing.T) {
-		server := mockNodeWithSpecVersion(t, "0.10.3")
+		for _, specVersion := range []string{"0.10.3", "v0.10.3"} {
+			t.Run(specVersion, func(t *testing.T) {
+				server := mockNodeWithSpecVersion(t, specVersion)
 
-		provider, err := validator.NewProvider(t.Context(), server.URL, logger)
+				provider, err := validator.NewProvider(t.Context(), server.URL, logger)
 
-		require.NoError(t, err)
-		require.NotNil(t, provider)
+				require.NoError(t, err)
+				require.NotNil(t, provider)
+			})
+		}
 	})
 
 	t.Run("Unsupported spec version", func(t *testing.T) {

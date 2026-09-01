@@ -27,7 +27,7 @@ func NewProvider[Logger utils.Logger](
 		if specErr != nil {
 			return nil, errors.Errorf("cannot read spec version of node at %s: %w", providerURL, specErr)
 		}
-		if !slices.Contains(supportedSpecVersions, nodeSpecVersion) {
+		if !slices.Contains(supportedSpecVersions, strings.TrimPrefix(nodeSpecVersion, "v")) {
 			return nil, errors.Errorf(
 				"node at %s implements JSON-RPC specification %s, this tool requires %s",
 				providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
@@ -36,7 +36,7 @@ func NewProvider[Logger utils.Logger](
 		logger.Warnw(
 			"node implements a different JSON-RPC specification than Starknet.Go targets",
 			"providerUrl", providerURL,
-			"nodeVersion", nodeSpecVersion,
+			"nodeSpecVersion", nodeSpecVersion,
 		)
 	} else if err != nil {
 		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err)

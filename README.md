@@ -107,9 +107,9 @@ Using a combination of both approaches is also valid. Values set by flags will o
 PROVIDER_HTTP_URL="http://localhost:6060/v0_10" ./build/validator \
     --config <path_to_config_file> \
     --provider-ws "ws://localhost:6061/v0_10" \
-    --signer-url "http//localhost:8080" \
+    --signer-url "http://localhost:8080" \
     --signer-op-address "0x123" \
-    --private-key "0x456"
+    --signer-priv-key "0x456"
 ```
 
 ## Additional configurations
