@@ -25,7 +25,9 @@ func NewProvider[Logger utils.Logger](
 	if errors.Is(err, rpc.ErrIncompatibleVersion) {
 		nodeSpecVersion, specErr := provider.SpecVersion(ctx)
 		if specErr != nil {
-			return nil, errors.Errorf("cannot read spec version of node at %s: %w", providerURL, specErr)
+			return nil, errors.Errorf(
+				"cannot read spec version of node at %s: %w", providerURL, specErr,
+			)
 		}
 		if !slices.Contains(supportedSpecVersions, strings.TrimPrefix(nodeSpecVersion, "v")) {
 			return nil, errors.Errorf(
