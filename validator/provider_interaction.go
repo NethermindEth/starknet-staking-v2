@@ -11,9 +11,7 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-// Starknet.Go only accepts the exact spec version it was built against, 0.10.2.
-// 0.10.3 describes the same node API, so it is accepted too.
-var supportedSpecVersions = []string{"0.10.2", "0.10.3"}
+var supportedSpecVersions = []string{"0.10.2", "0.10.3", "0.10.4"}
 
 // Returns a new Starknet.Go RPC Provider
 func NewProvider[Logger utils.Logger](
