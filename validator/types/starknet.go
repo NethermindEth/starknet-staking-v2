@@ -21,8 +21,24 @@ func AddressFromString(addrStr string) Address {
 	return Address(*adr)
 }
 
+// Convert the address to a string with the "0x" prefix and the length of 66.
 func (a *Address) String() string {
-	return (*felt.Felt)(a).String()
+	length := 66
+	hexStr := (*felt.Felt)(a).String()
+
+	// Check if the hex value is already of the desired length
+	if len(hexStr) >= length {
+		return hexStr
+	}
+
+	// Extract the hex value without the "0x" prefix
+	hexValue := hexStr[2:]
+	// Pad zeros after the "0x" prefix
+	paddedHexValue := fmt.Sprintf("%0*s", length-2, hexValue)
+	// Add back the "0x" prefix to the padded hex value
+	paddedHexStr := "0x" + paddedHexValue
+
+	return paddedHexStr
 }
 
 func (a *Address) UnmarshalJSON(data []byte) error {
