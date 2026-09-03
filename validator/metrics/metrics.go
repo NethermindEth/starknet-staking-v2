@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 var _ Tracer = (*Metrics)(nil)
@@ -16,7 +17,7 @@ var _ Tracer = (*Metrics)(nil)
 // Metrics represents the metrics server for the validator
 type Metrics struct {
 	server                          *http.Server
-	logger                          *utils.ZapLogger
+	logger                          log.Logger
 	network                         string
 	registry                        *prometheus.Registry
 	latestBlockNumber               *prometheus.GaugeVec
@@ -33,7 +34,7 @@ type Metrics struct {
 }
 
 // NewMetrics creates a new metrics server
-func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics {
+func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 	registry := prometheus.NewRegistry()
 
 	//nolint:exhaustruct,lll // Only specifying used fields // We can't break the lines since it'll show in the output
@@ -161,7 +162,7 @@ func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics
 
 // Start starts the metrics server
 func (m *Metrics) Start() error {
-	m.logger.Infof("Starting metrics server on %s", m.server.Addr)
+	m.logger.Info("Starting metrics server", zap.String("URL", m.server.Addr))
 
 	return m.server.ListenAndServe()
 }
@@ -175,13 +176,17 @@ func (m *Metrics) Stop(ctx context.Context) error {
 
 // UpdateLatestBlockNumber updates the latest block number metric
 func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
-	m.logger.Debugw("UpdateLatestBlockNumber", "blockNumber", blockNumber)
+	m.logger.Debug("UpdateLatestBlockNumber", zap.Uint64("blockNumber", blockNumber))
 	m.latestBlockNumber.WithLabelValues(m.network).Set(float64(blockNumber))
 }
 
 // UpdateEpochInfo updates the epoch-related metrics
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
-	m.logger.Debugw("UpdateEpochInfo", "epochInfo", epochInfo, "targetBlock", targetBlock)
+	m.logger.Debug(
+		"UpdateEpochInfo",
+		zap.Any("epochInfo", epochInfo),
+		zap.Uint64("targetBlock", targetBlock),
+	)
 	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochID))
 	m.currentEpochLength.WithLabelValues(m.network).Set(float64(epochInfo.EpochLen))
 	m.currentEpochStartingBlockNumber.
@@ -193,26 +198,26 @@ func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64
 // UpdateSignerBalance set's the signer account balance. If it is too big a default max value is set
 // instead
 func (m *Metrics) UpdateSignerBalance(balance float64) {
-	m.logger.Debugw("UpdateSignerBalancer", "balance", balance)
+	m.logger.Debug("UpdateSignerBalancer", zap.Float64("balance", balance))
 	m.signerBalance.WithLabelValues(m.network).Set(balance)
 }
 
 // RecordAttestationSubmitted increments the attestation submitted counter
 func (m *Metrics) RecordAttestationSubmitted() {
-	m.logger.Debugw("RecordAttestationSubmitted")
+	m.logger.Debug("RecordAttestationSubmitted")
 	m.attestationSubmittedCount.WithLabelValues(m.network).Inc()
 	m.lastAttestationTimestamp.WithLabelValues(m.network).Set(float64(time.Now().Unix()))
 }
 
 // RecordAttestationFailure increments the attestation failure counter
 func (m *Metrics) RecordAttestationFailure() {
-	m.logger.Debugw("RecordAttestationFailure")
+	m.logger.Debug("RecordAttestationFailure")
 	m.attestationFailureCount.WithLabelValues(m.network).Inc()
 }
 
 // RecordAttestationConfirmed increments the attestation confirmed counter
 func (m *Metrics) RecordAttestationConfirmed() {
-	m.logger.Debugw("RecordAttestationConfirmed")
+	m.logger.Debug("RecordAttestationConfirmed")
 	m.attestationConfirmedCount.WithLabelValues(m.network).Inc()
 }
 

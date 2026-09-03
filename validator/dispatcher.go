@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
-	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
+	"go.uber.org/zap"
 )
 
 // Created a function variable for mocking purposes in tests
@@ -126,7 +127,7 @@ func NewAttestTracker() AttestTracker {
 
 func (a *AttestTracker) UpdateStatus(
 	signer signerP.Signer,
-	logger *junoUtils.ZapLogger,
+	logger log.Logger,
 ) {
 	status := TrackAttest(signer, logger, &a.Hash)
 	a.setStatus(status)
@@ -165,7 +166,7 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 
 //nolint:gocyclo // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
-	signer S, balanceThreshold float64, logger *junoUtils.ZapLogger, tracer metrics.Tracer,
+	signer S, balanceThreshold float64, logger log.Logger, tracer metrics.Tracer,
 ) {
 	var targetBlockHash types.BlockHash
 
@@ -183,10 +184,13 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			targetBlockHash = attest.BlockHash
-			logger.Debugf("building attest transaction for blockhash: %s", targetBlockHash.String())
+			logger.Debug(
+				"building attest transaction for blockhash",
+				zap.String("blockhash", targetBlockHash.String()),
+			)
 			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
-				logger.Errorf("failed to build attest transaction: %s", err.Error())
+				logger.Error("failed to build attest transaction", zap.Error(err))
 
 				continue
 			}
@@ -214,13 +218,13 @@ func (d *EventDispatcher[S]) Dispatch(
 			// or the transaction invoke failed.
 			if !d.CurrentAttest.Transaction.Valid() {
 				targetBlockHash = attest.BlockHash
-				logger.Debugf(
-					"building attest transaction (in `do` stage) for blockhash: %s",
-					&targetBlockHash,
+				logger.Debug(
+					"building attest transaction (in `do` stage) for blockhash",
+					zap.String("blockhash", targetBlockHash.String()),
 				)
 				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
-					logger.Errorf("failed to build attest transaction: %s", err.Error())
+					logger.Error("failed to build attest transaction", zap.Error(err))
 
 					continue
 				}
@@ -231,17 +235,17 @@ func (d *EventDispatcher[S]) Dispatch(
 				logger.Debug("updating attest transaction nonce")
 				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
 				if err != nil {
-					logger.Errorf("failed to update transaction nonce: %s", err.Error())
+					logger.Error("failed to update transaction nonce", zap.Error(err))
 
 					continue
 				}
 			}
 
-			logger.Infof("invoking attest; target block hash: %s", targetBlockHash.String())
+			logger.Info("invoking attest", zap.String("target block hash", targetBlockHash.String()))
 			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
-					logger.Infow(
+					logger.Info(
 						"attestation is already done for this epoch",
 					)
 					d.CurrentAttest.setStatus(Successful)
@@ -249,16 +253,16 @@ func (d *EventDispatcher[S]) Dispatch(
 					continue
 				}
 
-				logger.Errorw(
+				logger.Error(
 					"failed to attest",
-					"error", err.Error(),
+					zap.Error(err),
 				)
 				d.CurrentAttest.setStatus(Failed)
 
 				continue
 			}
 
-			logger.Debugw("attest transaction sent", "hash", resp.Hash)
+			logger.Debug("attest transaction sent", zap.String("hash", resp.Hash.String()))
 			d.CurrentAttest.Hash = *resp.Hash
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
@@ -269,16 +273,16 @@ func (d *EventDispatcher[S]) Dispatch(
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
 			if d.CurrentAttest.Status == Successful {
-				logger.Infow(
+				logger.Info(
 					"successfully attested to target block",
-					"target block hash", targetBlockHash.String(),
+					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
 				tracer.RecordAttestationConfirmed()
 			} else {
-				logger.Warnw(
+				logger.Warn(
 					"failed to attest to target block",
-					"target block hash", targetBlockHash.String(),
-					"latest attest status", d.CurrentAttest.Status,
+					zap.String("targetBlockHash", targetBlockHash.String()),
+					zap.Uint8("latestAttestStatus", uint8(d.CurrentAttest.Status)),
 				)
 				tracer.RecordAttestationFailure()
 			}
@@ -292,23 +296,23 @@ func (d *EventDispatcher[S]) Dispatch(
 
 func TrackAttest[S signerP.Signer](
 	signer S,
-	logger *junoUtils.ZapLogger,
+	logger log.Logger,
 	txHash *felt.Felt,
 ) AttestStatus {
 	txStatus, err := signer.TransactionStatus(txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
-			logger.Infow(
+			logger.Info(
 				"attest transaction status was not found. Will wait.",
-				"transaction hash", txHash,
+				zap.String("transactionHash", txHash.String()),
 			)
 
 			return Ongoing
 		} else {
-			logger.Errorw(
+			logger.Error(
 				"attest transaction FAILED. Will retry.",
-				"transaction hash", txHash,
-				"error", err,
+				zap.String("transactionHash", txHash.String()),
+				zap.Error(err),
 			)
 
 			return Failed
@@ -316,10 +320,10 @@ func TrackAttest[S signerP.Signer](
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
-		logger.Errorw(
+		logger.Error(
 			"attest transaction REVERTED. Will retry.",
-			"transaction hash", txHash,
-			"failure reason", txStatus.FailureReason,
+			zap.String("transactionHash", txHash.String()),
+			zap.String("failureReason", txStatus.FailureReason),
 		)
 
 		return Failed
@@ -327,18 +331,19 @@ func TrackAttest[S signerP.Signer](
 
 	switch txStatus.FinalityStatus {
 	case rpc.TxnStatusReceived, rpc.TxnStatusCandidate, rpc.TxnStatusPreConfirmed:
-		logger.Infow(
-			fmt.Sprintf("attest transaction %s. Will wait.", txStatus.FinalityStatus),
-			"hash", txHash,
+		logger.Info(
+			"attest transaction in processing. Will wait",
+			zap.String("transactionHash", txHash.String()),
+			zap.String("finalityStatus", string(txStatus.FinalityStatus)),
 		)
 
 		return Ongoing
 	default:
-		logger.Infow(
+		logger.Info(
 			"attest transaction SUCCESSFUL.",
-			"transaction hash", txHash,
-			"finality status", txStatus.FinalityStatus,
-			"execution status", txStatus.ExecutionStatus,
+			zap.String("transactionHash", txHash.String()),
+			zap.String("finalityStatus", string(txStatus.FinalityStatus)),
+			zap.String("executionStatus", string(txStatus.ExecutionStatus)),
 		)
 
 		return Successful

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -479,7 +479,7 @@ func TestTrackAttest(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockSigner := mocks.NewMockSigner(mockCtrl)
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 
 	t.Run("attestation fails if error is transaction status not found", func(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)

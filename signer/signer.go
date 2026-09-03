@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
+	"go.uber.org/zap"
 )
 
 const SignEndpoint = "/sign"
@@ -39,12 +40,12 @@ func (r *Response) String() string {
 }
 
 type Signer struct {
-	logger    *utils.ZapLogger
+	logger    log.Logger
 	keyStore  *account.MemKeystore
 	publicKey string
 }
 
-func New(privateKey string, logger *utils.ZapLogger) (Signer, error) {
+func New(privateKey string, logger log.Logger) (Signer, error) {
 	privKey, ok := new(big.Int).SetString(privateKey, 0)
 	if !ok {
 		return Signer{}, errors.Errorf("cannot turn private key %s into a big int", privateKey)
@@ -76,14 +77,17 @@ func (s *Signer) Listen(address string) error {
 		Handler:      mux,
 	}
 
-	s.logger.Infof("server running at %s", address)
+	s.logger.Info(
+		"server running",
+		zap.String("URL", address),
+	)
 
 	return server.ListenAndServe()
 }
 
 // Decodes the request and returns ECDSA `r` and `s` signature values via http
 func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
-	s.logger.Debugw("receiving http request", "request", r)
+	s.logger.Debug("receiving http request", zap.Any("request", r))
 
 	defer func() { _ = r.Body.Close() }()
 
@@ -113,12 +117,15 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
-		s.logger.Errorf("encoding response %s: %s", resp, err)
+		s.logger.Error("encoding response", zap.Error(err), zap.Any("response", resp))
 
 		return
 	}
 
-	s.logger.Debugw("answered http request", "response", resp)
+	s.logger.Debug(
+		"answered http request",
+		zap.Any("response", resp),
+	)
 }
 
 // Given a transaction hash returns the ECDSA `r` and `s` signature values
@@ -127,7 +134,11 @@ func (s *Signer) hashAndSign(
 	chainID *felt.Felt,
 ) ([2]*felt.Felt, error) {
 	txJSONStr := sanitizeTx(broadcastTx, s.logger)
-	s.logger.Infow("Signing transaction", "transaction", txJSONStr, "chainId", chainID)
+	s.logger.Info(
+		"Signing transaction",
+		zap.String("transaction", txJSONStr),
+		zap.String("chainId", chainID.String()),
+	)
 
 	tempTx := rpc.InvokeTxnV3{
 		Type:                  broadcastTx.Type,
@@ -157,7 +168,11 @@ func (s *Signer) hashAndSign(
 		return [2]*felt.Felt{}, err
 	}
 
-	s.logger.Debugw("Signature", "r", s1, "s", s2)
+	s.logger.Debug(
+		"Signature",
+		zap.String("r", s1.String()),
+		zap.String("s", s2.String()),
+	)
 
 	return [2]*felt.Felt{
 		new(felt.Felt).SetBigInt(s1),
@@ -165,10 +180,10 @@ func (s *Signer) hashAndSign(
 	}, nil
 }
 
-func sanitizeTx(tx *rpc.BroadcastInvokeTxnV3, logger *utils.ZapLogger) string {
+func sanitizeTx(tx *rpc.BroadcastInvokeTxnV3, logger log.Logger) string {
 	txJSON, err := json.Marshal(tx)
 	if err != nil {
-		logger.Errorw("Failed to marshal transaction", "marshalErr", err)
+		logger.Error("failed to marshal transaction", zap.Error(err))
 
 		return "<marshal failed>"
 	}

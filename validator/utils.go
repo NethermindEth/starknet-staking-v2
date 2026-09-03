@@ -3,26 +3,28 @@ package validator
 import (
 	"fmt"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
+	"go.uber.org/zap"
 )
 
 func logNewEpoch(
 	epochInfo *types.EpochInfo,
 	attestInfo *types.AttestInfo,
-	logger *utils.ZapLogger,
+	logger log.Logger,
 ) {
-	logger.Infow(
-		fmt.Sprintf("epoch %d started", epochInfo.EpochID+1),
-		"epoch length", epochInfo.EpochLen,
-		"start block", epochInfo.StartingBlock,
-		"end block", epochInfo.StartingBlock+types.BlockNumber(epochInfo.EpochLen),
+	logger.Info(
+		"epoch started",
+		zap.Uint64("epochID", epochInfo.EpochID+1),
+		zap.Uint64("epochLength", epochInfo.EpochLen),
+		zap.Uint64("startBlock", epochInfo.StartingBlock.Uint64()),
+		zap.Uint64("endBlock", epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen),
 	)
-	logger.Infow(
+	logger.Info(
 		"attest info",
-		"target block", attestInfo.TargetBlock.Uint64(),
-		"window start block", attestInfo.WindowStart.Uint64(),
-		"window end block", attestInfo.WindowEnd.Uint64(),
+		zap.Uint64("targetBlock", attestInfo.TargetBlock.Uint64()),
+		zap.Uint64("windowStartBlock", attestInfo.WindowStart.Uint64()),
+		zap.Uint64("windowEndBlock", attestInfo.WindowEnd.Uint64()),
 	)
 }
 
@@ -30,7 +32,7 @@ func logBlock(
 	blockNum uint64,
 	epochInfo *types.EpochInfo,
 	attestInfo *types.AttestInfo,
-	logger *utils.ZapLogger,
+	logger log.Logger,
 ) {
 	base := fmt.Sprintf("block %d received", blockNum)
 	var suffix string

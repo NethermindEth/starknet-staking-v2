@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
+	"go.uber.org/zap"
 )
 
 func tryNewValidator(
@@ -17,7 +18,7 @@ func tryNewValidator(
 	conf *config.Config,
 	snConfig *config.StarknetConfig,
 	retries types.Retries,
-	logger utils.ZapLogger,
+	logger log.Logger,
 	braavosAccount bool,
 ) (validator.Validator, error) {
 	for {
@@ -27,11 +28,10 @@ func tryNewValidator(
 		}
 
 		if strings.Contains(err.Error(), "cannot connect to RPC provider") {
-			logger.Warnf(
-				"couldn't connect with RPC Provider at %s (attempts left: %s)."+
-					" Retrying in 3s...",
-				conf.Provider.HTTP,
-				retries.String(),
+			logger.Warn(
+				"couldn't connect with RPC Provider. Retrying in 3s...",
+				zap.String("provider", conf.Provider.HTTP),
+				zap.String("attemptsLeft", retries.String()),
 			)
 			time.Sleep(3 * time.Second)
 		} else {

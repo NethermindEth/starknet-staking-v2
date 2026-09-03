@@ -8,12 +8,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	configP "github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 const greeting = `
@@ -40,7 +41,7 @@ func NewCommand() cobra.Command {
 	var maxRetries types.Retries
 	var balanceThreshold float64
 	var snConfig configP.StarknetConfig
-	var logger utils.ZapLogger
+	var logger *log.ZapLogger
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
 		// Config takes the values from flags directly,
@@ -67,18 +68,18 @@ func NewCommand() cobra.Command {
 		}
 		maxRetries = parsedRetries
 
-		logLevel := utils.NewLogLevel(utils.INFO)
+		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
 			return err
 		}
 
-		loadedLogger, err := utils.NewZapLogger(logLevel, true)
+		loadedLogger, err := log.NewZapLogger(logLevel, log.WithColour(true))
 		if err != nil {
 			return err
 		}
 
-		logger = *loadedLogger
+		logger = loadedLogger
 
 		return nil
 	}
@@ -95,7 +96,7 @@ func NewCommand() cobra.Command {
 			braavosAccount,
 		)
 		if err != nil {
-			logger.Error(err)
+			logger.Error("couldn't start validator", zap.Error(err))
 
 			return
 		}
@@ -104,13 +105,13 @@ func NewCommand() cobra.Command {
 		if metricsF {
 			// Create metrics server
 			address := fmt.Sprintf("%s:%s", metricsHostF, metricsPortF)
-			metrics := metrics.NewMetrics(address, v.ChainID(cmd.Context()), &logger)
+			metrics := metrics.NewMetrics(address, v.ChainID(cmd.Context()), logger)
 			tracer = metrics
 
 			// Start metrics server in a goroutine
 			go func() {
 				if err := metrics.Start(); err != nil && err.Error() != "http: Server closed" {
-					logger.Errorw("Failed to start metrics server", "error", err)
+					logger.Error("failed to start metrics server", zap.Error(err))
 				}
 			}()
 			// Graceful shutdown at the end
@@ -120,7 +121,7 @@ func NewCommand() cobra.Command {
 				)
 				defer shutdownCancel()
 				if err := metrics.Stop(shutdownCtx); err != nil {
-					logger.Errorw("Failed to stop metrics server", "error", err)
+					logger.Error("failed to stop metrics server", zap.Error(err))
 				}
 			}()
 		}
@@ -138,14 +139,14 @@ func NewCommand() cobra.Command {
 		}()
 
 		// run upgrader tracker
-		go trackLatestRelease(cmd.Context(), &logger)
+		go trackLatestRelease(cmd.Context(), logger)
 
 		// Wait for signal or error
 		select {
 		case <-signalCh:
 			logger.Info("Received shutdown signal")
 		case err := <-errCh:
-			logger.Errorw("Validator stopped with error", "error", err)
+			logger.Error("validator stopped with error", zap.Error(err))
 		}
 	}
 
@@ -225,7 +226,7 @@ func NewCommand() cobra.Command {
 			" Braavos accounts. Only applies for internal signing.",
 	)
 	cmd.Flags().StringVar(
-		&logLevelF, "log-level", utils.INFO.String(), "Options: trace, debug, info, warn, error.",
+		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error.",
 	)
 
 	return cmd

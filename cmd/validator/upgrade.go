@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
+	"go.uber.org/zap"
 )
 
 type GitHubRelease struct {
@@ -68,7 +69,7 @@ func needsUpdate(currentVersion, latestVersion string) (bool, error) {
 	return latestVer.GreaterThan(currentVer), nil
 }
 
-func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
+func trackLatestRelease(ctx context.Context, logger log.Logger) {
 	timer := time.NewTimer(time.Millisecond) // Don't wait the first time
 	defer timer.Stop()
 
@@ -79,7 +80,7 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 		case <-timer.C:
 			latestVersion, err := getLatestRelease(ctx)
 			if err != nil {
-				logger.Debugf("cannot get latest release: %w", err)
+				logger.Debug("cannot get latest release", zap.Error(err))
 
 				continue
 			}
@@ -87,18 +88,18 @@ func trackLatestRelease(ctx context.Context, logger *utils.ZapLogger) {
 			currentVersion := validator.Version
 			needsUpdate, err := needsUpdate(currentVersion, latestVersion)
 			if err != nil {
-				logger.Debug(err.Error())
+				logger.Debug("error checking if update is needed", zap.Error(err))
 
 				continue
 			}
 
 			if needsUpdate {
 				const releasesURL = "https://github.com/NethermindEth/starknet-staking-v2/releases"
-				logger.Warnf(
-					"new release available. Update your tool from %s to %s. %s",
-					currentVersion,
-					latestVersion,
-					releasesURL,
+				logger.Warn(
+					"new release available. Update your tool to the latest version",
+					zap.String("currentVersion", currentVersion),
+					zap.String("latestVersion", latestVersion),
+					zap.String("releasesURL", releasesURL),
 				)
 			}
 			timer.Reset(time.Hour)

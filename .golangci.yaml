@@ -7,7 +7,7 @@ linters:
     - dogsled
     - dupl
     - errcheck
-    - exhaustruct
+    - exhaustruct_v5
     - funlen
     - gochecknoinits
     - goconst
@@ -87,7 +87,7 @@ linters:
       - common-false-positives
     rules:
       - linters:
-          - exhaustruct
+          - exhaustruct_v5
           - funlen
           - gosec
           - lll

@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 func NewCommand() cobra.Command {
@@ -18,17 +19,17 @@ func NewCommand() cobra.Command {
 	var logLevelF string
 
 	var privKey string
-	var logger *utils.ZapLogger
+	var logger *log.ZapLogger
 
 	preRunE := func(_ *cobra.Command, args []string) error {
 		var err error
 
-		logLevel := utils.NewLogLevel(utils.INFO)
+		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
 			return err
 		}
-		logger, err = utils.NewZapLogger(logLevel, true)
+		logger, err = log.NewZapLogger(logLevel, log.WithColour(true))
 		if err != nil {
 			return err
 		}
@@ -64,7 +65,7 @@ func NewCommand() cobra.Command {
 	)
 	cmd.Flags().StringVar(&envFilePath, "env", ".env", "Path to JSON config file")
 	cmd.Flags().StringVar(
-		&logLevelF, "log-level", utils.INFO.String(), "Options: trace, debug, info, warn, error",
+		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error",
 	)
 
 	return cmd
@@ -79,10 +80,13 @@ func main() {
 	}
 }
 
-func readSignerKeyFromEnv(envFilePath string, logger *utils.ZapLogger) (string, error) {
+func readSignerKeyFromEnv(envFilePath string, logger *log.ZapLogger) (string, error) {
 	err := godotenv.Load(envFilePath)
 	if err != nil {
-		logger.Debugf("couldn't load env var at %s: %s", envFilePath, err)
+		logger.Debug("couldn't load env var file",
+			zap.String("envFilePath", envFilePath),
+			zap.Error(err),
+		)
 	}
 
 	signerKey := os.Getenv("SIGNER_PRIVATE_KEY")
