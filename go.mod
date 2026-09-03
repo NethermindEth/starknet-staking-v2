@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/NethermindEth/juno v0.16.5
+	github.com/NethermindEth/juno v0.16.6
 	github.com/NethermindEth/starknet.go v0.18.0-beta.2.0.20260728023339-ccdd52a052ce
 	github.com/cockroachdb/errors v1.14.0
 	github.com/joho/godotenv v1.5.1
@@ -24,11 +24,11 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.25.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cockroachdb/crlib v0.0.0-20251122031428-fe658a2dbda1 // indirect
+	github.com/cockroachdb/crlib v0.0.0-20260823170307-44ef894cf300 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20241215232642-bb51bb14a506 // indirect
-	github.com/cockroachdb/pebble/v2 v2.1.6 // indirect
+	github.com/cockroachdb/pebble/v2 v2.1.7 // indirect
 	github.com/cockroachdb/redact v1.1.8 // indirect
-	github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b // indirect
+	github.com/cockroachdb/swiss v0.0.0-20260820225851-333444432258 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20250429170803-42689b6311bb // indirect
 	github.com/consensys/gnark-crypto v0.21.0 // indirect
 	github.com/deckarep/golang-set/v2 v2.9.0 // indirect
@@ -42,7 +42,7 @@ require (
 	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/minio/minlz v1.0.1 // indirect
+	github.com/minio/minlz v1.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect

@@ -4,6 +4,8 @@ github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAw
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/NethermindEth/juno v0.16.5 h1:PNs1eJDXADFriZDo+HnC81m+fDhWUuC6vyDGRdql2lM=
 github.com/NethermindEth/juno v0.16.5/go.mod h1:qqIWeD9yeXgzHN51HwMeiO5voaonSUK//473xyPDMjw=
+github.com/NethermindEth/juno v0.16.6 h1:wRWpyNwx84KIX69IInCmR1CR4hqV58bKdpUnWne6ysU=
+github.com/NethermindEth/juno v0.16.6/go.mod h1:lJyfrkPnS5lF06Bv6MxXuiQHUQfFvyeJTEKkmft/Eic=
 github.com/NethermindEth/starknet.go v0.18.0-beta.2.0.20260728023339-ccdd52a052ce h1:EETz++wLz9JcKD9OA6tmF5b4hBIM/yGz7a9QBxSXy8I=
 github.com/NethermindEth/starknet.go v0.18.0-beta.2.0.20260728023339-ccdd52a052ce/go.mod h1:72WzcIncBwvAUANawfRtKRR+6nUrc9eYMYs6QEbbh1Y=
 github.com/RaduBerinde/axisds v0.1.0 h1:YItk/RmU5nvlsv/awo2Fjx97Mfpt4JfgtEVAGPrLdz8=
@@ -20,6 +22,8 @@ github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UF
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cockroachdb/crlib v0.0.0-20251122031428-fe658a2dbda1 h1:iX0YCYC5Jbt2/g7zNTP/QxhrV8Syp5kkzNiERKeN1uE=
 github.com/cockroachdb/crlib v0.0.0-20251122031428-fe658a2dbda1/go.mod h1:NjNuToN/FbhwH1cCyM9G4Rhtxx+ZaOgtoqFR+thng7w=
+github.com/cockroachdb/crlib v0.0.0-20260823170307-44ef894cf300 h1:aoz4q3aSORECbXRujkHXsSO/8DT0sNH3lhKB+9erjQo=
+github.com/cockroachdb/crlib v0.0.0-20260823170307-44ef894cf300/go.mod h1:NjNuToN/FbhwH1cCyM9G4Rhtxx+ZaOgtoqFR+thng7w=
 github.com/cockroachdb/datadriven v1.0.3-0.20250407164829-2945557346d5 h1:UycK/E0TkisVrQbSoxvU827FwgBBcZ95nRRmpj/12QI=
 github.com/cockroachdb/datadriven v1.0.3-0.20250407164829-2945557346d5/go.mod h1:jsaKMvD3RBCATk1/jbUZM8C9idWBJME9+VRZ5+Liq1g=
 github.com/cockroachdb/errors v1.14.0 h1:EfdVEJpN3z8rPMo43Yit59LxoiIa470fSXpZXuEs+ZI=
@@ -28,12 +32,17 @@ github.com/cockroachdb/logtags v0.0.0-20241215232642-bb51bb14a506 h1:ASDL+UJcILM
 github.com/cockroachdb/logtags v0.0.0-20241215232642-bb51bb14a506/go.mod h1:Mw7HqKr2kdtu6aYGn3tPmAftiP3QPX63LdK/zcariIo=
 github.com/cockroachdb/metamorphic v0.0.0-20231108215700-4ba948b56895 h1:XANOgPYtvELQ/h4IrmPAohXqe2pWA8Bwhejr3VQoZsA=
 github.com/cockroachdb/metamorphic v0.0.0-20231108215700-4ba948b56895/go.mod h1:aPd7gM9ov9M8v32Yy5NJrDyOcD8z642dqs+F0CeNXfA=
+github.com/cockroachdb/pebble v1.1.5 h1:5AAWCBWbat0uE0blr8qzufZP5tBjkRyy/jWe1QWLnvw=
 github.com/cockroachdb/pebble/v2 v2.1.6 h1:GDo7Z2+LgFZ7LJLdLmBXhDeTVIwgSPGxIT15hE7vGqM=
 github.com/cockroachdb/pebble/v2 v2.1.6/go.mod h1:Reo1RTniv1UjVTAu/Fv74y5i3kJ5gmVrPhO9UtFiKn8=
+github.com/cockroachdb/pebble/v2 v2.1.7 h1:hFQnbsniSWg9BVcNKMuaUufYPiVXY6uJvaY9grbQ9+U=
+github.com/cockroachdb/pebble/v2 v2.1.7/go.mod h1:JhU5cqqYkr2BdsBHbZhRZOryAtfhcV3eNI/oBcbrxWc=
 github.com/cockroachdb/redact v1.1.8 h1:8eVLLj6juKxiKrAEw2b8cJvNqWq++U8WOfQFuL7KTaA=
 github.com/cockroachdb/redact v1.1.8/go.mod h1:GceHHpJ0rMDpYARL5In88Alq/xMBUtVlz7Qxix6ZVkw=
 github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b h1:VXvSNzmr8hMj8XTuY0PT9Ane9qZGul/p67vGYwl9BFI=
 github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b/go.mod h1:yBRu/cnL4ks9bgy4vAASdjIW+/xMlFwuHKqtmh3GZQg=
+github.com/cockroachdb/swiss v0.0.0-20260820225851-333444432258 h1:IJ+uNItEm0qx9FE2AgIc1PMsCUtk8nbSIzhQE1t5GWw=
+github.com/cockroachdb/swiss v0.0.0-20260820225851-333444432258/go.mod h1:yBRu/cnL4ks9bgy4vAASdjIW+/xMlFwuHKqtmh3GZQg=
 github.com/cockroachdb/tokenbucket v0.0.0-20250429170803-42689b6311bb h1:3bCgBvB8PbJVMX1ouCcSIxvsqKPYM7gs72o0zC76n9g=
 github.com/cockroachdb/tokenbucket v0.0.0-20250429170803-42689b6311bb/go.mod h1:7nc4anLGjupUW/PeY5qiNYsdNXj7zopG+eqsS7To5IQ=
 github.com/consensys/gnark-crypto v0.21.0 h1:FDHibVIk4T5LkOKAkiN38g8gEvOxNcM10mLHOqvFTD0=
@@ -80,6 +89,8 @@ github.com/leanovate/gopter v0.2.11 h1:vRjThO1EKPb/1NsDXuDrzldR28RLkBflWYcU9CvzW
 github.com/leanovate/gopter v0.2.11/go.mod h1:aK3tzZP/C+p1m3SPRE4SYZFGP7jjkuSI4f7Xvpt0S9c=
 github.com/minio/minlz v1.0.1 h1:OUZUzXcib8diiX+JYxyRLIdomyZYzHct6EShOKtQY2A=
 github.com/minio/minlz v1.0.1/go.mod h1:qT0aEB35q79LLornSzeDH75LBf3aH1MV+jB5w9Wasec=
+github.com/minio/minlz v1.2.0 h1:6IOBuiHg04QxvbFfgFLT/9sMaO/UhL7S+ApW1mK8q5A=
+github.com/minio/minlz v1.2.0/go.mod h1:Ls9H7nlkASeCcdl5thjVD5Eraj6z+zGa7xtq57jIKD4=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4=
