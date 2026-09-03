@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	signerP "github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
@@ -31,7 +31,7 @@ func TestNewInternalSigner(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 	envVars, envVarsErr := validator.LoadEnv(t)
 	loadedEnvVars := envVarsErr == nil
 
@@ -75,7 +75,7 @@ func TestNewInternalSigner(t *testing.T) {
 		}
 
 		// Test
-		logger := utils.NewNopZapLogger()
+		logger := log.NewNopZapLogger()
 		internalSigner, err := signer.NewInternalSigner(
 			t.Context(), provider, logger, &configSigner, contractAddresses, braavosAccount,
 		)
@@ -554,7 +554,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockSigner := mocks.NewMockSigner(mockCtrl)
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 
 	t.Run("Return error: fetching epoch info error", func(t *testing.T) {
 		validatorOperationalAddress := types.AddressFromString("0x123")

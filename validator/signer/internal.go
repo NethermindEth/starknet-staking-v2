@@ -6,7 +6,7 @@ import (
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
-	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
@@ -15,6 +15,7 @@ import (
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
 	"github.com/cockroachdb/errors"
+	"go.uber.org/zap"
 )
 
 var _ Signer = (*InternalSigner)(nil)
@@ -30,7 +31,7 @@ type InternalSigner struct {
 func NewInternalSigner(
 	ctx context.Context,
 	provider *rpc.Provider,
-	logger *junoUtils.ZapLogger,
+	logger log.Logger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
 	braavos bool,
@@ -58,9 +59,15 @@ func NewInternalSigner(
 	validationContracts := types.ValidationContractsFromAddresses(
 		addresses.SetDefaults(chainIDStr),
 	)
-	logger.Infof("Validation contracts: %s", validationContracts.String())
+	logger.Info(
+		"Validation contracts",
+		zap.String("validationContracts", validationContracts.String()),
+	)
 
-	logger.Debugw("internal signer has been set up", "address", accountAddr.String())
+	logger.Debug(
+		"internal signer has been set up",
+		zap.String("address", accountAddr.String()),
+	)
 
 	return InternalSigner{
 		ctx:                 ctx,

@@ -5,11 +5,12 @@ import (
 
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
-	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
+	"go.uber.org/zap"
 	"lukechampine.com/uint128"
 )
 
@@ -109,20 +110,20 @@ func FetchValidatorBalance[S Signer](signer S) (types.Balance, error) {
 }
 
 func FetchEpochAndAttestInfo[S Signer](
-	signer S, logger *junoUtils.ZapLogger,
+	signer S, logger log.Logger,
 ) (types.EpochInfo, types.AttestInfo, error) {
 	epochInfo, err := FetchEpochInfo(signer)
 	if err != nil {
 		return types.EpochInfo{}, types.AttestInfo{}, err
 	}
-	logger.Debugw(
+	logger.Debug(
 		"fetched epoch info",
-		"epoch ID", epochInfo.EpochID,
-		"epoch starting block", epochInfo.StartingBlock,
-		"epoch ending block", epochInfo.StartingBlock+
-			types.BlockNumber(epochInfo.EpochLen),
+		zap.Uint64("epochID", epochInfo.EpochID),
+		zap.Uint64("epochStartingBlock", epochInfo.StartingBlock.Uint64()),
+		zap.Uint64("epochEndingBlock",
+			epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen,
+		),
 	)
-
 	attestWindow, windowErr := FetchAttestWindow(signer)
 	if windowErr != nil {
 		return types.EpochInfo{}, types.AttestInfo{}, windowErr
@@ -137,10 +138,10 @@ func FetchEpochAndAttestInfo[S Signer](
 		WindowEnd:   blockNum + types.BlockNumber(attestWindow),
 	}
 
-	logger.Debugw(
+	logger.Debug(
 		"data received and parsed",
-		"epoch", epochInfo,
-		"attestation", attestInfo,
+		zap.Any("epoch", epochInfo),
+		zap.Any("attestation", attestInfo),
 	)
 
 	return epochInfo, attestInfo, nil
