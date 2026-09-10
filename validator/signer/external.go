@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/NethermindEth/juno/core/felt"
-	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
@@ -37,7 +37,7 @@ type ExternalSigner struct {
 func NewExternalSigner(
 	ctx context.Context,
 	provider *rpc.Provider,
-	logger *junoUtils.ZapLogger,
+	logger log.Logger,
 	sig *config.Signer,
 	addresses *config.ContractAddresses,
 	braavos bool,

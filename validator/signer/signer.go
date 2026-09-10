@@ -5,11 +5,12 @@ import (
 
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
-	junoUtils "github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
+	"go.uber.org/zap"
 	"lukechampine.com/uint128"
 )
 
@@ -59,7 +60,7 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 
 	return types.EpochInfo{
 		StakerAddress: types.Address(*result[0]),
-		Stake:         uint128.New(stake[0], stake[1]), //nolint:gosec // Bits returns [4]uint64
+		Stake:         uint128.New(stake[0], stake[1]),
 		EpochLen:      result[2].Uint64(),
 		EpochID:       result[3].Uint64(),
 		StartingBlock: types.BlockNumber(result[4].Uint64()),
@@ -109,20 +110,20 @@ func FetchValidatorBalance[S Signer](signer S) (types.Balance, error) {
 }
 
 func FetchEpochAndAttestInfo[S Signer](
-	signer S, logger *junoUtils.ZapLogger,
+	signer S, logger log.Logger,
 ) (types.EpochInfo, types.AttestInfo, error) {
 	epochInfo, err := FetchEpochInfo(signer)
 	if err != nil {
 		return types.EpochInfo{}, types.AttestInfo{}, err
 	}
-	logger.Debugw(
+	logger.Debug(
 		"fetched epoch info",
-		"epoch ID", epochInfo.EpochID,
-		"epoch starting block", epochInfo.StartingBlock,
-		"epoch ending block", epochInfo.StartingBlock+
-			types.BlockNumber(epochInfo.EpochLen),
+		zap.Uint64("epochID", epochInfo.EpochID),
+		zap.Uint64("epochStartingBlock", epochInfo.StartingBlock.Uint64()),
+		zap.Uint64("epochEndingBlock",
+			epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen,
+		),
 	)
-
 	attestWindow, windowErr := FetchAttestWindow(signer)
 	if windowErr != nil {
 		return types.EpochInfo{}, types.AttestInfo{}, windowErr
@@ -130,17 +131,17 @@ func FetchEpochAndAttestInfo[S Signer](
 
 	blockNum := ComputeBlockNumberToAttestTo(&epochInfo, attestWindow)
 
-	//nolint:exhaustruct // Purposely not using the block hash
+	//nolint:exhaustruct_v5 // Purposely not using the block hash
 	attestInfo := types.AttestInfo{
 		TargetBlock: blockNum,
 		WindowStart: blockNum + types.BlockNumber(constants.MinAttestationWindow),
 		WindowEnd:   blockNum + types.BlockNumber(attestWindow),
 	}
 
-	logger.Debugw(
+	logger.Debug(
 		"data received and parsed",
-		"epoch", epochInfo,
-		"attestation", attestInfo,
+		zap.Any("epoch", epochInfo),
+		zap.Any("attestation", attestInfo),
 	)
 
 	return epochInfo, attestInfo, nil
@@ -180,7 +181,7 @@ func ComputeBlockNumberToAttestTo(
 	epochInfo *types.EpochInfo,
 	attestWindow uint64,
 ) types.BlockNumber {
-	hash := crypto.PoseidonArray(
+	hash := crypto.PoseidonElems(
 		new(felt.Felt).SetBigInt(epochInfo.Stake.Big()),
 		new(felt.Felt).SetUint64(epochInfo.EpochID),
 		epochInfo.StakerAddress.Felt(),

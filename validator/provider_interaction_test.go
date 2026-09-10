@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -32,7 +32,7 @@ func TestNewProvider(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 
 	t.Run("Error creating provider", func(t *testing.T) {
 		providerURL := "wrong url"
@@ -45,7 +45,7 @@ func TestNewProvider(t *testing.T) {
 	})
 
 	t.Run("Supported spec version", func(t *testing.T) {
-		for _, specVersion := range []string{"0.10.3", "v0.10.3"} {
+		for _, specVersion := range []string{"0.10.3", "v0.10.3", "0.10.4"} {
 			t.Run(specVersion, func(t *testing.T) {
 				server := mockNodeWithSpecVersion(t, specVersion)
 
@@ -58,7 +58,7 @@ func TestNewProvider(t *testing.T) {
 	})
 
 	t.Run("Unsupported spec version", func(t *testing.T) {
-		for _, specVersion := range []string{"0.9.0", "0.10.1", "0.10.4", "0.11.0"} {
+		for _, specVersion := range []string{"0.9.0", "0.10.1", "0.10.5", "0.11.0"} {
 			t.Run(specVersion, func(t *testing.T) {
 				server := mockNodeWithSpecVersion(t, specVersion)
 
@@ -92,7 +92,7 @@ func TestBlockHeaderSubscription(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 
 	t.Run("Error creating provider", func(t *testing.T) {
 		wsProviderURL := "wrong url"

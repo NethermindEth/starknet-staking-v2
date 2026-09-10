@@ -35,8 +35,8 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (a Address) MarshalJSON() ([]byte, error) {
-	return (*felt.Felt)(&a).MarshalJSON()
+func (a Address) MarshalText() ([]byte, error) {
+	return felt.Felt(a).MarshalText()
 }
 
 type BlockHash felt.Felt

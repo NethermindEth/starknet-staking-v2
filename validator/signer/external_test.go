@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	s "github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
@@ -23,7 +23,7 @@ func TestExternalSignerAddress(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 
 	t.Run("Return signer address", func(t *testing.T) {
 		operationalAddress := felt.NewUnsafeFromString[felt.Felt]("0x123")

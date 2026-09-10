@@ -5,19 +5,20 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet.go/client"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
+	"go.uber.org/zap"
 )
 
 var supportedSpecVersions = []string{"0.10.2", "0.10.3", "0.10.4"}
 
 // Returns a new Starknet.Go RPC Provider
-func NewProvider[Logger utils.Logger](
+func NewProvider(
 	ctx context.Context,
 	providerURL string,
-	logger Logger,
+	logger log.Logger,
 ) (*rpc.Provider, error) {
 	provider, err := rpc.NewProvider(ctx, providerURL)
 	if errors.Is(err, rpc.ErrIncompatibleVersion) {
@@ -33,39 +34,39 @@ func NewProvider[Logger utils.Logger](
 				providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
 			)
 		}
-		logger.Warnw(
+		logger.Warn(
 			"node implements a different JSON-RPC specification than Starknet.Go targets",
-			"providerUrl", providerURL,
-			"nodeSpecVersion", nodeSpecVersion,
+			zap.String("providerUrl", providerURL),
+			zap.String("nodeSpecVersion", nodeSpecVersion),
 		)
 	} else if err != nil {
 		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err)
 	}
 
-	logger.Infof("connected to RPC at %s", providerURL)
+	logger.Info("connected to RPC", zap.String("providerURL", providerURL))
 
 	return provider, nil
 }
 
 // Returns a Go channel where BlockHeaders are received
-func SubscribeToBlockHeaders[Logger utils.Logger](
+func SubscribeToBlockHeaders(
 	ctx context.Context,
 	wsProviderURL string,
-	logger Logger,
+	logger log.Logger,
 ) (
 	*rpc.WsProvider,
 	chan *rpc.BlockHeader,
 	*client.ClientSubscription,
 	error,
 ) {
-	logger.Debugw("initialising websocket connection", "wsProviderUrl", wsProviderURL)
+	logger.Debug("initialising websocket connection", zap.String("wsProviderUrl", wsProviderURL))
 	// This needs a timeout or something
 	wsProvider, err := rpc.NewWebsocketProvider(ctx, wsProviderURL)
 	if err != nil {
 		return nil, nil, nil, errors.Errorf("dialling WS provider at %s: %w", wsProviderURL, err)
 	}
 
-	logger.Debugw("Subscribing to new block headers...")
+	logger.Debug("Subscribing to new block headers...")
 	headersFeed := make(chan *rpc.BlockHeader)
 	clientSubscription, err := wsProvider.SubscribeNewHeads(
 		ctx, headersFeed, new(rpc.SubscriptionBlockID).WithLatestTag(),
@@ -74,7 +75,10 @@ func SubscribeToBlockHeaders[Logger utils.Logger](
 		return nil, nil, nil, errors.Errorf("subscribing to new block headers: %w", err)
 	}
 
-	logger.Infof("subscribed to new block header. Subscription ID: %s", clientSubscription.ID())
+	logger.Info(
+		"subscribed to new block header",
+		zap.String("subscription ID", clientSubscription.ID()),
+	)
 
 	return wsProvider, headersFeed, clientSubscription, nil
 }

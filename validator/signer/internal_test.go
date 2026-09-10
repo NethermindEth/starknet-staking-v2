@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	signerP "github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
@@ -31,7 +31,7 @@ func TestNewInternalSigner(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 	envVars, envVarsErr := validator.LoadEnv(t)
 	loadedEnvVars := envVarsErr == nil
 
@@ -75,7 +75,7 @@ func TestNewInternalSigner(t *testing.T) {
 		}
 
 		// Test
-		logger := utils.NewNopZapLogger()
+		logger := log.NewNopZapLogger()
 		internalSigner, err := signer.NewInternalSigner(
 			t.Context(), provider, logger, &configSigner, contractAddresses, braavosAccount,
 		)
@@ -288,7 +288,7 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		epochInfo, err := signer.FetchEpochInfo(mockSigner)
@@ -315,7 +315,7 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(1)}, nil)
 
 		epochInfo, err := signer.FetchEpochInfo(mockSigner)
@@ -359,7 +359,7 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(
 				[]*felt.Felt{stakerAddress, stake, epochLen, epochID, currentEpochStartingBlock},
 				nil,
@@ -401,7 +401,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		mockSigner.EXPECT().ValidationContracts().Return(
@@ -429,7 +429,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{}, nil)
 
 		mockSigner.EXPECT().ValidationContracts().Return(
@@ -457,7 +457,7 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(16)}, nil)
 
 		mockSigner.EXPECT().ValidationContracts().Return(
@@ -495,7 +495,7 @@ func TestFetchAttestWindow(t *testing.T) {
 //
 // 		mockSigner.
 // 			EXPECT().
-// 			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+// 			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 // 			Return(nil, errors.New("some contract error"))
 //
 // 		balance, err := signer.FetchValidatorBalance(mockSigner)
@@ -517,7 +517,7 @@ func TestFetchAttestWindow(t *testing.T) {
 //
 // 		mockSigner.
 // 			EXPECT().
-// 			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+// 			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 // 			Return([]*felt.Felt{}, nil)
 //
 // 		balance, err := signer.FetchValidatorBalance(mockSigner)
@@ -539,7 +539,7 @@ func TestFetchAttestWindow(t *testing.T) {
 //
 // 		mockSigner.
 // 			EXPECT().
-// 			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+// 			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 // 			Return([]*felt.Felt{new(felt.Felt).SetUint64(1)}, nil)
 //
 // 		balance, err := signer.FetchValidatorBalance(mockSigner)
@@ -554,7 +554,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	mockSigner := mocks.NewMockSigner(mockCtrl)
-	logger := utils.NewNopZapLogger()
+	logger := log.NewNopZapLogger()
 
 	t.Run("Return error: fetching epoch info error", func(t *testing.T) {
 		validatorOperationalAddress := types.AddressFromString("0x123")
@@ -573,7 +573,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		mockSigner.EXPECT().ValidationContracts().Return(
@@ -611,7 +611,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		epochStartingBlock := uint64(5)
 		mockSigner.
 			EXPECT().
-			Call(expectedEpochInfoFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{
 				new(felt.Felt).SetUint64(1),
 				new(felt.Felt).SetUint64(2),
@@ -630,7 +630,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedWindowFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(mockSigner, logger)
@@ -675,7 +675,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedEpochInfoFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(
 				[]*felt.Felt{
 					stakerAddress,
@@ -699,7 +699,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		attestWindow := uint64(16)
 		mockSigner.
 			EXPECT().
-			Call(expectedWindowFnCall, rpc.BlockID{Tag: "latest"}).
+			Call(expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(attestWindow)}, nil)
 
 		// Test

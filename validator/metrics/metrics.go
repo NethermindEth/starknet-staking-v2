@@ -5,18 +5,21 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 var _ Tracer = (*Metrics)(nil)
 
 // Metrics represents the metrics server for the validator
+const networkLabel = "network"
+
 type Metrics struct {
 	server                          *http.Server
-	logger                          *utils.ZapLogger
+	logger                          log.Logger
 	network                         string
 	registry                        *prometheus.Registry
 	latestBlockNumber               *prometheus.GaugeVec
@@ -33,10 +36,10 @@ type Metrics struct {
 }
 
 // NewMetrics creates a new metrics server
-func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics {
+func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 	registry := prometheus.NewRegistry()
 
-	//nolint:exhaustruct,lll // Only specifying used fields // We can't break the lines since it'll show in the output
+	//nolint:exhaustruct_v5,lll // Only specifying used fields // We can't break the lines since it'll show in the output
 	m := &Metrics{
 		logger:   logger,
 		network:  chainID,
@@ -46,77 +49,77 @@ func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics
 				Name: "validator_attestation_starknet_latest_block_number",
 				Help: "The latest block number seen by the validator on the Starknet network",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochID: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_id",
 				Help: "The ID of the current epoch the validator is participating in",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochLength: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_length",
 				Help: "The total length (in blocks) of the current epoch",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochStartingBlockNumber: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_starting_block_number",
 				Help: "The first block number of the current epoch",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochAssignedBlockNumber: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_assigned_block_number",
 				Help: "The specific block number within the current epoch for which the validator is assigned to attest",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		lastAttestationTimestamp: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_last_attestation_timestamp_seconds",
 				Help: "The Unix timestamp (in seconds) of the last successful attestation submission",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		attestationSubmittedCount: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "validator_attestation_attestation_submitted_count",
 				Help: "The total number of attestations submitted by the validator since startup",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		attestationFailureCount: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "validator_attestation_attestation_failure_count",
 				Help: "The total number of attestation transaction submission failures encountered by the validator since startup",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		attestationConfirmedCount: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "validator_attestation_attestation_confirmed_count",
 				Help: "The total number of attestations that have been confirmed on the network since validator startup",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		signerBalance: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_signer_balance",
 				Help: "The balance of the account that signs the attestation after each attest transaction",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		signerBalanceBelowThreshold: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_signer_below_threshold",
 				Help: "Set to one if the account that signs the attestation has it's balance below certain threshold",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 	}
 
@@ -144,10 +147,10 @@ func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics
 			m.logger.Errorf("Failed to write health check response: %v", err)
 		}
 	})
-	//nolint:exhaustruct // Using default values
+	//nolint:exhaustruct_v5 // Using default values
 	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
-	//nolint:exhaustruct // Only specifying used fields
+	//nolint:exhaustruct_v5 // Only specifying used fields
 	m.server = &http.Server{
 		Addr:              serverAddress,
 		Handler:           mux,
@@ -161,7 +164,7 @@ func NewMetrics(serverAddress, chainID string, logger *utils.ZapLogger) *Metrics
 
 // Start starts the metrics server
 func (m *Metrics) Start() error {
-	m.logger.Infof("Starting metrics server on %s", m.server.Addr)
+	m.logger.Info("Starting metrics server", zap.String("URL", m.server.Addr))
 
 	return m.server.ListenAndServe()
 }
@@ -175,13 +178,17 @@ func (m *Metrics) Stop(ctx context.Context) error {
 
 // UpdateLatestBlockNumber updates the latest block number metric
 func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
-	m.logger.Debugw("UpdateLatestBlockNumber", "blockNumber", blockNumber)
+	m.logger.Debug("UpdateLatestBlockNumber", zap.Uint64("blockNumber", blockNumber))
 	m.latestBlockNumber.WithLabelValues(m.network).Set(float64(blockNumber))
 }
 
 // UpdateEpochInfo updates the epoch-related metrics
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
-	m.logger.Debugw("UpdateEpochInfo", "epochInfo", epochInfo, "targetBlock", targetBlock)
+	m.logger.Debug(
+		"UpdateEpochInfo",
+		zap.Any("epochInfo", epochInfo),
+		zap.Uint64("targetBlock", targetBlock),
+	)
 	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochID))
 	m.currentEpochLength.WithLabelValues(m.network).Set(float64(epochInfo.EpochLen))
 	m.currentEpochStartingBlockNumber.
@@ -193,26 +200,26 @@ func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64
 // UpdateSignerBalance set's the signer account balance. If it is too big a default max value is set
 // instead
 func (m *Metrics) UpdateSignerBalance(balance float64) {
-	m.logger.Debugw("UpdateSignerBalancer", "balance", balance)
+	m.logger.Debug("UpdateSignerBalancer", zap.Float64("balance", balance))
 	m.signerBalance.WithLabelValues(m.network).Set(balance)
 }
 
 // RecordAttestationSubmitted increments the attestation submitted counter
 func (m *Metrics) RecordAttestationSubmitted() {
-	m.logger.Debugw("RecordAttestationSubmitted")
+	m.logger.Debug("RecordAttestationSubmitted")
 	m.attestationSubmittedCount.WithLabelValues(m.network).Inc()
 	m.lastAttestationTimestamp.WithLabelValues(m.network).Set(float64(time.Now().Unix()))
 }
 
 // RecordAttestationFailure increments the attestation failure counter
 func (m *Metrics) RecordAttestationFailure() {
-	m.logger.Debugw("RecordAttestationFailure")
+	m.logger.Debug("RecordAttestationFailure")
 	m.attestationFailureCount.WithLabelValues(m.network).Inc()
 }
 
 // RecordAttestationConfirmed increments the attestation confirmed counter
 func (m *Metrics) RecordAttestationConfirmed() {
-	m.logger.Debugw("RecordAttestationConfirmed")
+	m.logger.Debug("RecordAttestationConfirmed")
 	m.attestationConfirmedCount.WithLabelValues(m.network).Inc()
 }
 
