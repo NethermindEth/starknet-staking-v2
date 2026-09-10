@@ -181,7 +181,7 @@ func ComputeBlockNumberToAttestTo(
 	epochInfo *types.EpochInfo,
 	attestWindow uint64,
 ) types.BlockNumber {
-	hash := crypto.PoseidonArray(
+	hash := crypto.PoseidonElems(
 		new(felt.Felt).SetBigInt(epochInfo.Stake.Big()),
 		new(felt.Felt).SetUint64(epochInfo.EpochID),
 		epochInfo.StakerAddress.Felt(),
