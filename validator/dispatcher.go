@@ -118,7 +118,7 @@ type AttestTracker struct {
 }
 
 func NewAttestTracker() AttestTracker {
-	//nolint:exhaustruct // Using default values
+	//nolint:exhaustruct_v5 // Using default values
 	return AttestTracker{
 		Transaction: AttestTransaction{},
 		Status:      Iddle,
@@ -241,13 +241,14 @@ func (d *EventDispatcher[S]) Dispatch(
 				}
 			}
 
-			logger.Info("invoking attest", zap.String("target block hash", targetBlockHash.String()))
+			logger.Info(
+				"invoking attest",
+				zap.String("target block hash", targetBlockHash.String()),
+			)
 			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
-					logger.Info(
-						"attestation is already done for this epoch",
-					)
+					logger.Info("attestation is already done for this epoch")
 					d.CurrentAttest.setStatus(Successful)
 
 					continue

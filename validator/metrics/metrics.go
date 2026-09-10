@@ -15,6 +15,8 @@ import (
 var _ Tracer = (*Metrics)(nil)
 
 // Metrics represents the metrics server for the validator
+const networkLabel = "network"
+
 type Metrics struct {
 	server                          *http.Server
 	logger                          log.Logger
@@ -37,7 +39,7 @@ type Metrics struct {
 func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 	registry := prometheus.NewRegistry()
 
-	//nolint:exhaustruct,lll // Only specifying used fields // We can't break the lines since it'll show in the output
+	//nolint:exhaustruct_v5,lll // Only specifying used fields // We can't break the lines since it'll show in the output
 	m := &Metrics{
 		logger:   logger,
 		network:  chainID,
@@ -47,77 +49,77 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 				Name: "validator_attestation_starknet_latest_block_number",
 				Help: "The latest block number seen by the validator on the Starknet network",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochID: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_id",
 				Help: "The ID of the current epoch the validator is participating in",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochLength: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_length",
 				Help: "The total length (in blocks) of the current epoch",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochStartingBlockNumber: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_starting_block_number",
 				Help: "The first block number of the current epoch",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		currentEpochAssignedBlockNumber: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_current_epoch_assigned_block_number",
 				Help: "The specific block number within the current epoch for which the validator is assigned to attest",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		lastAttestationTimestamp: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_last_attestation_timestamp_seconds",
 				Help: "The Unix timestamp (in seconds) of the last successful attestation submission",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		attestationSubmittedCount: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "validator_attestation_attestation_submitted_count",
 				Help: "The total number of attestations submitted by the validator since startup",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		attestationFailureCount: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "validator_attestation_attestation_failure_count",
 				Help: "The total number of attestation transaction submission failures encountered by the validator since startup",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		attestationConfirmedCount: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "validator_attestation_attestation_confirmed_count",
 				Help: "The total number of attestations that have been confirmed on the network since validator startup",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		signerBalance: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_signer_balance",
 				Help: "The balance of the account that signs the attestation after each attest transaction",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 		signerBalanceBelowThreshold: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_signer_below_threshold",
 				Help: "Set to one if the account that signs the attestation has it's balance below certain threshold",
 			},
-			[]string{"network"},
+			[]string{networkLabel},
 		),
 	}
 
@@ -145,10 +147,10 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			m.logger.Errorf("Failed to write health check response: %v", err)
 		}
 	})
-	//nolint:exhaustruct // Using default values
+	//nolint:exhaustruct_v5 // Using default values
 	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
-	//nolint:exhaustruct // Only specifying used fields
+	//nolint:exhaustruct_v5 // Only specifying used fields
 	m.server = &http.Server{
 		Addr:              serverAddress,
 		Handler:           mux,

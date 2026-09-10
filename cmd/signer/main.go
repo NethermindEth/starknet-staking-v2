@@ -51,7 +51,7 @@ func NewCommand() cobra.Command {
 		return remoteSigner.Listen(address)
 	}
 
-	//nolint:exhaustruct // Only specifying used fields
+	//nolint:exhaustruct_v5 // Only specifying used fields
 	cmd := cobra.Command{
 		Use:     "signer",
 		Short:   "Program that signs transactions received by http request",

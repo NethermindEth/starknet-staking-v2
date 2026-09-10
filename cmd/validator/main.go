@@ -150,7 +150,7 @@ func NewCommand() cobra.Command {
 		}
 	}
 
-	//nolint:exhaustruct // Only specifying used fields
+	//nolint:exhaustruct_v5 // Only specifying used fields
 	cmd := cobra.Command{
 		Use:     "validator",
 		Short:   "Validator program for Starknet stakers created by Nethermind",

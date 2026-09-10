@@ -68,7 +68,7 @@ func (s *Signer) Listen(address string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc(SignEndpoint, s.handler)
 
-	//nolint:exhaustruct // Only specifying used fields
+	//nolint:exhaustruct_v5 // Only specifying used fields
 	server := &http.Server{
 		Addr:         address,
 		ReadTimeout:  15 * time.Second,

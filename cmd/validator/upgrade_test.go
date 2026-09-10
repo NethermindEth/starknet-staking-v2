@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const v130 = "1.3.0"
+
 func TestNeedsUpdate(t *testing.T) {
 	otherVer := []struct {
 		currentVer string
@@ -14,37 +16,37 @@ func TestNeedsUpdate(t *testing.T) {
 		update     bool
 	}{
 		{
-			currentVer: "1.3.0",
+			currentVer: v130,
 			otherVer:   "0.4.0",
 			update:     false,
 		},
 		{
-			currentVer: "1.3.0",
+			currentVer: v130,
 			otherVer:   "1.2.9",
 			update:     false,
 		},
 		{
-			currentVer: "1.3.0",
+			currentVer: v130,
 			otherVer:   "1.3.0-rc.0",
 			update:     false,
 		},
 		{
-			currentVer: "1.3.0",
-			otherVer:   "1.3.0",
+			currentVer: v130,
+			otherVer:   v130,
 			update:     false,
 		},
 		{
-			currentVer: "1.3.0",
+			currentVer: v130,
 			otherVer:   "1.3.1",
 			update:     true,
 		},
 		{
-			currentVer: "1.3.0",
+			currentVer: v130,
 			otherVer:   "2.0.0-rc.1",
 			update:     false,
 		},
 		{
-			currentVer: "1.3.0",
+			currentVer: v130,
 			otherVer:   "2.0.0-beta.1",
 			update:     false,
 		},
@@ -64,7 +66,7 @@ func TestNeedsUpdate(t *testing.T) {
 			update:     true,
 		},
 		{
-			currentVer: "1.3.0",
+			currentVer: v130,
 			otherVer:   "2.0.0",
 			update:     true,
 		},
