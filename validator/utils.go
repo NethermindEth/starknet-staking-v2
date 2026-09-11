@@ -8,11 +8,23 @@ import (
 	"go.uber.org/zap"
 )
 
+// skipCaller returns a logger that attributes log lines to the caller of the
+// helper function using it, rather than to the helper itself. Loggers that are
+// not *log.ZapLogger are returned unchanged.
+func skipCaller(logger log.Logger) log.Logger {
+	if zl, ok := logger.(*log.ZapLogger); ok {
+		return zl.WithOptions(zap.AddCallerSkip(1))
+	}
+
+	return logger
+}
+
 func logNewEpoch(
 	epochInfo *types.EpochInfo,
 	attestInfo *types.AttestInfo,
 	logger log.Logger,
 ) {
+	logger = skipCaller(logger)
 	logger.Info(
 		"epoch started",
 		zap.Uint64("epochID", epochInfo.EpochID+1),
@@ -34,6 +46,7 @@ func logBlock(
 	attestInfo *types.AttestInfo,
 	logger log.Logger,
 ) {
+	logger = skipCaller(logger)
 	base := fmt.Sprintf("block %d received", blockNum)
 	var suffix string
 	switch {
