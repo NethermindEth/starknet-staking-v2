@@ -267,6 +267,49 @@ func TestCorrectConfig(t *testing.T) {
 	}
 }
 
+func TestSignerExternal(t *testing.T) {
+	const externalURL = "http://localhost:5678"
+
+	t.Run("With external url", func(t *testing.T) {
+		signer := Signer{ExternalURL: externalURL}
+		require.True(t, signer.External())
+	})
+
+	t.Run("With private key only", func(t *testing.T) {
+		signer := Signer{PrivKey: "0x123"}
+		require.False(t, signer.External())
+	})
+
+	t.Run("External url takes priority over private key", func(t *testing.T) {
+		signer := Signer{ExternalURL: externalURL, PrivKey: "0x123"}
+		require.True(t, signer.External())
+	})
+}
+
+func TestRewardExternal(t *testing.T) {
+	t.Run("With external url", func(t *testing.T) {
+		reward := Reward{ExternalURL: "http://localhost:9012"}
+		require.True(t, reward.External())
+	})
+
+	t.Run("With private key only", func(t *testing.T) {
+		reward := Reward{PrivKey: "0xabc"}
+		require.False(t, reward.External())
+	})
+}
+
+func TestRewardIsSet(t *testing.T) {
+	t.Run("Empty reward", func(t *testing.T) {
+		require.False(t, (&Reward{}).IsSet())
+	})
+
+	t.Run("With any field set", func(t *testing.T) {
+		require.True(t, (&Reward{Address: "0x789"}).IsSet())
+		require.True(t, (&Reward{PrivKey: "0xabc"}).IsSet())
+		require.True(t, (&Reward{ExternalURL: "http://localhost:9012"}).IsSet())
+	})
+}
+
 func TestConfigFill(t *testing.T) {
 	// Test data
 	config1, err := FromData(
