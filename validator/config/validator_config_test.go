@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -146,175 +147,124 @@ func TestConfigFromEnv(t *testing.T) {
 }
 
 func TestCorrectConfig(t *testing.T) {
-	t.Run("Missing provider http url", func(t *testing.T) {
-		data := []byte(`{
-            "provider": {
-                "ws": "ws://localhost:1235"
-            },
-            "signer": {
-                "url": "http://localhost:5678",
-                "privateKey": "0x123", 
-                "operationalAddress": "0x456"
-            }
-        }`)
-		config, err := FromData(data)
-		require.NoError(t, err)
-		require.ErrorContains(t, config.Check(), "http provider url")
-	})
+	const (
+		validProvider = `{
+            "http": "http://localhost:1234",
+            "ws": "ws://localhost:1235"
+        }`
+		validSigner = `{
+            "url": "http://localhost:5678",
+            "privateKey": "0x123",
+            "operationalAddress": "0x456"
+        }`
+	)
 
-	t.Run("Missing provider ws url", func(t *testing.T) {
-		data := []byte(`{
-            "provider": {
-                "http": "http://localhost:1234"
-            },
-            "signer": {
-                "url": "http://localhost:5678",
-                "privateKey": "0x123", 
-                "operationalAddress": "0x456"
-            }
-        }`)
-		config, err := FromData(data)
-		require.NoError(t, err)
-		require.ErrorContains(t, config.Check(), "ws provider url")
-	})
+	// Builds a config JSON. Empty sections default to valid values, except
+	// reward which is omitted
+	configJSON := func(provider, signer, reward string) []byte {
+		if provider == "" {
+			provider = validProvider
+		}
+		if signer == "" {
+			signer = validSigner
+		}
+		if reward == "" {
+			return fmt.Appendf(nil, `{"provider": %s, "signer": %s}`, provider, signer)
+		}
 
-	t.Run("Missing operational address", func(t *testing.T) {
-		data := []byte(`{
-            "provider": {
-                "http": "http://localhost:1234",
-                "ws": "ws://localhost:1235"
-            },
-            "signer": {
-                "url": "http://localhost:5678",
-                "privateKey": "0x123"
-            }
-        }`)
-		config, err := FromData(data)
-		require.NoError(t, err)
-		require.ErrorContains(t, config.Check(), "operational address")
-	})
-
-	t.Run("Missing external signer url", func(t *testing.T) {
-		data := []byte(`{
-            "provider": {
-                "http": "http://localhost:1234",
-                "ws": "ws://localhost:1235"
-            },
-            "signer": {
-                "privateKey": "0x123", 
-                "operationalAddress": "0x456"
-            }
-        }`)
-		config, err := FromData(data)
-		require.NoError(t, err)
-		require.NoError(t, config.Check())
-		require.False(t, config.Signer.External())
-	})
-
-	t.Run("Missing private key", func(t *testing.T) {
-		data := []byte(`{
-            "provider": {
-                "http": "http://localhost:1234",
-                "ws": "ws://localhost:1235"
-            },
-            "signer": {
-                "url": "http://localhost:5678",
-                "operationalAddress": "0x456"
-            }
-        }`)
-		config, err := FromData(data)
-		require.NoError(t, err)
-		require.NoError(t, config.Check())
-		require.True(t, config.Signer.External())
-	})
-
-	t.Run("Missing private key and external signer", func(t *testing.T) {
-		data := []byte(`{
-            "provider": {
-                "http": "http://localhost:1234",
-                "ws": "ws://localhost:1235"
-            },
-            "signer": {
-                "operationalAddress": "0x456"
-            }
-        }`)
-		config, err := FromData(data)
-		require.NoError(t, err)
-		require.ErrorContains(t, config.Check(), "private key")
-	})
-}
-
-func TestRewardCheck(t *testing.T) {
-	const externalURL = "http://localhost:9012"
+		return fmt.Appendf(
+			nil, `{"provider": %s, "signer": %s, "reward": %s}`, provider, signer, reward,
+		)
+	}
 
 	testCases := []struct {
-		name   string
-		reward Reward
-		errMsg string
+		name     string
+		provider string
+		signer   string
+		reward   string
+		errMsg   string
+		verify   func(t *testing.T, config *Config)
 	}{
+		// Provider
 		{
-			name:   "Not set",
-			reward: Reward{},
+			name:     "With both provider http and ws urls",
+			provider: `{"http": "http://localhost:1234", "ws": "ws://localhost:1235"}`,
 		},
 		{
-			name:   "Address and private key",
-			reward: Reward{Address: "0x123", PrivKey: "0x456"},
+			name:     "Missing provider http url",
+			provider: `{"ws": "ws://localhost:1235"}`,
+			errMsg:   "http provider url",
 		},
 		{
-			name:   "Address and external url",
-			reward: Reward{Address: "0x123", ExternalURL: externalURL},
+			name:     "Missing provider ws url",
+			provider: `{"http": "http://localhost:1234"}`,
+			errMsg:   "ws provider url",
+		},
+		// Signer
+		{
+			name:   "With private key and NO external signer URL",
+			signer: `{"privateKey": "0x123", "operationalAddress": "0x456"}`,
 		},
 		{
-			name:   "Missing address",
-			reward: Reward{PrivKey: "0x456"},
-			errMsg: "address is not set",
+			name:   "With external signer URL and NO private key",
+			signer: `{"url": "http://localhost:5678", "operationalAddress": "0x456"}`,
 		},
 		{
-			name: "Both private key and external url",
-			reward: Reward{
-				Address:     "0x123",
-				PrivKey:     "0x456",
-				ExternalURL: externalURL,
-			},
-			errMsg: "both private key and external url",
+			name:   "Missing operational address",
+			signer: `{"url": "http://localhost:5678", "privateKey": "0x123"}`,
+			errMsg: "operational address",
 		},
 		{
-			name:   "Neither private key nor external url",
-			reward: Reward{Address: "0x123"},
-			errMsg: "neither private key nor external url",
+			name:   "Missing private key and external signer",
+			signer: `{"operationalAddress": "0x456"}`,
+			errMsg: "private key",
+		},
+		// Reward
+		{
+			name:   "Reward not set must be ignored",
+			reward: `{}`,
+		},
+		{
+			name:   "Reward with address and private key",
+			reward: `{"address": "0x789", "privateKey": "0xabc"}`,
+		},
+		{
+			name:   "Reward with address and external url",
+			reward: `{"address": "0x789", "url": "http://localhost:9012"}`,
+		},
+		{
+			name:   "Reward missing address",
+			reward: `{"privateKey": "0xabc"}`,
+			errMsg: "address is not set in reward configuration",
+		},
+		{
+			name:   "Reward with both private key and external url",
+			reward: `{"address": "0x789", "privateKey": "0xabc", "url": "http://localhost:9012"}`,
+			errMsg: "both private key and external url set in reward configuration",
+		},
+		{
+			name:   "Reward missing private key and external url",
+			reward: `{"address": "0x789"}`,
+			errMsg: "neither private key nor external url set in reward configuration",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.reward.Check()
-			if tc.errMsg == "" {
-				require.NoError(t, err)
+			config, err := FromData(configJSON(tc.provider, tc.signer, tc.reward))
+			require.NoError(t, err)
+
+			if tc.errMsg != "" {
+				require.ErrorContains(t, config.Check(), tc.errMsg)
 
 				return
 			}
-			require.ErrorContains(t, err, tc.errMsg)
+			require.NoError(t, config.Check())
+			if tc.verify != nil {
+				tc.verify(t, &config)
+			}
 		})
 	}
-
-	t.Run("Config check fails on invalid reward", func(t *testing.T) {
-		data := []byte(`{
-            "provider": {
-                "http": "http://localhost:1234",
-                "ws": "ws://localhost:1235"
-            },
-            "signer": {
-                "privateKey": "0x123",
-                "operationalAddress": "0x456"
-            },
-            "reward": {
-                "address": "0x789"
-            }
-        }`)
-		config, err := FromData(data)
-		require.NoError(t, err)
-		require.ErrorContains(t, config.Check(), "reward configuration")
-	})
 }
 
 func TestConfigFill(t *testing.T) {
