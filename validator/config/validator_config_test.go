@@ -48,6 +48,10 @@ func TestConfigFromFile(t *testing.T) {
                 "url": "http://localhost:5678",
                 "privateKey": "0x123", 
                 "operationalAddress": "0x456"
+            },
+            "reward": {
+                "privateKey": "0x789",
+                "address": "0xabc"
             }
         }`)
 		config, err := FromData(data)
@@ -63,6 +67,10 @@ func TestConfigFromFile(t *testing.T) {
 				ExternalURL:        "http://localhost:5678",
 				PrivKey:            "0x123",
 				OperationalAddress: "0x456",
+			},
+			Reward: Reward{
+				PrivKey: "0x789",
+				Address: "0xabc",
 			},
 		}
 		require.Equal(t, expectedConfig, config)
@@ -107,11 +115,32 @@ func TestConfigFromEnv(t *testing.T) {
 		signer,
 	)
 
+	// Test Reward
+	rewardURL := "hej"
+	t.Setenv("REWARD_EXTERNAL_URL", rewardURL)
+	rewardPrivateKey := "salut"
+	t.Setenv("REWARD_PRIVATE_KEY", rewardPrivateKey)
+	rewardAddress := "ahoj"
+	t.Setenv("REWARD_ADDRESS", rewardAddress)
+
+	reward := RewardFromEnv()
+	expectedReward := Reward{
+		ExternalURL: rewardURL,
+		PrivKey:     rewardPrivateKey,
+		Address:     rewardAddress,
+	}
+	require.Equal(
+		t,
+		expectedReward,
+		reward,
+	)
+
 	// Test Config
 	config := FromEnv()
 	expectedConfig := Config{
 		Provider: expectedProvider,
 		Signer:   expectedSigner,
+		Reward:   expectedReward,
 	}
 	require.Equal(t, expectedConfig, config)
 }
@@ -215,6 +244,79 @@ func TestCorrectConfig(t *testing.T) {
 	})
 }
 
+func TestRewardCheck(t *testing.T) {
+	const externalURL = "http://localhost:9012"
+
+	testCases := []struct {
+		name   string
+		reward Reward
+		errMsg string
+	}{
+		{
+			name:   "Not set",
+			reward: Reward{},
+		},
+		{
+			name:   "Address and private key",
+			reward: Reward{Address: "0x123", PrivKey: "0x456"},
+		},
+		{
+			name:   "Address and external url",
+			reward: Reward{Address: "0x123", ExternalURL: externalURL},
+		},
+		{
+			name:   "Missing address",
+			reward: Reward{PrivKey: "0x456"},
+			errMsg: "address is not set",
+		},
+		{
+			name: "Both private key and external url",
+			reward: Reward{
+				Address:     "0x123",
+				PrivKey:     "0x456",
+				ExternalURL: externalURL,
+			},
+			errMsg: "both private key and external url",
+		},
+		{
+			name:   "Neither private key nor external url",
+			reward: Reward{Address: "0x123"},
+			errMsg: "neither private key nor external url",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.reward.Check()
+			if tc.errMsg == "" {
+				require.NoError(t, err)
+
+				return
+			}
+			require.ErrorContains(t, err, tc.errMsg)
+		})
+	}
+
+	t.Run("Config check fails on invalid reward", func(t *testing.T) {
+		data := []byte(`{
+            "provider": {
+                "http": "http://localhost:1234",
+                "ws": "ws://localhost:1235"
+            },
+            "signer": {
+                "privateKey": "0x123",
+                "operationalAddress": "0x456"
+            },
+            "reward": {
+                "address": "0x789"
+            }
+        }`)
+		config, err := FromData(data)
+		require.NoError(t, err)
+		require.ErrorContains(t, config.Check(), "reward configuration")
+	})
+}
+
 func TestConfigFill(t *testing.T) {
 	// Test data
 	config1, err := FromData(
@@ -225,6 +327,9 @@ func TestConfigFill(t *testing.T) {
             "signer": {
                 "privateKey": "0x123", 
                 "operationalAddress": "0x456"
+            },
+            "reward": {
+                "privateKey": "0x321"
             }
         }`),
 	)
@@ -237,6 +342,11 @@ func TestConfigFill(t *testing.T) {
             "signer": {
                 "url": "http://localhost:5678",
                 "privateKey": "0x999"
+            },
+            "reward": {
+                "url": "http://localhost:4321",
+                "privateKey": "0x888",
+                "address": "0xabc"
             }
         }`),
 	)
@@ -253,6 +363,11 @@ func TestConfigFill(t *testing.T) {
                 "url": "http://localhost:5678",
                 "privateKey": "0x123", 
                 "operationalAddress": "0x456"
+            },
+            "reward": {
+                "url": "http://localhost:4321",
+                "privateKey": "0x321",
+                "address": "0xabc"
             }
         }`),
 	)

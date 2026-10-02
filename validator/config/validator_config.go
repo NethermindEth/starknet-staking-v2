@@ -84,15 +84,72 @@ func (s *Signer) External() bool {
 	return s.ExternalURL != ""
 }
 
+type Reward struct {
+	ExternalURL string `json:"url"`
+	PrivKey     string `json:"privateKey"`
+	Address     string `json:"address"`
+}
+
+func RewardFromEnv() Reward {
+	return Reward{
+		ExternalURL: os.Getenv("REWARD_EXTERNAL_URL"),
+		PrivKey:     os.Getenv("REWARD_PRIVATE_KEY"),
+		Address:     os.Getenv("REWARD_ADDRESS"),
+	}
+}
+
+// Reward configuration is optional, but if any field is set, it requires the address
+// and exactly one signing method: either a private key or an external url
+func (r *Reward) Check() error {
+	if !r.IsSet() {
+		return nil
+	}
+	if r.Address == "" {
+		return errors.New("address is not set in reward configuration")
+	}
+	if r.PrivKey != "" && r.ExternalURL != "" {
+		return errors.New("both private key and external url set in reward configuration")
+	}
+	if r.PrivKey == "" && r.ExternalURL == "" {
+		return errors.New("neither private key nor external url set in reward configuration")
+	}
+
+	return nil
+}
+
+func (r *Reward) IsSet() bool {
+	return r.Address != "" || r.PrivKey != "" || r.ExternalURL != ""
+}
+
+// @todo not in use yet
+func (r *Reward) External() bool {
+	return r.ExternalURL != ""
+}
+
+// Merge its missing fields with data from other reward
+func (r *Reward) Fill(other *Reward) {
+	if isZero(r.ExternalURL) {
+		r.ExternalURL = other.ExternalURL
+	}
+	if isZero(r.PrivKey) {
+		r.PrivKey = other.PrivKey
+	}
+	if isZero(r.Address) {
+		r.Address = other.Address
+	}
+}
+
 type Config struct {
 	Provider Provider `json:"provider"`
 	Signer   Signer   `json:"signer"`
+	Reward   Reward   `json:"reward"`
 }
 
 func FromEnv() Config {
 	return Config{
 		Provider: ProviderFromEnv(),
 		Signer:   SignerFromEnv(),
+		Reward:   RewardFromEnv(),
 	}
 }
 
@@ -119,6 +176,7 @@ func FromData(data []byte) (Config, error) {
 func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
+	c.Reward.Fill(&other.Reward)
 }
 
 // Verifies its data is appropiatly set
@@ -127,6 +185,9 @@ func (c *Config) Check() error {
 		return err
 	}
 	if err := c.Signer.Check(); err != nil {
+		return err
+	}
+	if err := c.Reward.Check(); err != nil {
 		return err
 	}
 

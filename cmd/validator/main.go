@@ -184,6 +184,26 @@ func NewCommand() cobra.Command {
 		"Signer operational address, required for attesting",
 	)
 
+	// Config reward flags
+	cmd.Flags().StringVar(
+		&config.Reward.ExternalURL,
+		"reward-signer-url",
+		"",
+		"Reward signer url address, required if using an external signer for the reward account",
+	)
+	cmd.Flags().StringVar(
+		&config.Reward.PrivKey,
+		"reward-priv-key",
+		"",
+		"Reward account private key, required for internal signing of the reward account",
+	)
+	cmd.Flags().StringVar(
+		&config.Reward.Address,
+		"reward-address",
+		"",
+		"Reward account address",
+	)
+
 	// Config starknet flags
 	cmd.Flags().StringVar(
 		&snConfig.ContractAddresses.Attest,
