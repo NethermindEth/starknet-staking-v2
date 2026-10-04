@@ -235,17 +235,17 @@ func TestCorrectConfig(t *testing.T) {
 		{
 			name:   "Reward missing address",
 			reward: `{"privateKey": "0xabc"}`,
-			errMsg: "address is not set in reward configuration",
+			errMsg: errRewardAddressNotSet.Error(),
 		},
 		{
 			name:   "Reward with both private key and external url",
 			reward: `{"address": "0x789", "privateKey": "0xabc", "url": "http://localhost:9012"}`,
-			errMsg: "both private key and external url set in reward configuration",
+			errMsg: errRewardBothKeysAndURL.Error(),
 		},
 		{
-			name:   "Reward missing private key and external url",
+			name:   "Reward missing private key or external url",
 			reward: `{"address": "0x789"}`,
-			errMsg: "neither private key nor external url set in reward configuration",
+			errMsg: errRewardNoKeysOrURL.Error(),
 		},
 	}
 
@@ -337,7 +337,6 @@ func TestConfigFill(t *testing.T) {
                 "privateKey": "0x999"
             },
             "reward": {
-                "url": "http://localhost:4321",
                 "privateKey": "0x888",
                 "address": "0xabc"
             }
@@ -358,7 +357,6 @@ func TestConfigFill(t *testing.T) {
                 "operationalAddress": "0x456"
             },
             "reward": {
-                "url": "http://localhost:4321",
                 "privateKey": "0x321",
                 "address": "0xabc"
             }

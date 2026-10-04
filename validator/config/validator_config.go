@@ -3,7 +3,14 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+)
+
+var (
+	errRewardAddressNotSet  = errors.New("address is not set in reward configuration")
+	errRewardBothKeysAndURL = errors.New("both private key and external signer URL set in reward configuration where only one is allowed")
+	errRewardNoKeysOrURL    = errors.New("you must set either a private key or an external signer URL in reward configuration")
 )
 
 type Provider struct {
@@ -105,13 +112,13 @@ func (r *Reward) Check() error {
 		return nil
 	}
 	if r.Address == "" {
-		return errors.New("address is not set in reward configuration")
+		return errRewardAddressNotSet
 	}
 	if r.PrivKey != "" && r.ExternalURL != "" {
-		return errors.New("both private key and external url set in reward configuration")
+		return errRewardBothKeysAndURL
 	}
 	if r.PrivKey == "" && r.ExternalURL == "" {
-		return errors.New("neither private key nor external url set in reward configuration")
+		return errRewardNoKeysOrURL
 	}
 
 	return nil
@@ -182,13 +189,13 @@ func (c *Config) Fill(other *Config) {
 // Verifies its data is appropiatly set
 func (c *Config) Check() error {
 	if err := c.Provider.Check(); err != nil {
-		return err
+		return fmt.Errorf("provider: %w", err)
 	}
 	if err := c.Signer.Check(); err != nil {
-		return err
+		return fmt.Errorf("signer: %w", err)
 	}
 	if err := c.Reward.Check(); err != nil {
-		return err
+		return fmt.Errorf("reward: %w", err)
 	}
 
 	return nil
