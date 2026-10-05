@@ -27,6 +27,20 @@ Validator program for Starknet stakers created by Nethermind
 
 `
 
+const longDescription = `Validator program for Starknet stakers created by Nethermind
+
+Configuration can be provided through flags, environment variables or a JSON
+config file, in that order of priority.
+
+Auto-claim reward feature (optional):
+  Automatically claims the staker rewards once the unclaimed amount 
+  reaches --reward-claim-threshold. If any reward option is set, --reward-address,
+  --reward-claim-threshold and exactly one of --reward-priv-key or
+  --reward-signer-url are required.
+	
+Full documentation: https://nethermindeth.github.io/starknet-staking-v2/	
+`
+
 //nolint:funlen // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {
 	var configPath string
@@ -140,6 +154,7 @@ func NewCommand() cobra.Command {
 	cmd := cobra.Command{
 		Use:     "validator",
 		Short:   "Validator program for Starknet stakers created by Nethermind",
+		Long:    longDescription,
 		Version: validator.Version,
 		PreRunE: preRunE,
 		Run:     run,
@@ -172,36 +187,39 @@ func NewCommand() cobra.Command {
 
 	// Config reward flags
 	cmd.Flags().StringVar(
-		&config.Reward.ExternalURL,
-		"reward-signer-url",
-		"",
-		"Reward signer url address, required if using an external signer for the reward account",
-	)
-	cmd.Flags().StringVar(
-		&config.Reward.PrivKey,
-		"reward-priv-key",
-		"",
-		"Reward account private key, required for internal signing of the reward account",
-	)
-	cmd.Flags().StringVar(
 		&config.Reward.Address,
 		"reward-address",
 		"",
-		"Reward account address",
-	)
-	cmd.Flags().Uint64Var(
-		&config.Reward.ClaimThreshold,
-		"reward-claim-threshold",
-		0,
-		"Amount of unclaimed rewards, in STRK, that triggers an automatic claim."+
-			" Required if the reward account is configured",
+		"(Optional) Reward account address. \n"+
+			"Required for the auto-claim reward feature.",
 	)
 	cmd.Flags().Uint64Var(
 		&config.Reward.ClaimMaxFee,
 		"reward-claim-max-fee",
 		0,
-		"Max fee, in FRI, to pay for the claim transaction."+
+		"(Optional) Max fee, in FRI, to pay for the claim transaction. \n"+
 			" Defaults to 'unlimited' if not specified (max uint64, which is ~18.4 STRK)",
+	)
+	cmd.Flags().Uint64Var(
+		&config.Reward.ClaimThreshold,
+		"reward-claim-threshold",
+		0,
+		"(Optional) Amount of unclaimed rewards, in STRK, that triggers an automatic claim. \n"+
+			" Required for the auto-claim reward feature.",
+	)
+	cmd.Flags().StringVar(
+		&config.Reward.PrivKey,
+		"reward-priv-key",
+		"",
+		"(Optional) Reward account private key, used for internal signing of the reward account. \n"+
+			"Required for the auto-claim reward feature. Can be replaced by the 'reward-signer-url' flag.",
+	)
+	cmd.Flags().StringVar(
+		&config.Reward.ExternalURL,
+		"reward-signer-url",
+		"",
+		"(Optional) Reward signer url address, used for external signing of the reward account. \n"+
+			"Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag.",
 	)
 
 	// Config starknet flags
