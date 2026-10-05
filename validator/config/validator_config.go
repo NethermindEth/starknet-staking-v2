@@ -4,13 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
 )
 
 var (
-	errRewardAddressNotSet  = errors.New("address is not set in reward configuration")
-	errRewardBothKeysAndURL = errors.New("both private key and external signer URL set in reward configuration where only one is allowed")
-	errRewardNoKeysOrURL    = errors.New("you must set either a private key or an external signer URL in reward configuration")
+	errRewardAddressNotSet        = errors.New("address is not set in reward configuration")
+	errRewardBothKeysAndURL       = errors.New("both private key and external signer URL set in reward configuration where only one is allowed")
+	errRewardNoKeysOrURL          = errors.New("you must set either a private key or an external signer URL in reward configuration")
+	errRewardClaimThresholdNotSet = errors.New(
+		"claim threshold must be set to a positive value in reward configuration",
+	)
 )
 
 type Provider struct {
@@ -95,14 +100,44 @@ type Reward struct {
 	ExternalURL string `json:"url"`
 	PrivKey     string `json:"privateKey"`
 	Address     string `json:"address"`
+	// Amount of unclaimed rewards, in STRK, that triggers an automatic claim
+	ClaimThreshold uint64 `json:"claimThreshold"`
+	// Max fee, in FRI, to pay for the claim transaction
+	ClaimMaxFee uint64 `json:"claimMaxFee"`
 }
 
-func RewardFromEnv() Reward {
-	return Reward{
-		ExternalURL: os.Getenv("REWARD_EXTERNAL_URL"),
-		PrivKey:     os.Getenv("REWARD_PRIVATE_KEY"),
-		Address:     os.Getenv("REWARD_ADDRESS"),
+func RewardFromEnv() (Reward, error) {
+	var claimThreshold uint64
+	if value := os.Getenv("REWARD_CLAIM_THRESHOLD"); value != "" {
+		parsed, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return Reward{}, fmt.Errorf(
+				"invalid REWARD_CLAIM_THRESHOLD env var, not a valid integer: %w",
+				err,
+			)
+		}
+		claimThreshold = parsed
 	}
+
+	var claimMaxFee uint64
+	if value := os.Getenv("REWARD_CLAIM_MAX_FEE"); value != "" {
+		parsed, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return Reward{}, fmt.Errorf(
+				"invalid REWARD_CLAIM_MAX_FEE env var, not a valid integer: %w",
+				err,
+			)
+		}
+		claimMaxFee = parsed
+	}
+
+	return Reward{
+		ExternalURL:    os.Getenv("REWARD_EXTERNAL_URL"),
+		PrivKey:        os.Getenv("REWARD_PRIVATE_KEY"),
+		Address:        os.Getenv("REWARD_ADDRESS"),
+		ClaimThreshold: claimThreshold,
+		ClaimMaxFee:    claimMaxFee,
+	}, nil
 }
 
 // Reward configuration is optional, but if any field is set, it requires the address
@@ -120,12 +155,30 @@ func (r *Reward) Check() error {
 	if r.PrivKey == "" && r.ExternalURL == "" {
 		return errRewardNoKeysOrURL
 	}
+	if r.ClaimThreshold == 0 {
+		return errRewardClaimThresholdNotSet
+	}
 
 	return nil
 }
 
 func (r *Reward) IsSet() bool {
-	return r.Address != "" || r.PrivKey != "" || r.ExternalURL != ""
+	return r.Address != "" ||
+		r.PrivKey != "" ||
+		r.ExternalURL != "" ||
+		r.ClaimThreshold != 0 ||
+		r.ClaimMaxFee != 0
+}
+
+// Sets default values for the fields not provided. It should be called after
+// all config sources are merged, otherwise the defaults would take priority
+func (r *Reward) SetDefaults() {
+	if !r.IsSet() {
+		return
+	}
+	if isZero(r.ClaimMaxFee) {
+		r.ClaimMaxFee = math.MaxUint64
+	}
 }
 
 // @todo not in use yet
@@ -144,6 +197,12 @@ func (r *Reward) Fill(other *Reward) {
 	if isZero(r.Address) {
 		r.Address = other.Address
 	}
+	if isZero(r.ClaimThreshold) {
+		r.ClaimThreshold = other.ClaimThreshold
+	}
+	if isZero(r.ClaimMaxFee) {
+		r.ClaimMaxFee = other.ClaimMaxFee
+	}
 }
 
 type Config struct {
@@ -152,12 +211,17 @@ type Config struct {
 	Reward   Reward   `json:"reward"`
 }
 
-func FromEnv() Config {
+func FromEnv() (Config, error) {
+	reward, err := RewardFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Provider: ProviderFromEnv(),
 		Signer:   SignerFromEnv(),
-		Reward:   RewardFromEnv(),
-	}
+		Reward:   reward,
+	}, nil
 }
 
 // Function to load and parse the JSON file
@@ -184,6 +248,11 @@ func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
 	c.Reward.Fill(&other.Reward)
+}
+
+// Sets default values for the fields not provided by any config source
+func (c *Config) SetDefaults() {
+	c.Reward.SetDefaults()
 }
 
 // Verifies its data is appropiatly set

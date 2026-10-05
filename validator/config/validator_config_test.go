@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"testing"
 
@@ -52,7 +53,9 @@ func TestConfigFromFile(t *testing.T) {
             },
             "reward": {
                 "privateKey": "0x789",
-                "address": "0xabc"
+                "address": "0xabc",
+                "claimThreshold": 100,
+                "claimMaxFee": 1000
             }
         }`)
 		config, err := FromData(data)
@@ -70,8 +73,10 @@ func TestConfigFromFile(t *testing.T) {
 				OperationalAddress: "0x456",
 			},
 			Reward: Reward{
-				PrivKey: "0x789",
-				Address: "0xabc",
+				PrivKey:        "0x789",
+				Address:        "0xabc",
+				ClaimThreshold: 100,
+				ClaimMaxFee:    1000,
 			},
 		}
 		require.Equal(t, expectedConfig, config)
@@ -123,12 +128,17 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("REWARD_PRIVATE_KEY", rewardPrivateKey)
 	rewardAddress := "ahoj"
 	t.Setenv("REWARD_ADDRESS", rewardAddress)
+	t.Setenv("REWARD_CLAIM_THRESHOLD", "100")
+	t.Setenv("REWARD_CLAIM_MAX_FEE", "1000")
 
-	reward := RewardFromEnv()
+	reward, err := RewardFromEnv()
+	require.NoError(t, err)
 	expectedReward := Reward{
-		ExternalURL: rewardURL,
-		PrivKey:     rewardPrivateKey,
-		Address:     rewardAddress,
+		ExternalURL:    rewardURL,
+		PrivKey:        rewardPrivateKey,
+		Address:        rewardAddress,
+		ClaimThreshold: 100,
+		ClaimMaxFee:    1000,
 	}
 	require.Equal(
 		t,
@@ -137,13 +147,46 @@ func TestConfigFromEnv(t *testing.T) {
 	)
 
 	// Test Config
-	config := FromEnv()
+	config, err := FromEnv()
+	require.NoError(t, err)
 	expectedConfig := Config{
 		Provider: expectedProvider,
 		Signer:   expectedSigner,
 		Reward:   expectedReward,
 	}
 	require.Equal(t, expectedConfig, config)
+}
+
+func TestRewardFromEnvInvalidValues(t *testing.T) {
+	const (
+		thresholdEnv = "REWARD_CLAIM_THRESHOLD"
+		maxFeeEnv    = "REWARD_CLAIM_MAX_FEE"
+	)
+
+	testCases := []struct {
+		name   string
+		envVar string
+		value  string
+	}{
+		{name: "Non numeric claim threshold", envVar: thresholdEnv, value: "abc"},
+		{name: "Negative claim threshold", envVar: thresholdEnv, value: "-1"},
+		{name: "Decimal claim threshold", envVar: thresholdEnv, value: "1.5"},
+		{name: "Non numeric claim max fee", envVar: maxFeeEnv, value: "abc"},
+		{name: "Negative claim max fee", envVar: maxFeeEnv, value: "-1"},
+		{name: "Decimal claim max fee", envVar: maxFeeEnv, value: "1.5"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(tc.envVar, tc.value)
+
+			_, err := RewardFromEnv()
+			require.ErrorContains(t, err, tc.envVar)
+
+			_, err = FromEnv()
+			require.ErrorContains(t, err, tc.envVar)
+		})
+	}
 }
 
 func TestCorrectConfig(t *testing.T) {
@@ -225,12 +268,16 @@ func TestCorrectConfig(t *testing.T) {
 			reward: `{}`,
 		},
 		{
-			name:   "Reward with address and private key",
-			reward: `{"address": "0x789", "privateKey": "0xabc"}`,
+			name:   "Reward with address, claim threshold and private key",
+			reward: `{"address": "0x789", "privateKey": "0xabc", "claimThreshold": 10}`,
 		},
 		{
-			name:   "Reward with address and external url",
-			reward: `{"address": "0x789", "url": "http://localhost:9012"}`,
+			name:   "Reward with address, claim threshold and external url",
+			reward: `{"address": "0x789", "url": "http://localhost:9012", "claimThreshold": 10}`,
+		},
+		{
+			name:   "Reward with claim max fee",
+			reward: `{"address": "0x789", "privateKey": "0xabc", "claimThreshold": 10, "claimMaxFee": 1000}`,
 		},
 		{
 			name:   "Reward missing address",
@@ -246,6 +293,21 @@ func TestCorrectConfig(t *testing.T) {
 			name:   "Reward missing private key or external url",
 			reward: `{"address": "0x789"}`,
 			errMsg: errRewardNoKeysOrURL.Error(),
+		},
+		{
+			name:   "Reward missing claim threshold",
+			reward: `{"address": "0x789", "privateKey": "0xabc"}`,
+			errMsg: errRewardClaimThresholdNotSet.Error(),
+		},
+		{
+			name:   "Reward with only claim threshold",
+			reward: `{"claimThreshold": 10}`,
+			errMsg: errRewardAddressNotSet.Error(),
+		},
+		{
+			name:   "Reward with only claim max fee",
+			reward: `{"claimMaxFee": 1000}`,
+			errMsg: errRewardAddressNotSet.Error(),
 		},
 	}
 
@@ -307,6 +369,28 @@ func TestRewardIsSet(t *testing.T) {
 		require.True(t, (&Reward{Address: "0x789"}).IsSet())
 		require.True(t, (&Reward{PrivKey: "0xabc"}).IsSet())
 		require.True(t, (&Reward{ExternalURL: "http://localhost:9012"}).IsSet())
+		require.True(t, (&Reward{ClaimThreshold: 10}).IsSet())
+		require.True(t, (&Reward{ClaimMaxFee: 1000}).IsSet())
+	})
+}
+
+func TestRewardSetDefaults(t *testing.T) {
+	t.Run("Reward not set stays empty", func(t *testing.T) {
+		reward := Reward{}
+		reward.SetDefaults()
+		require.Equal(t, Reward{}, reward)
+	})
+
+	t.Run("Missing claim max fee defaults to max uint64", func(t *testing.T) {
+		reward := Reward{Address: "0x789", PrivKey: "0xabc", ClaimThreshold: 10}
+		reward.SetDefaults()
+		require.Equal(t, uint64(math.MaxUint64), reward.ClaimMaxFee)
+	})
+
+	t.Run("Explicit claim max fee is kept", func(t *testing.T) {
+		reward := Reward{Address: "0x789", PrivKey: "0xabc", ClaimThreshold: 10, ClaimMaxFee: 1000}
+		reward.SetDefaults()
+		require.Equal(t, uint64(1000), reward.ClaimMaxFee)
 	})
 }
 
@@ -322,7 +406,8 @@ func TestConfigFill(t *testing.T) {
                 "operationalAddress": "0x456"
             },
             "reward": {
-                "privateKey": "0x321"
+                "privateKey": "0x321",
+                "claimThreshold": 10
             }
         }`),
 	)
@@ -338,7 +423,9 @@ func TestConfigFill(t *testing.T) {
             },
             "reward": {
                 "privateKey": "0x888",
-                "address": "0xabc"
+                "address": "0xabc",
+                "claimThreshold": 99,
+                "claimMaxFee": 1000
             }
         }`),
 	)
@@ -358,7 +445,9 @@ func TestConfigFill(t *testing.T) {
             },
             "reward": {
                 "privateKey": "0x321",
-                "address": "0xabc"
+                "address": "0xabc",
+                "claimThreshold": 10,
+                "claimMaxFee": 1000
             }
         }`),
 	)

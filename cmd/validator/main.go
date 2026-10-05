@@ -44,21 +44,7 @@ func NewCommand() cobra.Command {
 	var logger *log.ZapLogger
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
-		// Config takes the values from flags directly,
-		// then fills the missing ones from the env vars
-		configFromEnv := configP.FromEnv()
-		config.Fill(&configFromEnv)
-
-		// It fills the missing one from the ones defined
-		// in a config file
-		if configPath != "" {
-			configFromFile, err := configP.FromFile(configPath)
-			if err != nil {
-				return err
-			}
-			config.Fill(&configFromFile)
-		}
-		if err := config.Check(); err != nil {
+		if err := loadConfig(&config, configPath); err != nil {
 			return err
 		}
 
@@ -203,6 +189,20 @@ func NewCommand() cobra.Command {
 		"",
 		"Reward account address",
 	)
+	cmd.Flags().Uint64Var(
+		&config.Reward.ClaimThreshold,
+		"reward-claim-threshold",
+		0,
+		"Amount of unclaimed rewards, in STRK, that triggers an automatic claim."+
+			" Required if the reward account is configured",
+	)
+	cmd.Flags().Uint64Var(
+		&config.Reward.ClaimMaxFee,
+		"reward-claim-max-fee",
+		0,
+		"Max fee, in FRI, to pay for the claim transaction."+
+			" Defaults to 'unlimited' if not specified (max uint64, which is ~18.4 STRK)",
+	)
 
 	// Config starknet flags
 	cmd.Flags().StringVar(
@@ -250,6 +250,28 @@ func NewCommand() cobra.Command {
 	)
 
 	return cmd
+}
+
+// Completes the config, which already holds the values from flags, with the
+// ones from env vars and then from the config file. Afterwards it sets the
+// defaults for the missing values and verifies the result
+func loadConfig(config *configP.Config, configPath string) error {
+	configFromEnv, err := configP.FromEnv()
+	if err != nil {
+		return err
+	}
+	config.Fill(&configFromEnv)
+
+	if configPath != "" {
+		configFromFile, err := configP.FromFile(configPath)
+		if err != nil {
+			return err
+		}
+		config.Fill(&configFromFile)
+	}
+	config.SetDefaults()
+
+	return config.Check()
 }
 
 func main() {
