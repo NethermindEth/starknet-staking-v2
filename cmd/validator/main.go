@@ -228,22 +228,22 @@ func NewCommand() cobra.Command {
 		&maxRetriesF,
 		"max-retries",
 		"infinite",
-		"How many times to retry to get information required for attestation."+
+		"How many times to retry to get information required for attestation.\n"+
 			" It can be either a positive integer or the key word 'infinite'",
 	)
 	cmd.Flags().Float64Var(
 		&balanceThreshold,
 		"balance-threshold",
 		100, //nolint:mnd // Default balance threshold (100 STRK)
-		"Triggers a warning if it detects the signer account (i.e. operational address)"+
-			" stark balance below the specified threshold. One stark equals 1 << 1e18.",
+		"Triggers a warning if it detects the signer account (i.e. operational address)\n"+
+			"stark balance below the specified threshold. One stark equals 1 << 1e18.",
 	)
 	cmd.Flags().BoolVar(
 		&braavosAccount,
 		"braavos-account",
 		false,
-		"Changes the the transaction version format from 0x3 to 1<<128 + 0x3, required by"+
-			" Braavos accounts. Only applies for internal signing.",
+		"Changes the the transaction version format from 0x3 to 1<<128 + 0x3, required by\n"+
+			"Braavos accounts. Only applies for internal signing.",
 	)
 	cmd.Flags().StringVar(
 		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error.",
