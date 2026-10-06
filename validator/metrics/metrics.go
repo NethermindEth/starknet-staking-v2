@@ -33,9 +33,13 @@ type Metrics struct {
 	attestationConfirmedCount       *prometheus.CounterVec
 	signerBalance                   *prometheus.GaugeVec
 	signerBalanceBelowThreshold     *prometheus.GaugeVec
+	rewardBalance                   *prometheus.GaugeVec
+	rewardBalanceBelowThreshold     *prometheus.GaugeVec
 }
 
 // NewMetrics creates a new metrics server
+//
+//nolint:funlen // Long due to the metric declarations
 func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 	registry := prometheus.NewRegistry()
 
@@ -121,6 +125,20 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			},
 			[]string{networkLabel},
 		),
+		rewardBalance: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "validator_attestation_reward_balance",
+				Help: "The balance of the reward account, checked after each attestation window",
+			},
+			[]string{networkLabel},
+		),
+		rewardBalanceBelowThreshold: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "validator_attestation_reward_below_threshold",
+				Help: "Set to one if the reward account has it's balance below certain threshold",
+			},
+			[]string{networkLabel},
+		),
 	}
 
 	// Register metrics with Prometheus registry
@@ -136,6 +154,8 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		m.attestationConfirmedCount,
 		m.signerBalance,
 		m.signerBalanceBelowThreshold,
+		m.rewardBalance,
+		m.rewardBalanceBelowThreshold,
 	)
 
 	// Create HTTP server
@@ -233,4 +253,23 @@ func (m *Metrics) RecordSignerBalanceAboveThreshold() {
 func (m *Metrics) RecordSignerBalanceBelowThreshold() {
 	m.logger.Debug("RecordSignerBalanceBelowThreshold")
 	m.signerBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
+}
+
+// UpdateRewardBalance set's the reward account balance. If it is too big a default max value is set
+// instead
+func (m *Metrics) UpdateRewardBalance(balance float64) {
+	m.logger.Debug("UpdateRewardBalance", zap.Float64("balance", balance))
+	m.rewardBalance.WithLabelValues(m.network).Set(balance)
+}
+
+// RecordRewardBalanceAboveThreshold sets the value to 0
+func (m *Metrics) RecordRewardBalanceAboveThreshold() {
+	m.logger.Debug("RecordRewardBalanceAboveThreshold")
+	m.rewardBalanceBelowThreshold.WithLabelValues(m.network).Set(0)
+}
+
+// RecordRewardBalanceBelowThreshold sets the value to 1
+func (m *Metrics) RecordRewardBalanceBelowThreshold() {
+	m.logger.Debug("RecordRewardBalanceBelowThreshold")
+	m.rewardBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
 }

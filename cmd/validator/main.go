@@ -254,7 +254,9 @@ func NewCommand() cobra.Command {
 		"balance-threshold",
 		100, //nolint:mnd // Default balance threshold (100 STRK)
 		"Triggers a warning if it detects the signer account (i.e. operational address)\n"+
-			"stark balance below the specified threshold. One stark equals 1 << 1e18.",
+			"stark balance below the specified threshold. If the auto-claim reward feature\n"+
+			"is configured, the reward account balance is checked as well.\n"+
+			"One stark equals 1 << 1e18.",
 	)
 	cmd.Flags().BoolVar(
 		&braavosAccount,

@@ -25,6 +25,12 @@ type Validator struct {
 	signer   signerP.Signer
 	logger   log.Logger
 
+	// @todo do we need it here? Maybe remove when we have decided how to handle
+	// the reward feature (hopping we already figured out how to handle it)
+
+	// Reward account address, only set if the reward configuration is provided
+	rewardAddress *types.Address
+
 	// Used to initiate a websocket connection later on
 	wsProvider string
 }
@@ -75,11 +81,19 @@ func New(
 		logger.Info("using internal signer")
 	}
 
+	// @todo continuation: do we need it here?
+	var rewardAddress *types.Address
+	if conf.Reward.IsSet() {
+		address := types.AddressFromString(conf.Reward.Address)
+		rewardAddress = &address
+	}
+
 	return Validator{
-		provider:   provider,
-		signer:     signer,
-		logger:     logger,
-		wsProvider: conf.Provider.WS,
+		provider:      provider,
+		signer:        signer,
+		logger:        logger,
+		rewardAddress: rewardAddress,
+		wsProvider:    conf.Provider.WS,
 	}, nil
 }
 
@@ -101,13 +115,13 @@ func (v *Validator) Attest(
 	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance
-	go CheckBalance(v.signer, balanceThreshold, v.logger, tracer)
+	go CheckBalance(v.signer, v.rewardAddress, balanceThreshold, v.logger, tracer)
 
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
-		dispatcher.Dispatch(v.signer, balanceThreshold, v.logger, tracer)
+		dispatcher.Dispatch(v.signer, v.rewardAddress, balanceThreshold, v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
 	defer wg.Wait()
