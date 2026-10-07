@@ -167,7 +167,7 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 //nolint:gocyclo // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
 	signer S,
-	rewardAddress *types.Address,
+	rewardSigner *signerP.RewardSigner,
 	balanceThreshold float64,
 	logger log.Logger, tracer metrics.Tracer,
 ) {
@@ -292,8 +292,8 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
-			// check the account balance
-			go CheckBalance(signer, rewardAddress, balanceThreshold, logger, tracer)
+			// check the accounts balances
+			go CheckBalance(signer, rewardSigner.Address(), balanceThreshold, logger, tracer)
 		}
 	}
 }

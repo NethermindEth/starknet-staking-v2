@@ -25,11 +25,7 @@ type Validator struct {
 	signer   signerP.Signer
 	logger   log.Logger
 
-	// @todo do we need it here? Maybe remove when we have decided how to handle
-	// the reward feature (hopping we already figured out how to handle it)
-
-	// Reward account address, only set if the reward configuration is provided
-	rewardAddress *types.Address
+	rewardSigner *signerP.RewardSigner
 
 	// Used to initiate a websocket connection later on
 	wsProvider string
@@ -86,19 +82,38 @@ func New(
 		zap.String("validationContracts", signer.ValidationContracts().String()),
 	)
 
-	// @todo continuation: do we need it here?
-	var rewardAddress *types.Address
+	var rewardSigner *signerP.RewardSigner
 	if conf.Reward.IsSet() {
-		address := types.AddressFromString(conf.Reward.Address)
-		rewardAddress = &address
+		var err error
+		if conf.Reward.External() {
+			rewardSigner, err = signerP.NewExternalRewardSigner(
+				ctx, provider, logger, &conf.Reward, braavos,
+			)
+			if err != nil {
+				return Validator{}, fmt.Errorf("failed to initialise external reward signer: %w", err)
+			}
+		} else {
+			rewardSigner, err = signerP.NewInternalRewardSigner(
+				ctx, provider, logger, &conf.Reward, braavos,
+			)
+			if err != nil {
+				return Validator{}, fmt.Errorf("failed to initialise internal reward signer: %w", err)
+			}
+			logger.Debug("using internal reward signer")
+		}
+
+		logger.Info(
+			"Reward auto-claiming enabled",
+			zap.String("rewardAddress", rewardSigner.Address().String()),
+		)
 	}
 
 	return Validator{
-		provider:      provider,
-		signer:        signer,
-		logger:        logger,
-		rewardAddress: rewardAddress,
-		wsProvider:    conf.Provider.WS,
+		provider:     provider,
+		signer:       signer,
+		logger:       logger,
+		rewardSigner: rewardSigner,
+		wsProvider:   conf.Provider.WS,
 	}, nil
 }
 
@@ -120,13 +135,13 @@ func (v *Validator) Attest(
 	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance
-	go CheckBalance(v.signer, v.rewardAddress, balanceThreshold, v.logger, tracer)
+	go CheckBalance(v.signer, v.rewardSigner.Address(), balanceThreshold, v.logger, tracer)
 
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
-		dispatcher.Dispatch(v.signer, v.rewardAddress, balanceThreshold, v.logger, tracer)
+		dispatcher.Dispatch(v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
 	defer wg.Wait()
