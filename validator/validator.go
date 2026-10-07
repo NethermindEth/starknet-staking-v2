@@ -81,6 +81,11 @@ func New(
 		logger.Info("using internal signer")
 	}
 
+	logger.Info(
+		"Validation contracts",
+		zap.String("validationContracts", signer.ValidationContracts().String()),
+	)
+
 	// @todo continuation: do we need it here?
 	var rewardAddress *types.Address
 	if conf.Reward.IsSet() {

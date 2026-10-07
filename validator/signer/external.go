@@ -49,7 +49,6 @@ func NewExternalSigner(
 	chainID := new(felt.Felt).SetBytes([]byte(chainIDStr))
 
 	validationContracts := types.ValidationContractsFromAddresses(addresses.SetDefaults(chainIDStr))
-	logger.Infof("validation contracts: %s", validationContracts.String())
 
 	return ExternalSigner{
 		ctx:                 ctx,
