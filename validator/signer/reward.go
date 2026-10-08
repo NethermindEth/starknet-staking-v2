@@ -21,7 +21,7 @@ func NewInternalRewardSigner(
 	braavos bool,
 ) (*RewardSigner, error) {
 	zeroAddresses := emptyContractAddresses()
-	signer := makeSignerFromRewardConfig(rewardConfig)
+	signer := makeSignerConfFromRewardConf(rewardConfig)
 
 	internalSigner, err := NewInternalSigner(
 		ctx, provider, logger, &signer, &zeroAddresses, braavos,
@@ -41,7 +41,7 @@ func NewExternalRewardSigner(
 	braavos bool,
 ) (*RewardSigner, error) {
 	zeroAddresses := emptyContractAddresses()
-	signer := makeSignerFromRewardConfig(rewardConfig)
+	signer := makeSignerConfFromRewardConf(rewardConfig)
 
 	externalSigner, err := NewExternalSigner(
 		ctx, provider, logger, &signer, &zeroAddresses, braavos,
@@ -53,7 +53,7 @@ func NewExternalRewardSigner(
 	return &RewardSigner{signer: &externalSigner}, nil
 }
 
-func makeSignerFromRewardConfig(rewardConfig *config.Reward) config.Signer {
+func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
 	return config.Signer{
 		ExternalURL:        rewardConfig.ExternalURL,
 		PrivKey:            rewardConfig.PrivKey,
