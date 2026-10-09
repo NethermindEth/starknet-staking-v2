@@ -15,9 +15,10 @@ import (
 )
 
 type RewardSigner struct {
-	ctx      context.Context
-	signer   Signer
-	provider rpc.RPCProvider
+	ctx            context.Context
+	signer         Signer
+	provider       rpc.RPCProvider
+	stakingAddress *types.Address
 }
 
 func NewRewardSigner(
@@ -26,6 +27,7 @@ func NewRewardSigner(
 	logger log.Logger,
 	rewardConfig *config.Reward,
 	contractAddresses *config.ContractAddresses,
+	stakingAddress *types.Address,
 	braavos bool,
 	isExternal bool,
 ) (*RewardSigner, error) {
@@ -47,9 +49,10 @@ func NewRewardSigner(
 		signer = &internalSigner
 	}
 	return &RewardSigner{
-		ctx:      ctx,
-		signer:   signer,
-		provider: provider,
+		ctx:            ctx,
+		signer:         signer,
+		provider:       provider,
+		stakingAddress: stakingAddress,
 	}, nil
 }
 

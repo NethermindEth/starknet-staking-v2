@@ -84,13 +84,20 @@ func New(
 
 	var rewardSigner *signerP.RewardSigner
 	if conf.Reward.IsSet() {
-		var err error
+		epochInfo, err := signerP.FetchEpochInfo(signer)
+		if err != nil {
+			return Validator{}, fmt.Errorf(
+				"failed to fetch staking address from epoch info: %w", err,
+			)
+		}
+
 		rewardSigner, err = signerP.NewRewardSigner(
 			ctx,
 			provider,
 			logger,
 			&conf.Reward,
 			&snConfig.ContractAddresses,
+			&epochInfo.StakerAddress,
 			braavos,
 			conf.Reward.IsExternal(),
 		)
