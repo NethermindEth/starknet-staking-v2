@@ -18,13 +18,13 @@ func NewInternalRewardSigner(
 	provider *rpc.Provider,
 	logger log.Logger,
 	rewardConfig *config.Reward,
+	contractAddresses *config.ContractAddresses,
 	braavos bool,
 ) (*RewardSigner, error) {
-	zeroAddresses := emptyContractAddresses()
 	signer := makeSignerConfFromRewardConf(rewardConfig)
 
 	internalSigner, err := NewInternalSigner(
-		ctx, provider, logger, &signer, &zeroAddresses, braavos,
+		ctx, provider, logger, &signer, contractAddresses, braavos,
 	)
 	if err != nil {
 		return nil, err
@@ -38,14 +38,12 @@ func NewExternalRewardSigner(
 	provider *rpc.Provider,
 	logger log.Logger,
 	rewardConfig *config.Reward,
+	contractAddresses *config.ContractAddresses,
 	braavos bool,
 ) (*RewardSigner, error) {
-	zeroAddresses := emptyContractAddresses()
 	signer := makeSignerConfFromRewardConf(rewardConfig)
 
-	externalSigner, err := NewExternalSigner(
-		ctx, provider, logger, &signer, &zeroAddresses, braavos,
-	)
+	externalSigner, err := NewExternalSigner(ctx, provider, logger, &signer, contractAddresses, braavos)
 	if err != nil {
 		return nil, err
 	}
@@ -58,15 +56,6 @@ func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
 		ExternalURL:        rewardConfig.ExternalURL,
 		PrivKey:            rewardConfig.PrivKey,
 		OperationalAddress: rewardConfig.Address,
-	}
-}
-
-// Returns a [config.ContractAddresses] with all addresses set to 0x0.
-// These addresses are required for the [Signer], but not for the reward feat.
-func emptyContractAddresses() config.ContractAddresses {
-	return config.ContractAddresses{
-		Attest:  "0x0",
-		Staking: "0x0",
 	}
 }
 

@@ -87,14 +87,24 @@ func New(
 		var err error
 		if conf.Reward.External() {
 			rewardSigner, err = signerP.NewExternalRewardSigner(
-				ctx, provider, logger, &conf.Reward, braavos,
+				ctx,
+				provider,
+				logger,
+				&conf.Reward,
+				&snConfig.ContractAddresses,
+				braavos,
 			)
 			if err != nil {
 				return Validator{}, fmt.Errorf("failed to initialise external reward signer: %w", err)
 			}
 		} else {
 			rewardSigner, err = signerP.NewInternalRewardSigner(
-				ctx, provider, logger, &conf.Reward, braavos,
+				ctx,
+				provider,
+				logger,
+				&conf.Reward,
+				&snConfig.ContractAddresses,
+				braavos,
 			)
 			if err != nil {
 				return Validator{}, fmt.Errorf("failed to initialise internal reward signer: %w", err)
