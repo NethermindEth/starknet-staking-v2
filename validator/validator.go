@@ -44,7 +44,7 @@ func New(
 	}
 
 	var signer signerP.Signer
-	if conf.Signer.External() {
+	if conf.Signer.IsExternal() {
 		externalSigner, err := signerP.NewExternalSigner(
 			ctx,
 			provider,
@@ -92,7 +92,7 @@ func New(
 			&conf.Reward,
 			&snConfig.ContractAddresses,
 			braavos,
-			conf.Reward.External(),
+			conf.Reward.IsExternal(),
 		)
 		if err != nil {
 			return Validator{}, fmt.Errorf("failed to initialise reward signer: %w", err)

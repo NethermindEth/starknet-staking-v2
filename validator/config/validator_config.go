@@ -61,7 +61,7 @@ func (s *Signer) Check() error {
 	if s.OperationalAddress == "" {
 		return errors.New("operational address is not set in signer configuration")
 	}
-	if s.External() {
+	if s.IsExternal() {
 		return nil
 	}
 	if s.PrivKey == "" {
@@ -92,7 +92,7 @@ func (s *Signer) Fill(other *Signer) {
 	}
 }
 
-func (s *Signer) External() bool {
+func (s *Signer) IsExternal() bool {
 	return s.ExternalURL != ""
 }
 
@@ -181,8 +181,7 @@ func (r *Reward) SetDefaults() {
 	}
 }
 
-// @todo not in use yet
-func (r *Reward) External() bool {
+func (r *Reward) IsExternal() bool {
 	return r.ExternalURL != ""
 }
 

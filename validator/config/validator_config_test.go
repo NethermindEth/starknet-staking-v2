@@ -334,29 +334,29 @@ func TestSignerExternal(t *testing.T) {
 
 	t.Run("With external url", func(t *testing.T) {
 		signer := Signer{ExternalURL: externalURL}
-		require.True(t, signer.External())
+		require.True(t, signer.IsExternal())
 	})
 
 	t.Run("With private key only", func(t *testing.T) {
 		signer := Signer{PrivKey: "0x123"}
-		require.False(t, signer.External())
+		require.False(t, signer.IsExternal())
 	})
 
 	t.Run("External url takes priority over private key", func(t *testing.T) {
 		signer := Signer{ExternalURL: externalURL, PrivKey: "0x123"}
-		require.True(t, signer.External())
+		require.True(t, signer.IsExternal())
 	})
 }
 
 func TestRewardExternal(t *testing.T) {
 	t.Run("With external url", func(t *testing.T) {
 		reward := Reward{ExternalURL: "http://localhost:9012"}
-		require.True(t, reward.External())
+		require.True(t, reward.IsExternal())
 	})
 
 	t.Run("With private key only", func(t *testing.T) {
 		reward := Reward{PrivKey: "0xabc"}
-		require.False(t, reward.External())
+		require.False(t, reward.IsExternal())
 	})
 }
 
