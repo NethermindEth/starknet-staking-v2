@@ -10,7 +10,9 @@ import (
 )
 
 type RewardSigner struct {
-	signer Signer
+	ctx      context.Context
+	signer   Signer
+	provider rpc.RPCProvider
 }
 
 func NewInternalRewardSigner(
@@ -30,7 +32,11 @@ func NewInternalRewardSigner(
 		return nil, err
 	}
 
-	return &RewardSigner{signer: &internalSigner}, nil
+	return &RewardSigner{
+		ctx:      ctx,
+		signer:   &internalSigner,
+		provider: provider,
+	}, nil
 }
 
 func NewExternalRewardSigner(
@@ -48,7 +54,11 @@ func NewExternalRewardSigner(
 		return nil, err
 	}
 
-	return &RewardSigner{signer: &externalSigner}, nil
+	return &RewardSigner{
+		ctx:      ctx,
+		signer:   &externalSigner,
+		provider: provider,
+	}, nil
 }
 
 func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
