@@ -64,35 +64,53 @@ func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
 	}
 }
 
-func (r *RewardSigner) Address() *types.Address {
-	return r.signer.Address()
+func (rs *RewardSigner) Address() *types.Address {
+	return rs.signer.Address()
 }
 
-func (r *RewardSigner) ClaimReward(ctx context.Context) error {
+func (rs *RewardSigner) claimReward() (
+	rpc.AddInvokeTransactionResponse, error,
+) {
+	var resp rpc.AddInvokeTransactionResponse
 
-	return nil
+	txn, err := rs.buildClaimRewardTransaction()
+	if err != nil {
+		return resp, fmt.Errorf("failed to build claim reward transaction: %w", err)
+	}
+
+	err = rs.populateFees(&txn)
+	if err != nil {
+		return resp, fmt.Errorf("failed to populate fees: %w", err)
+	}
+
+	resp, err = rs.provider.AddInvokeTransaction(rs.ctx, &txn)
+	if err != nil {
+		return resp, fmt.Errorf("failed to invoke transaction: %w", err)
+	}
+
+	return resp, nil
 }
 
-func (r *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, error) {
+func (rs *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, error) {
 	invokeCall := []rpc.InvokeFunctionCall{{
-		ContractAddress: r.signer.ValidationContracts().Staking.Felt(),
+		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
 		FunctionName:    "claim_reward",
-		CallData:        []*felt.Felt{},
+		CallData:        []*felt.Felt{rs.stakingAddress.Felt()},
 	}}
 	call := utils.InvokeFuncCallsToFunctionCalls(invokeCall)
 	calldata := account.FmtCallDataCairo2(call)
 	defaultResources := makeDefaultResources()
 
-	nonce, err := r.provider.Nonce(
-		r.ctx,
+	nonce, err := rs.provider.Nonce(
+		rs.ctx,
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
-		r.Address().Felt(),
+		rs.Address().Felt(),
 	)
 	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
+		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to get nonce: %w", err)
 	}
 
-	tip, err := rpc.EstimateTip(r.ctx, r.provider, constants.TipMultiplier)
+	tip, err := rpc.EstimateTip(rs.ctx, rs.provider, constants.TipMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
@@ -100,7 +118,7 @@ func (r *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, 
 	// Taken from starknet.go `utils.BuildInvokeTxn`
 	attestTransaction := rpc.BroadcastInvokeTxnV3{
 		Type:                  rpc.TransactionTypeInvoke,
-		SenderAddress:         r.Address().Felt(),
+		SenderAddress:         rs.Address().Felt(),
 		Calldata:              calldata,
 		Version:               rpc.TransactionV3,
 		Signature:             []*felt.Felt{},
@@ -115,5 +133,28 @@ func (r *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, 
 		ProofFacts:            []*felt.Felt{},
 	}
 
+	_, err = rs.signer.SignTransaction(&attestTransaction)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
 	return attestTransaction, nil
+}
+
+func (rs *RewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) error {
+	estimate, err := rs.signer.EstimateFee(txn)
+	if err != nil {
+		return fmt.Errorf("failed to estimate fee: %w", err)
+	}
+	txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, constants.FeeEstimationMultiplier)
+
+	// patch for making sure txn.Version is correct
+	txn.Version = rpc.TransactionV3
+
+	_, err = rs.signer.SignTransaction(txn)
+	if err != nil {
+		return fmt.Errorf("failed to sign the transaction: %w", err)
+	}
+
+	return nil
 }
