@@ -59,10 +59,6 @@ func NewInternalSigner(
 	validationContracts := types.ValidationContractsFromAddresses(
 		addresses.SetDefaults(chainIDStr),
 	)
-	logger.Info(
-		"Validation contracts",
-		zap.String("validationContracts", validationContracts.String()),
-	)
 
 	logger.Debug(
 		"internal signer has been set up",

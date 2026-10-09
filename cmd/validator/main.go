@@ -27,6 +27,20 @@ Validator program for Starknet stakers created by Nethermind
 
 `
 
+const longDescription = `Validator program for Starknet stakers created by Nethermind
+
+Configuration can be provided through flags, environment variables or a JSON
+config file, in that order of priority.
+
+Auto-claim reward feature (optional):
+  Automatically claims the staker rewards once the unclaimed amount 
+  reaches --reward-claim-threshold. If any reward option is set, --reward-address,
+  --reward-claim-threshold and exactly one of --reward-priv-key or
+  --reward-signer-url are required.
+	
+Full documentation: https://nethermindeth.github.io/starknet-staking-v2/	
+`
+
 //nolint:funlen // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {
 	var configPath string
@@ -44,21 +58,7 @@ func NewCommand() cobra.Command {
 	var logger *log.ZapLogger
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
-		// Config takes the values from flags directly,
-		// then fills the missing ones from the env vars
-		configFromEnv := configP.FromEnv()
-		config.Fill(&configFromEnv)
-
-		// It fills the missing one from the ones defined
-		// in a config file
-		if configPath != "" {
-			configFromFile, err := configP.FromFile(configPath)
-			if err != nil {
-				return err
-			}
-			config.Fill(&configFromFile)
-		}
-		if err := config.Check(); err != nil {
+		if err := loadConfig(&config, configPath); err != nil {
 			return err
 		}
 
@@ -154,6 +154,7 @@ func NewCommand() cobra.Command {
 	cmd := cobra.Command{
 		Use:     "validator",
 		Short:   "Validator program for Starknet stakers created by Nethermind",
+		Long:    longDescription,
 		Version: validator.Version,
 		PreRunE: preRunE,
 		Run:     run,
@@ -184,6 +185,43 @@ func NewCommand() cobra.Command {
 		"Signer operational address, required for attesting",
 	)
 
+	// Config reward flags
+	cmd.Flags().StringVar(
+		&config.Reward.Address,
+		"reward-address",
+		"",
+		"(Optional) Reward account address. \n"+
+			"Required for the auto-claim reward feature.",
+	)
+	cmd.Flags().Uint64Var(
+		&config.Reward.ClaimMaxFee,
+		"reward-claim-max-fee",
+		0,
+		"(Optional) Max fee, in FRI, to pay for the claim transaction. \n"+
+			" Defaults to 'unlimited' if not specified (max uint64, which is ~18.4 STRK)",
+	)
+	cmd.Flags().Uint64Var(
+		&config.Reward.ClaimThreshold,
+		"reward-claim-threshold",
+		0,
+		"(Optional) Amount of unclaimed rewards, in STRK, that triggers an automatic claim. \n"+
+			" Required for the auto-claim reward feature.",
+	)
+	cmd.Flags().StringVar(
+		&config.Reward.PrivKey,
+		"reward-priv-key",
+		"",
+		"(Optional) Reward account private key, used for internal signing of the reward account. \n"+
+			"Required for the auto-claim reward feature. Can be replaced by the 'reward-signer-url' flag.",
+	)
+	cmd.Flags().StringVar(
+		&config.Reward.ExternalURL,
+		"reward-signer-url",
+		"",
+		"(Optional) Reward signer url address, used for external signing of the reward account. \n"+
+			"Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag.",
+	)
+
 	// Config starknet flags
 	cmd.Flags().StringVar(
 		&snConfig.ContractAddresses.Attest,
@@ -208,28 +246,52 @@ func NewCommand() cobra.Command {
 		&maxRetriesF,
 		"max-retries",
 		"infinite",
-		"How many times to retry to get information required for attestation."+
+		"How many times to retry to get information required for attestation.\n"+
 			" It can be either a positive integer or the key word 'infinite'",
 	)
 	cmd.Flags().Float64Var(
 		&balanceThreshold,
 		"balance-threshold",
 		100, //nolint:mnd // Default balance threshold (100 STRK)
-		"Triggers a warning if it detects the signer account (i.e. operational address)"+
-			" stark balance below the specified threshold. One stark equals 1 << 1e18.",
+		"Triggers a warning if it detects the signer account (i.e. operational address)\n"+
+			"stark balance below the specified threshold. If the auto-claim reward feature\n"+
+			"is configured, the reward account balance is checked as well.\n"+
+			"One stark equals 1 << 1e18.",
 	)
 	cmd.Flags().BoolVar(
 		&braavosAccount,
 		"braavos-account",
 		false,
-		"Changes the the transaction version format from 0x3 to 1<<128 + 0x3, required by"+
-			" Braavos accounts. Only applies for internal signing.",
+		"Changes the the transaction version format from 0x3 to 1<<128 + 0x3, required by\n"+
+			"Braavos accounts. Only applies for internal signing.",
 	)
 	cmd.Flags().StringVar(
 		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error.",
 	)
 
 	return cmd
+}
+
+// Completes the config, which already holds the values from flags, with the
+// ones from env vars and then from the config file. Afterwards it sets the
+// defaults for the missing values and verifies the result
+func loadConfig(config *configP.Config, configPath string) error {
+	configFromEnv, err := configP.FromEnv()
+	if err != nil {
+		return err
+	}
+	config.Fill(&configFromEnv)
+
+	if configPath != "" {
+		configFromFile, err := configP.FromFile(configPath)
+		if err != nil {
+			return err
+		}
+		config.Fill(&configFromFile)
+	}
+	config.SetDefaults()
+
+	return config.Check()
 }
 
 func main() {

@@ -25,6 +25,8 @@ type Validator struct {
 	signer   signerP.Signer
 	logger   log.Logger
 
+	rewardSigner *signerP.RewardSigner
+
 	// Used to initiate a websocket connection later on
 	wsProvider string
 }
@@ -42,7 +44,7 @@ func New(
 	}
 
 	var signer signerP.Signer
-	if conf.Signer.External() {
+	if conf.Signer.IsExternal() {
 		externalSigner, err := signerP.NewExternalSigner(
 			ctx,
 			provider,
@@ -75,11 +77,46 @@ func New(
 		logger.Info("using internal signer")
 	}
 
+	logger.Info(
+		"Validation contracts",
+		zap.String("validationContracts", signer.ValidationContracts().String()),
+	)
+
+	var rewardSigner *signerP.RewardSigner
+	if conf.Reward.IsSet() {
+		epochInfo, err := signerP.FetchEpochInfo(signer)
+		if err != nil {
+			return Validator{}, fmt.Errorf(
+				"failed to fetch staking address from epoch info: %w", err,
+			)
+		}
+
+		rewardSigner, err = signerP.NewRewardSigner(
+			ctx,
+			provider,
+			logger,
+			&conf.Reward,
+			&snConfig.ContractAddresses,
+			&epochInfo.StakerAddress,
+			braavos,
+			conf.Reward.IsExternal(),
+		)
+		if err != nil {
+			return Validator{}, fmt.Errorf("failed to initialise reward signer: %w", err)
+		}
+
+		logger.Info(
+			"Reward auto-claiming enabled",
+			zap.String("rewardAddress", rewardSigner.Address().String()),
+		)
+	}
+
 	return Validator{
-		provider:   provider,
-		signer:     signer,
-		logger:     logger,
-		wsProvider: conf.Provider.WS,
+		provider:     provider,
+		signer:       signer,
+		logger:       logger,
+		rewardSigner: rewardSigner,
+		wsProvider:   conf.Provider.WS,
 	}, nil
 }
 
@@ -101,13 +138,13 @@ func (v *Validator) Attest(
 	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance
-	go CheckBalance(v.signer, balanceThreshold, v.logger, tracer)
+	go CheckBalance(v.signer, v.rewardSigner.Address(), balanceThreshold, v.logger, tracer)
 
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
-		dispatcher.Dispatch(v.signer, balanceThreshold, v.logger, tracer)
+		dispatcher.Dispatch(v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
 	defer wg.Wait()
