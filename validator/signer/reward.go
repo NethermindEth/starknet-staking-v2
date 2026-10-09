@@ -20,48 +20,35 @@ type RewardSigner struct {
 	provider rpc.RPCProvider
 }
 
-func NewInternalRewardSigner(
+func NewRewardSigner(
 	ctx context.Context,
 	provider *rpc.Provider,
 	logger log.Logger,
 	rewardConfig *config.Reward,
 	contractAddresses *config.ContractAddresses,
 	braavos bool,
+	isExternal bool,
 ) (*RewardSigner, error) {
-	signer := makeSignerConfFromRewardConf(rewardConfig)
+	signerConf := makeSignerConfFromRewardConf(rewardConfig)
 
-	internalSigner, err := NewInternalSigner(
-		ctx, provider, logger, &signer, contractAddresses, braavos,
-	)
-	if err != nil {
-		return nil, err
+	var signer Signer
+
+	if isExternal {
+		externalSigner, err := NewExternalSigner(ctx, provider, logger, &signerConf, contractAddresses, braavos)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create internal signer: %w", err)
+		}
+		signer = &externalSigner
+	} else {
+		internalSigner, err := NewInternalSigner(ctx, provider, logger, &signerConf, contractAddresses, braavos)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create internal signer: %w", err)
+		}
+		signer = &internalSigner
 	}
-
 	return &RewardSigner{
 		ctx:      ctx,
-		signer:   &internalSigner,
-		provider: provider,
-	}, nil
-}
-
-func NewExternalRewardSigner(
-	ctx context.Context,
-	provider *rpc.Provider,
-	logger log.Logger,
-	rewardConfig *config.Reward,
-	contractAddresses *config.ContractAddresses,
-	braavos bool,
-) (*RewardSigner, error) {
-	signer := makeSignerConfFromRewardConf(rewardConfig)
-
-	externalSigner, err := NewExternalSigner(ctx, provider, logger, &signer, contractAddresses, braavos)
-	if err != nil {
-		return nil, err
-	}
-
-	return &RewardSigner{
-		ctx:      ctx,
-		signer:   &externalSigner,
+		signer:   signer,
 		provider: provider,
 	}, nil
 }
