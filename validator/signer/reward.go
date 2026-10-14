@@ -104,10 +104,14 @@ func (rs *RewardSigner) ClaimRewards() {
 		return
 	}
 
-	err = rs.populateFees(&txn)
+	overallFee, err := rs.populateFees(&txn)
 	if err != nil {
 		if errors.Is(err, errFeeExceedsClaimMaxFee) {
-			rs.logger.Warn(pref+"estimated fee exceeds claim max fee; skipping claim...", zap.Error(err))
+			rs.logger.Warn(
+				pref+"estimated fee exceeds claim max fee; skipping claim...",
+				zap.String("overall fee", overallFee.String()),
+				zap.String("claim max fee", rs.claimMaxFee.String()),
+			)
 			return
 		}
 		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
@@ -241,15 +245,17 @@ func (rs *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 }
 
 // populateFees estimates the fee and populates the transaction with the fee.
+// Returns the overall fee and an error.
 // If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned.
-func (rs *RewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) error {
+func (rs *RewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) (felt.Felt, error) {
+	var overallFee felt.Felt
 	estimate, err := rs.signer.EstimateFee(txn)
 	if err != nil {
-		return fmt.Errorf("failed to estimate fee: %w", err)
+		return overallFee, fmt.Errorf("failed to estimate fee: %w", err)
 	}
 
 	if rs.claimMaxFee.Cmp(estimate.OverallFee) < 0 {
-		return errFeeExceedsClaimMaxFee
+		return overallFee, errFeeExceedsClaimMaxFee
 	}
 
 	txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, constants.FeeEstimationMultiplier)
@@ -259,8 +265,9 @@ func (rs *RewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) error {
 
 	_, err = rs.signer.SignTransaction(txn)
 	if err != nil {
-		return fmt.Errorf("failed to sign the transaction: %w", err)
+		return overallFee, fmt.Errorf("failed to sign the transaction: %w", err)
 	}
 
-	return nil
+	overallFee = *estimate.OverallFee
+	return overallFee, nil
 }
