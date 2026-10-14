@@ -2,6 +2,7 @@ package signer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -14,11 +15,16 @@ import (
 	"github.com/NethermindEth/starknet.go/utils"
 )
 
+var errFeeExceedsClaimMaxFee = fmt.Errorf("estimated fee is greater than claim max fee")
+
 type RewardSigner struct {
 	ctx            context.Context
 	signer         Signer
 	provider       rpc.RPCProvider
 	stakingAddress *types.Address
+
+	claimMaxFee    felt.Felt
+	claimThreshold felt.Felt
 }
 
 func NewRewardSigner(
@@ -53,6 +59,8 @@ func NewRewardSigner(
 		signer:         signer,
 		provider:       provider,
 		stakingAddress: stakingAddress,
+		claimMaxFee:    felt.FromUint64[felt.Felt](rewardConfig.ClaimMaxFee),
+		claimThreshold: felt.FromUint64[felt.Felt](rewardConfig.ClaimThreshold),
 	}, nil
 }
 
@@ -132,6 +140,8 @@ func (rs *RewardSigner) decode_get_staker_info_v1(resp []*felt.Felt) (felt.Felt,
 	return result, nil
 }
 
+// claimReward builds, populates fees and invokes the claim reward transaction.
+// If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned.
 func (rs *RewardSigner) claimReward() (
 	rpc.AddInvokeTransactionResponse, error,
 ) {
@@ -144,6 +154,9 @@ func (rs *RewardSigner) claimReward() (
 
 	err = rs.populateFees(&txn)
 	if err != nil {
+		if errors.Is(err, errFeeExceedsClaimMaxFee) {
+			return resp, err
+		}
 		return resp, fmt.Errorf("failed to populate fees: %w", err)
 	}
 
@@ -205,11 +218,18 @@ func (rs *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 	return attestTransaction, nil
 }
 
+// populateFees estimates the fee and populates the transaction with the fee.
+// If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned.
 func (rs *RewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) error {
 	estimate, err := rs.signer.EstimateFee(txn)
 	if err != nil {
 		return fmt.Errorf("failed to estimate fee: %w", err)
 	}
+
+	if rs.claimMaxFee.Cmp(estimate.OverallFee) < 0 {
+		return errFeeExceedsClaimMaxFee
+	}
+
 	txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, constants.FeeEstimationMultiplier)
 
 	// patch for making sure txn.Version is correct
