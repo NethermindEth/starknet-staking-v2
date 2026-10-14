@@ -68,6 +68,70 @@ func (rs *RewardSigner) Address() *types.Address {
 	return rs.signer.Address()
 }
 
+func (rs *RewardSigner) getUnclaimedRewardsAmount() (felt.Felt, error) {
+	functionCall := rpc.FunctionCall{
+		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
+		EntryPointSelector: utils.GetSelectorFromNameFelt(
+			"get_staker_info_v1",
+		),
+		Calldata: []*felt.Felt{rs.stakingAddress.Felt()},
+	}
+
+	resp, err := rs.signer.Call(functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
+	if err != nil {
+		return felt.Felt{}, fmt.Errorf("calling 'get_staker_info_v1': %w", err)
+	}
+
+	result, err := rs.decode_get_staker_info_v1(resp)
+	if err != nil {
+		return felt.Felt{}, fmt.Errorf("decoding 'get_staker_info_v1': %w", err)
+	}
+
+	return result, nil
+}
+
+// https://github.com/starkware-libs/starknet-staking/blob/main/docs/spec.md#stakerinfov1
+func (rs *RewardSigner) decode_get_staker_info_v1(resp []*felt.Felt) (felt.Felt, error) {
+	var result felt.Felt
+
+	if len(resp) == 0 {
+		return result, fmt.Errorf("response is empty")
+	}
+
+	// #1 = enum. 0x0 is valid, 0x1 is not.
+	if resp[0].IsOne() {
+		return result, fmt.Errorf(
+			"staker address %s not found by the staking contract",
+			rs.stakingAddress,
+		)
+	}
+
+	if len(resp) < 4 {
+		return result, fmt.Errorf("response is too short")
+	}
+
+	// #2 = reward_address
+	// #3 = operational_address
+
+	var index int = 4
+	// #4 = unstake_time
+	if resp[3].IsZero() {
+		// if 'unstake_time' is valid (0 value), there is a new field in the list: 'seconds'.
+		// Increase the index by 1 to skip it.
+		index++
+	}
+
+	// #5 = amount_own; skip it.
+	index++
+	// #6 = unclaimed_rewards_own
+	if len(resp) < index+1 {
+		return result, fmt.Errorf("response is too short")
+	}
+	result = *resp[index]
+
+	return result, nil
+}
+
 func (rs *RewardSigner) claimReward() (
 	rpc.AddInvokeTransactionResponse, error,
 ) {
