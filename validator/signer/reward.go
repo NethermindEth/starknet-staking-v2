@@ -13,12 +13,14 @@ import (
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
+	"go.uber.org/zap"
 )
 
 var errFeeExceedsClaimMaxFee = fmt.Errorf("estimated fee is greater than claim max fee")
 
 type RewardSigner struct {
 	ctx            context.Context
+	logger         log.Logger
 	signer         Signer
 	provider       rpc.RPCProvider
 	stakingAddress *types.Address
@@ -56,6 +58,7 @@ func NewRewardSigner(
 	}
 	return &RewardSigner{
 		ctx:            ctx,
+		logger:         logger,
 		signer:         signer,
 		provider:       provider,
 		stakingAddress: stakingAddress,
@@ -74,6 +77,53 @@ func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
 
 func (rs *RewardSigner) Address() *types.Address {
 	return rs.signer.Address()
+}
+
+func (rs *RewardSigner) ClaimRewards() {
+	pref := "Auto-Claiming Rewards: "
+	rs.logger.Debug(pref + "starting claim rewards")
+
+	unclaimedRewardsAmount, err := rs.getUnclaimedRewardsAmount()
+	if err != nil {
+		rs.logger.Error(pref+"failed to get unclaimed rewards amount", zap.Error(err))
+		return
+	}
+
+	if rs.claimThreshold.Cmp(&unclaimedRewardsAmount) > 0 {
+		rs.logger.Debug(
+			pref + "unclaimed rewards amount is greater than claim threshold; skipping claim...",
+		)
+		return
+	}
+
+	rs.logger.Info(pref + "rewards amount reached claim threshold; claiming rewards...")
+
+	txn, err := rs.buildClaimRewardTransaction()
+	if err != nil {
+		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
+		return
+	}
+
+	err = rs.populateFees(&txn)
+	if err != nil {
+		if errors.Is(err, errFeeExceedsClaimMaxFee) {
+			rs.logger.Warn(pref+"estimated fee exceeds claim max fee; skipping claim...", zap.Error(err))
+			return
+		}
+		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
+		return
+	}
+
+	resp, err := rs.provider.AddInvokeTransaction(rs.ctx, &txn)
+	if err != nil {
+		rs.logger.Error(pref+"failed to send reward claim transaction", zap.Error(err))
+		return
+	}
+
+	rs.logger.Info(
+		pref+"reward claim transaction sent successfully",
+		zap.String("transaction hash", resp.Hash.String()),
+	)
 }
 
 func (rs *RewardSigner) getUnclaimedRewardsAmount() (felt.Felt, error) {
@@ -138,34 +188,6 @@ func (rs *RewardSigner) decode_get_staker_info_v1(resp []*felt.Felt) (felt.Felt,
 	result = *resp[index]
 
 	return result, nil
-}
-
-// claimReward builds, populates fees and invokes the claim reward transaction.
-// If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned.
-func (rs *RewardSigner) claimReward() (
-	rpc.AddInvokeTransactionResponse, error,
-) {
-	var resp rpc.AddInvokeTransactionResponse
-
-	txn, err := rs.buildClaimRewardTransaction()
-	if err != nil {
-		return resp, fmt.Errorf("failed to build claim reward transaction: %w", err)
-	}
-
-	err = rs.populateFees(&txn)
-	if err != nil {
-		if errors.Is(err, errFeeExceedsClaimMaxFee) {
-			return resp, err
-		}
-		return resp, fmt.Errorf("failed to populate fees: %w", err)
-	}
-
-	resp, err = rs.provider.AddInvokeTransaction(rs.ctx, &txn)
-	if err != nil {
-		return resp, fmt.Errorf("failed to invoke transaction: %w", err)
-	}
-
-	return resp, nil
 }
 
 func (rs *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, error) {
