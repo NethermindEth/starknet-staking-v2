@@ -18,6 +18,9 @@ import (
 
 var errFeeExceedsClaimMaxFee = fmt.Errorf("estimated fee is greater than claim max fee")
 
+// RewardSigner is a signer that can claim rewards from the staking contract.
+// It is used for the validator to claim rewards automatically, an optional feature
+// that can be enabled by setting the corresponding flags in the config.
 type RewardSigner struct {
 	ctx            context.Context
 	logger         log.Logger
@@ -79,6 +82,8 @@ func (rs *RewardSigner) Address() *types.Address {
 	return rs.signer.Address()
 }
 
+// ClaimRewards claims rewards if the unclaimed rewards amount is greater than the claim threshold.
+// All errors and state changes are logged, the feature does not stop the flow.
 func (rs *RewardSigner) ClaimRewards() {
 	pref := "Auto-Claiming Rewards: "
 	rs.logger.Debug(pref + "starting claim rewards")
