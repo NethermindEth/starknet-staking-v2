@@ -1,14 +1,17 @@
 package validator_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
+	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
+	"github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/NethermindEth/starknet.go/utils"
@@ -63,6 +66,28 @@ func strkBalance(strk uint64) []*felt.Felt {
 	return []*felt.Felt{fri, new(felt.Felt)}
 }
 
+func newRewardSigner(t *testing.T, logger log.Logger) *signer.RewardSigner {
+	rewardConfig := &config.Reward{
+		PrivKey:        "0x123",
+		Address:        "0x123",
+		ClaimThreshold: 100,
+		ClaimMaxFee:    math.MaxUint64,
+	}
+
+	rewardSigner, err := signer.NewRewardSigner(
+		t.Context(),
+		nil,
+		logger,
+		rewardConfig,
+		(&config.ContractAddresses{}).SetDefaults("SN_SEPOLIA"),
+		(*types.Address)(&felt.One),
+		false,
+		false,
+	)
+	require.NoError(t, err)
+	return rewardSigner
+}
+
 func TestCheckBalance(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
@@ -70,6 +95,7 @@ func TestCheckBalance(t *testing.T) {
 	logger := log.NewNopZapLogger()
 	signerAddress := types.AddressFromString("0x123")
 	rewardAddress := types.AddressFromString("0x456")
+	rewardSigner := newRewardSigner(t, logger)
 	threshold := 100.0
 
 	t.Run("Only signer balance is checked when reward address is not set", func(t *testing.T) {
@@ -108,7 +134,7 @@ func TestCheckBalance(t *testing.T) {
 				Return(strkBalance(tc.rewardBalance), nil)
 
 			tracer := &balanceTracer{}
-			validator.CheckBalance(mockSigner, &rewardAddress, threshold, logger, tracer)
+			validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
 
 			require.Equal(t, float64(tc.signerBalance), *tracer.signerBalance)
 			require.Equal(t, float64(tc.signerBalance) <= threshold, *tracer.signerBelow)
@@ -128,7 +154,7 @@ func TestCheckBalance(t *testing.T) {
 			Return(strkBalance(150), nil)
 
 		tracer := &balanceTracer{}
-		validator.CheckBalance(mockSigner, &rewardAddress, threshold, logger, tracer)
+		validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
 
 		require.Nil(t, tracer.signerBalance)
 		require.Nil(t, tracer.signerBelow)
@@ -147,7 +173,7 @@ func TestCheckBalance(t *testing.T) {
 			Return(nil, errors.New("some error"))
 
 		tracer := &balanceTracer{}
-		validator.CheckBalance(mockSigner, &rewardAddress, threshold, logger, tracer)
+		validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
 
 		require.Equal(t, 150.0, *tracer.signerBalance)
 		require.False(t, *tracer.signerBelow)

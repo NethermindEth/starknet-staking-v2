@@ -293,7 +293,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
 			// check the accounts balances
-			go CheckBalance(signer, rewardSigner.Address(), balanceThreshold, logger, tracer)
+			go CheckBalance(signer, rewardSigner, balanceThreshold, logger, tracer)
 
 			// Claim rewards if the feature is enabled
 			if rewardSigner != nil {

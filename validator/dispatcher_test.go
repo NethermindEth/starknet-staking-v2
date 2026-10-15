@@ -2,13 +2,17 @@ package validator_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
+	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
+	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
+	"github.com/sourcegraph/conc"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -538,4 +542,62 @@ func TestTrackAttest(t *testing.T) {
 
 		require.Equal(t, validator.Successful, txStatus)
 	})
+}
+
+// When the auto-claim reward feature is not configured, the dispatcher receives
+// a nil *RewardSigner. Processing an EndOfWindow event must not panic.
+func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+
+	signerAddress := types.AddressFromString("0x123")
+	balanceChecked := make(chan struct{}, 1)
+
+	mockSigner := mocks.NewMockSigner(mockCtrl)
+	mockSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
+	mockSigner.EXPECT().
+		ValidationContracts().
+		Return(validator.SepoliaValidationContracts(t)).
+		AnyTimes()
+	// Called by `TrackAttest` when the window ends without a successful attest
+	mockSigner.EXPECT().
+		TransactionStatus(gomock.Any()).
+		Return(nil, validator.ErrTxnHashNotFound).
+		AnyTimes()
+	// Called by the `CheckBalance` goroutine launched at the end of the window
+	mockSigner.EXPECT().
+		Call(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ rpc.FunctionCall, _ rpc.BlockID) ([]*felt.Felt, error) {
+			select {
+			case balanceChecked <- struct{}{}:
+			default:
+			}
+
+			return nil, errors.New("balance unavailable")
+		}).
+		AnyTimes()
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(
+			mockSigner, nil, 100, log.NewNopZapLogger(), metrics.NewNoOpMetrics(),
+		)
+	})
+
+	dispatcher.EndOfWindow <- struct{}{}
+	close(dispatcher.DoAttest)
+
+	recovered := wg.WaitAndRecover()
+	require.Nil(
+		t, recovered, "Dispatch panicked on EndOfWindow with a nil reward signer: %s",
+		recovered,
+	)
+
+	// Make sure the balance check goroutine is done, confirming that the EndOfWindow
+	// event was processed correctly.
+	select {
+	case <-balanceChecked:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "balance check was not performed at the end of the window")
+	}
 }

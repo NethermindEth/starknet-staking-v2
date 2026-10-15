@@ -20,7 +20,7 @@ const (
 // Each balance is recorded and a warning is given if it is below the threshold
 func CheckBalance[S signerP.Signer](
 	signer S,
-	rewardAddress *types.Address,
+	rewardS *signerP.RewardSigner,
 	threshold float64,
 	logger log.Logger,
 	tracer metrics.Tracer,
@@ -34,10 +34,10 @@ func CheckBalance[S signerP.Signer](
 		}
 	}
 
-	if rewardAddress == nil {
+	if rewardS == nil {
 		return
 	}
-	if balance, ok := fetchStrkBalance(signer, rewardAccount, rewardAddress, logger); ok {
+	if balance, ok := fetchStrkBalance(signer, rewardAccount, rewardS.Address(), logger); ok {
 		tracer.UpdateRewardBalance(balance)
 		if isBelowThreshold(rewardAccount, balance, threshold, logger) {
 			tracer.RecordRewardBalanceBelowThreshold()
