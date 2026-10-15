@@ -21,6 +21,8 @@ var errFeeExceedsClaimMaxFee = fmt.Errorf("estimated fee is greater than claim m
 // RewardSigner is a signer that can claim rewards from the staking contract.
 // It is used for the validator to claim rewards automatically, an optional feature
 // that can be enabled by setting the corresponding flags in the config.
+//
+//go:generate go tool mockgen -destination=../../mocks/mock_reward_signer.go -package=mocks github.com/NethermindEth/starknet-staking-v2/validator/signer RewardSigner
 type RewardSigner interface {
 	Address() *types.Address
 	ClaimRewards()
