@@ -25,7 +25,7 @@ type Validator struct {
 	signer   signerP.Signer
 	logger   log.Logger
 
-	rewardSigner *signerP.RewardSigner
+	rewardSigner signerP.RewardSigner
 
 	// Used to initiate a websocket connection later on
 	wsProvider string
@@ -82,7 +82,7 @@ func New(
 		zap.String("validationContracts", signer.ValidationContracts().String()),
 	)
 
-	var rewardSigner *signerP.RewardSigner
+	var rewardSigner signerP.RewardSigner
 	if conf.Reward.IsSet() {
 		epochInfo, err := signerP.FetchEpochInfo(signer)
 		if err != nil {

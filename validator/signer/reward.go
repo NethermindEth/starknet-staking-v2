@@ -21,7 +21,13 @@ var errFeeExceedsClaimMaxFee = fmt.Errorf("estimated fee is greater than claim m
 // RewardSigner is a signer that can claim rewards from the staking contract.
 // It is used for the validator to claim rewards automatically, an optional feature
 // that can be enabled by setting the corresponding flags in the config.
-type RewardSigner struct {
+type RewardSigner interface {
+	Address() *types.Address
+	ClaimRewards()
+}
+
+// rewardSigner is the implementation of the RewardSigner interface.
+type rewardSigner struct {
 	ctx            context.Context
 	logger         log.Logger
 	signer         Signer
@@ -32,6 +38,8 @@ type RewardSigner struct {
 	claimThreshold felt.Felt
 }
 
+var _ RewardSigner = (*rewardSigner)(nil)
+
 func NewRewardSigner(
 	ctx context.Context,
 	provider *rpc.Provider,
@@ -41,7 +49,7 @@ func NewRewardSigner(
 	stakingAddress *types.Address,
 	braavos bool,
 	isExternal bool,
-) (*RewardSigner, error) {
+) (RewardSigner, error) {
 	signerConf := makeSignerConfFromRewardConf(rewardConfig)
 
 	var signer Signer
@@ -59,7 +67,7 @@ func NewRewardSigner(
 		}
 		signer = &internalSigner
 	}
-	return &RewardSigner{
+	return &rewardSigner{
 		ctx:            ctx,
 		logger:         logger,
 		signer:         signer,
@@ -78,13 +86,13 @@ func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
 	}
 }
 
-func (rs *RewardSigner) Address() *types.Address {
+func (rs *rewardSigner) Address() *types.Address {
 	return rs.signer.Address()
 }
 
 // ClaimRewards claims rewards if the unclaimed rewards amount is greater than the claim threshold.
 // All errors and state changes are logged, the feature does not stop the flow.
-func (rs *RewardSigner) ClaimRewards() {
+func (rs *rewardSigner) ClaimRewards() {
 	pref := "Auto-Claiming Rewards: "
 	rs.logger.Debug(pref + "starting claim rewards")
 
@@ -135,7 +143,7 @@ func (rs *RewardSigner) ClaimRewards() {
 	)
 }
 
-func (rs *RewardSigner) getUnclaimedRewardsAmount() (felt.Felt, error) {
+func (rs *rewardSigner) getUnclaimedRewardsAmount() (felt.Felt, error) {
 	functionCall := rpc.FunctionCall{
 		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt(
@@ -158,7 +166,7 @@ func (rs *RewardSigner) getUnclaimedRewardsAmount() (felt.Felt, error) {
 }
 
 // https://github.com/starkware-libs/starknet-staking/blob/main/docs/spec.md#stakerinfov1
-func (rs *RewardSigner) decode_get_staker_info_v1(resp []*felt.Felt) (felt.Felt, error) {
+func (rs *rewardSigner) decode_get_staker_info_v1(resp []*felt.Felt) (felt.Felt, error) {
 	var result felt.Felt
 
 	if len(resp) == 0 {
@@ -199,7 +207,7 @@ func (rs *RewardSigner) decode_get_staker_info_v1(resp []*felt.Felt) (felt.Felt,
 	return result, nil
 }
 
-func (rs *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, error) {
+func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, error) {
 	invokeCall := []rpc.InvokeFunctionCall{{
 		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
 		FunctionName:    "claim_reward",
@@ -252,7 +260,7 @@ func (rs *RewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 // populateFees estimates the fee and populates the transaction with the fee.
 // Returns the overall fee and an error.
 // If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned.
-func (rs *RewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) (felt.Felt, error) {
+func (rs *rewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) (felt.Felt, error) {
 	var overallFee felt.Felt
 	estimate, err := rs.signer.EstimateFee(txn)
 	if err != nil {

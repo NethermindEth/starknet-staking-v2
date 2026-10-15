@@ -20,7 +20,7 @@ const (
 // Each balance is recorded and a warning is given if it is below the threshold
 func CheckBalance[S signerP.Signer](
 	signer S,
-	rewardS *signerP.RewardSigner,
+	rewardS signerP.RewardSigner,
 	threshold float64,
 	logger log.Logger,
 	tracer metrics.Tracer,

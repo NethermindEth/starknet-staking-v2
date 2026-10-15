@@ -66,7 +66,7 @@ func strkBalance(strk uint64) []*felt.Felt {
 	return []*felt.Felt{fri, new(felt.Felt)}
 }
 
-func newRewardSigner(t *testing.T, logger log.Logger) *signer.RewardSigner {
+func newRewardSigner(t *testing.T, logger log.Logger) signer.RewardSigner {
 	rewardConfig := &config.Reward{
 		PrivKey:        "0x123",
 		Address:        "0x123",
