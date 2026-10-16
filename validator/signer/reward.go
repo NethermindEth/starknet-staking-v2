@@ -39,6 +39,8 @@ type RewardSigner interface {
 }
 
 // rewardSigner is the implementation of the RewardSigner interface.
+//
+//go:generate go tool mockgen -destination=../../mocks/mock_rpc_provider.go -package=mocks github.com/NethermindEth/starknet.go/rpc RPCProvider
 type rewardSigner struct {
 	ctx           context.Context
 	logger        log.Logger
@@ -64,7 +66,7 @@ type stakerInfo struct {
 // to claim the staker rewards, i.e. it's either the staker address or its reward address.
 func NewRewardSigner(
 	ctx context.Context,
-	provider *rpc.Provider,
+	provider rpc.RPCProvider,
 	logger log.Logger,
 	rewardConfig *config.Reward,
 	contractAddresses *config.ContractAddresses,

@@ -30,7 +30,7 @@ type InternalSigner struct {
 
 func NewInternalSigner(
 	ctx context.Context,
-	provider *rpc.Provider,
+	provider rpc.RPCProvider,
 	logger log.Logger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,

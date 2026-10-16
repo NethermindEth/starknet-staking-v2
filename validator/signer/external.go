@@ -25,7 +25,7 @@ var _ Signer = (*ExternalSigner)(nil)
 // Used as a wrapper around an exgernal signer implementation
 type ExternalSigner struct {
 	ctx                 context.Context
-	Provider            *rpc.Provider
+	Provider            rpc.RPCProvider
 	operationalAddress  types.Address
 	chainID             felt.Felt
 	url                 string
@@ -36,7 +36,7 @@ type ExternalSigner struct {
 
 func NewExternalSigner(
 	ctx context.Context,
-	provider *rpc.Provider,
+	provider rpc.RPCProvider,
 	logger log.Logger,
 	sig *config.Signer,
 	addresses *config.ContractAddresses,
