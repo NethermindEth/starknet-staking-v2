@@ -87,14 +87,14 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 	return result[0].Uint64(), nil
 }
 
-// For near future when tracking validator's balance
-func FetchValidatorBalance[S Signer](signer S) (types.Balance, error) {
+// Fetches the STRK balance of any account, using the signer only to perform the call
+func FetchBalance[S Signer](signer S, address *types.Address) (types.Balance, error) {
 	StrkTokenContract := types.AddressFromString(constants.StrkContractAddress)
 	result, err := signer.Call(
 		rpc.FunctionCall{
 			ContractAddress:    StrkTokenContract.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("balance_of"),
-			Calldata:           []*felt.Felt{signer.Address().Felt()},
+			Calldata:           []*felt.Felt{address.Felt()},
 		},
 		rpc.WithBlockTag(rpc.BlockTagLatest),
 	)
