@@ -16,7 +16,17 @@ import (
 	"go.uber.org/zap"
 )
 
-var errFeeExceedsClaimMaxFee = fmt.Errorf("estimated fee is greater than claim max fee")
+// Layout of the `get_staker_info_v1` response, an `Option<StakerInfoV1>`:
+// https://github.com/starkware-libs/starknet-staking/blob/main/docs/spec.md#stakerinfov1
+const (
+	stakerInfoRewardAddressIndex = 1
+	stakerInfoUnstakeTimeIndex   = 3
+)
+
+var (
+	errFeeExceedsClaimMaxFee = errors.New("estimated fee is greater than claim max fee")
+	errResponseTooShort      = errors.New("response is too short")
+)
 
 // RewardSigner is a signer that can claim rewards from the staking contract.
 // It is used for the validator to claim rewards automatically, an optional feature
@@ -30,25 +40,35 @@ type RewardSigner interface {
 
 // rewardSigner is the implementation of the RewardSigner interface.
 type rewardSigner struct {
-	ctx            context.Context
-	logger         log.Logger
-	signer         Signer
-	provider       rpc.RPCProvider
-	stakingAddress *types.Address
+	ctx           context.Context
+	logger        log.Logger
+	signer        Signer
+	provider      rpc.RPCProvider
+	stakerAddress *types.Address
 
-	claimMaxFee    felt.Felt
-	claimThreshold felt.Felt
+	// Max fee, in FRI, to pay for the claim transaction
+	claimMaxFee felt.Felt
+	// Amount of unclaimed rewards, in STRK, that triggers a claim
+	claimThreshold uint64
 }
 
 var _ RewardSigner = (*rewardSigner)(nil)
 
+// The relevant fields of the staker info returned by the staking contract
+type stakerInfo struct {
+	rewardAddress    felt.Felt
+	unclaimedRewards felt.Felt
+}
+
+// Creates a new RewardSigner and verifies that the configured reward account is allowed
+// to claim the staker rewards, i.e. it's either the staker address or its reward address.
 func NewRewardSigner(
 	ctx context.Context,
 	provider *rpc.Provider,
 	logger log.Logger,
 	rewardConfig *config.Reward,
 	contractAddresses *config.ContractAddresses,
-	stakingAddress *types.Address,
+	stakerAddress *types.Address,
 	braavos bool,
 	isExternal bool,
 ) (RewardSigner, error) {
@@ -57,27 +77,38 @@ func NewRewardSigner(
 	var signer Signer
 
 	if isExternal {
-		externalSigner, err := NewExternalSigner(ctx, provider, logger, &signerConf, contractAddresses, braavos)
+		externalSigner, err := NewExternalSigner(
+			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create internal signer: %w", err)
+			return nil, fmt.Errorf("failed to create external signer: %w", err)
 		}
 		signer = &externalSigner
 	} else {
-		internalSigner, err := NewInternalSigner(ctx, provider, logger, &signerConf, contractAddresses, braavos)
+		internalSigner, err := NewInternalSigner(
+			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create internal signer: %w", err)
 		}
 		signer = &internalSigner
 	}
-	return &rewardSigner{
+
+	rs := &rewardSigner{
 		ctx:            ctx,
 		logger:         logger,
 		signer:         signer,
 		provider:       provider,
-		stakingAddress: stakingAddress,
+		stakerAddress:  stakerAddress,
 		claimMaxFee:    felt.FromUint64[felt.Felt](rewardConfig.ClaimMaxFee),
-		claimThreshold: felt.FromUint64[felt.Felt](rewardConfig.ClaimThreshold),
-	}, nil
+		claimThreshold: rewardConfig.ClaimThreshold,
+	}
+
+	if err := rs.checkRewardAddress(); err != nil {
+		return nil, fmt.Errorf("reward address check: %w", err)
+	}
+
+	return rs, nil
 }
 
 func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
@@ -92,30 +123,63 @@ func (rs *rewardSigner) Address() *types.Address {
 	return rs.signer.Address()
 }
 
-// ClaimRewards claims rewards if the unclaimed rewards amount is greater than the claim threshold.
+// Only the staker address or its reward address are allowed to claim the staker rewards
+func (rs *rewardSigner) checkRewardAddress() error {
+	info, err := rs.fetchStakerInfo()
+	if err != nil {
+		return fmt.Errorf("failed to fetch staker info: %w", err)
+	}
+
+	address := rs.Address().Felt()
+	if !address.Equal(rs.stakerAddress.Felt()) && !address.Equal(&info.rewardAddress) {
+		return fmt.Errorf(
+			"the configured reward account is not the real reward address nor the staker address:\n"+
+				"configured reward account: %s\n"+
+				"real reward address: %s\n"+
+				"staker address: %s",
+			address.String(),
+			&info.rewardAddress,
+			rs.stakerAddress,
+		)
+	}
+
+	return nil
+}
+
+// ClaimRewards claims rewards if the unclaimed rewards amount reaches the claim threshold.
 // All errors and state changes are logged, the feature does not stop the flow.
 func (rs *rewardSigner) ClaimRewards() {
 	pref := "Auto-Claiming Rewards: "
 	rs.logger.Debug(pref + "starting claim rewards")
 
-	unclaimedRewardsAmount, err := rs.getUnclaimedRewardsAmount()
+	info, err := rs.fetchStakerInfo()
 	if err != nil {
 		rs.logger.Error(pref+"failed to get unclaimed rewards amount", zap.Error(err))
+
 		return
 	}
 
-	if rs.claimThreshold.Cmp(&unclaimedRewardsAmount) > 0 {
+	// The contract returns the unclaimed rewards in FRI
+	unclaimedRewardsStrk := utils.FRIToSTRK(&info.unclaimedRewards)
+	if utils.STRKToFRI(float64(rs.claimThreshold)).Cmp(&info.unclaimedRewards) > 0 {
 		rs.logger.Debug(
-			pref + "unclaimed rewards amount is greater than claim threshold; skipping claim...",
+			pref+"unclaimed rewards amount is below claim threshold; skipping claim...",
+			zap.Float64("unclaimed rewards (STRK)", unclaimedRewardsStrk),
+			zap.Uint64("claim threshold (STRK)", rs.claimThreshold),
 		)
+
 		return
 	}
 
-	rs.logger.Info(pref + "rewards amount reached claim threshold; claiming rewards...")
+	rs.logger.Info(
+		pref+"rewards amount reached claim threshold; claiming rewards...",
+		zap.Float64("unclaimed rewards (STRK)", unclaimedRewardsStrk),
+	)
 
 	txn, err := rs.buildClaimRewardTransaction()
 	if err != nil {
 		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
+
 		return
 	}
 
@@ -127,15 +191,18 @@ func (rs *rewardSigner) ClaimRewards() {
 				zap.String("overall fee", overallFee.String()),
 				zap.String("claim max fee", rs.claimMaxFee.String()),
 			)
+
 			return
 		}
 		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
+
 		return
 	}
 
 	resp, err := rs.provider.AddInvokeTransaction(rs.ctx, &txn)
 	if err != nil {
 		rs.logger.Error(pref+"failed to send reward claim transaction", zap.Error(err))
+
 		return
 	}
 
@@ -145,75 +212,89 @@ func (rs *rewardSigner) ClaimRewards() {
 	)
 }
 
-func (rs *rewardSigner) getUnclaimedRewardsAmount() (felt.Felt, error) {
+func (rs *rewardSigner) fetchStakerInfo() (stakerInfo, error) {
 	functionCall := rpc.FunctionCall{
 		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt(
 			"get_staker_info_v1",
 		),
-		Calldata: []*felt.Felt{rs.stakingAddress.Felt()},
+		Calldata: []*felt.Felt{rs.stakerAddress.Felt()},
 	}
 
 	resp, err := rs.signer.Call(functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
-		return felt.Felt{}, fmt.Errorf("calling 'get_staker_info_v1': %w", err)
+		return stakerInfo{}, fmt.Errorf("calling 'get_staker_info_v1': %w", err)
 	}
 
-	result, err := rs.decode_get_staker_info_v1(resp)
+	result, err := rs.decodeGetStakerInfoV1(resp)
 	if err != nil {
-		return felt.Felt{}, fmt.Errorf("decoding 'get_staker_info_v1': %w", err)
+		return stakerInfo{}, fmt.Errorf("decoding 'get_staker_info_v1': %w", err)
 	}
 
 	return result, nil
 }
 
+// Decodes the `Option<StakerInfoV1>` returned by `get_staker_info_v1`.
 // https://github.com/starkware-libs/starknet-staking/blob/main/docs/spec.md#stakerinfov1
-func (rs *rewardSigner) decode_get_staker_info_v1(resp []*felt.Felt) (felt.Felt, error) {
-	var result felt.Felt
-
+func (rs *rewardSigner) decodeGetStakerInfoV1(resp []*felt.Felt) (stakerInfo, error) {
 	if len(resp) == 0 {
-		return result, fmt.Errorf("response is empty")
+		return stakerInfo{}, errors.New("response is empty")
 	}
 
-	// #1 = enum. 0x0 is valid, 0x1 is not.
-	if resp[0].IsOne() {
-		return result, fmt.Errorf(
+	isStaker, err := isOptionSome(resp[0])
+	if err != nil {
+		return stakerInfo{}, fmt.Errorf("staker info: %w", err)
+	}
+	if !isStaker {
+		return stakerInfo{}, fmt.Errorf(
 			"staker address %s not found by the staking contract",
-			rs.stakingAddress,
+			rs.stakerAddress,
 		)
 	}
 
-	if len(resp) < 4 {
-		return result, fmt.Errorf("response is too short")
+	if len(resp) <= stakerInfoUnstakeTimeIndex {
+		return stakerInfo{}, errResponseTooShort
 	}
 
-	// #2 = reward_address
-	// #3 = operational_address
-
-	var index int = 4
-	// #4 = unstake_time
-	if resp[3].IsZero() {
-		// if 'unstake_time' is valid (0 value), there is a new field in the list: 'seconds'.
-		// Increase the index by 1 to skip it.
-		index++
+	isUnstaking, err := isOptionSome(resp[stakerInfoUnstakeTimeIndex])
+	if err != nil {
+		return stakerInfo{}, fmt.Errorf("unstake time: %w", err)
 	}
 
-	// #5 = amount_own; skip it.
-	index++
-	// #6 = unclaimed_rewards_own
-	if len(resp) < index+1 {
-		return result, fmt.Errorf("response is too short")
+	// `amount_own` follows `unstake_time`, which holds an extra felt (the timestamp
+	// seconds) when it is `Some`. `unclaimed_rewards_own` follows `amount_own`.
+	amountOwnIndex := stakerInfoUnstakeTimeIndex + 1
+	if isUnstaking {
+		amountOwnIndex++
 	}
-	result = *resp[index]
+	unclaimedRewardsIndex := amountOwnIndex + 1
+	if len(resp) <= unclaimedRewardsIndex {
+		return stakerInfo{}, errResponseTooShort
+	}
 
-	return result, nil
+	return stakerInfo{
+		rewardAddress:    *resp[stakerInfoRewardAddressIndex],
+		unclaimedRewards: *resp[unclaimedRewardsIndex],
+	}, nil
+}
+
+// Returns whether a serialised Cairo `Option` variant is `Some` (0) or `None` (1)
+func isOptionSome(variant *felt.Felt) (bool, error) {
+	switch {
+	case variant.IsZero():
+		return true, nil
+	case variant.IsOne():
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid Option variant %s", variant)
+	}
 }
 
 func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, error) {
 	invokeCall := []rpc.InvokeFunctionCall{{
 		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
-		FunctionName:    "claim_reward",
-		CallData:        []*felt.Felt{rs.stakingAddress.Felt()},
+		FunctionName:    "claim_rewards",
+		CallData:        []*felt.Felt{rs.stakerAddress.Felt()},
 	}}
 	call := utils.InvokeFuncCallsToFunctionCalls(invokeCall)
 	calldata := account.FmtCallDataCairo2(call)
@@ -234,7 +315,7 @@ func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 	}
 
 	// Taken from starknet.go `utils.BuildInvokeTxn`
-	attestTransaction := rpc.BroadcastInvokeTxnV3{
+	claimTransaction := rpc.BroadcastInvokeTxnV3{
 		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         rs.Address().Felt(),
 		Calldata:              calldata,
@@ -251,25 +332,26 @@ func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 		ProofFacts:            []*felt.Felt{},
 	}
 
-	_, err = rs.signer.SignTransaction(&attestTransaction)
+	_, err = rs.signer.SignTransaction(&claimTransaction)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
-	return attestTransaction, nil
+	return claimTransaction, nil
 }
 
 // populateFees estimates the fee and populates the transaction with the fee.
-// Returns the overall fee and an error.
-// If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned.
+// Returns the estimated overall fee and an error.
+// If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned
+// alongside the estimated fee, and the transaction is left untouched.
 func (rs *rewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) (felt.Felt, error) {
-	var overallFee felt.Felt
 	estimate, err := rs.signer.EstimateFee(txn)
 	if err != nil {
-		return overallFee, fmt.Errorf("failed to estimate fee: %w", err)
+		return felt.Felt{}, fmt.Errorf("failed to estimate fee: %w", err)
 	}
+	overallFee := *estimate.OverallFee
 
-	if rs.claimMaxFee.Cmp(estimate.OverallFee) < 0 {
+	if rs.claimMaxFee.Cmp(&overallFee) < 0 {
 		return overallFee, errFeeExceedsClaimMaxFee
 	}
 
@@ -283,6 +365,5 @@ func (rs *rewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) (felt.Felt, 
 		return overallFee, fmt.Errorf("failed to sign the transaction: %w", err)
 	}
 
-	overallFee = *estimate.OverallFee
 	return overallFee, nil
 }

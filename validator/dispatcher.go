@@ -164,7 +164,7 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	}
 }
 
-//nolint:gocyclo // Refactor in another time
+//nolint:gocyclo,funlen // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
 	signer S,
 	rewardSigner signerP.RewardSigner,
