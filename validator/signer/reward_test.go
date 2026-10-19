@@ -32,7 +32,13 @@ func TestRewardSignerAddress(t *testing.T) {
 		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
 		mockSigner.EXPECT().Address().Return(&rewardAddress)
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, 1)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			1,
+		)
 		require.Equal(t, &rewardAddress, rs.Address())
 	})
 }
@@ -284,7 +290,11 @@ func TestDecodeGetStakerInfoV1(t *testing.T) {
 			resp := hexFelts(t, tc.resp...)
 			result, err := rs.decodeGetStakerInfoV1(resp)
 			require.NoError(t, err)
-			require.Equal(t, *felt.NewUnsafeFromString[felt.Felt](tc.expectedReward), result.unclaimedRewards)
+			require.Equal(
+				t,
+				*felt.NewUnsafeFromString[felt.Felt](tc.expectedReward),
+				result.unclaimedRewards,
+			)
 			require.Equal(t, *resp[1], result.rewardAddress)
 		})
 	}
@@ -367,11 +377,21 @@ func TestFetchStakerInfo(t *testing.T) {
 			Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(stakerInfoResponse(t, unclaimed), nil)
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, 1)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			1,
+		)
 		result, err := rs.fetchStakerInfo()
 		require.NoError(t, err)
 		require.Equal(t, *unclaimed, result.unclaimedRewards)
-		require.Equal(t, *felt.NewUnsafeFromString[felt.Felt](testRewardAddress), result.rewardAddress)
+		require.Equal(
+			t,
+			*felt.NewUnsafeFromString[felt.Felt](testRewardAddress),
+			result.rewardAddress,
+		)
 	})
 
 	t.Run("Error: call fails", func(t *testing.T) {
@@ -383,7 +403,13 @@ func TestFetchStakerInfo(t *testing.T) {
 			Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, callErr)
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, 1)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			1,
+		)
 		_, err := rs.fetchStakerInfo()
 		require.ErrorIs(t, err, callErr)
 	})
@@ -499,7 +525,13 @@ func TestPopulateFees(t *testing.T) {
 		mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(estimate, nil)
 		mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil)
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, claimMaxFee)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			claimMaxFee,
+		)
 		defaultResources := makeDefaultResources()
 		txn := rpc.BroadcastInvokeTxnV3{ResourceBounds: &defaultResources}
 
@@ -515,7 +547,13 @@ func TestPopulateFees(t *testing.T) {
 		mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(estimate, nil)
 		mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil)
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, claimMaxFee)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			claimMaxFee,
+		)
 		txn := rpc.BroadcastInvokeTxnV3{}
 
 		overallFee, err := rs.populateFees(&txn)
@@ -532,7 +570,13 @@ func TestPopulateFees(t *testing.T) {
 		mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(estimate, nil)
 		// SignTransaction must not be called
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, claimMaxFee)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			claimMaxFee,
+		)
 		defaultResources := makeDefaultResources()
 		txn := rpc.BroadcastInvokeTxnV3{ResourceBounds: &defaultResources}
 
@@ -549,7 +593,13 @@ func TestPopulateFees(t *testing.T) {
 		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
 		mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(rpc.FeeEstimation{}, estimateErr)
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, claimMaxFee)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			claimMaxFee,
+		)
 		txn := rpc.BroadcastInvokeTxnV3{}
 
 		_, err := rs.populateFees(&txn)
@@ -564,7 +614,13 @@ func TestPopulateFees(t *testing.T) {
 		mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(newFeeEstimation(t, 1), nil)
 		mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, signErr)
 
-		rs := newTestRewardSigner(t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, claimMaxFee)
+		rs := newTestRewardSigner(
+			t,
+			mockSigner,
+			mocks.NewMockRPCProvider(gomock.NewController(t)),
+			1,
+			claimMaxFee,
+		)
 		txn := rpc.BroadcastInvokeTxnV3{}
 
 		_, err := rs.populateFees(&txn)
@@ -805,14 +861,16 @@ func newFeeEstimation(t *testing.T, overallFee uint64) rpc.FeeEstimation {
 	t.Helper()
 
 	return rpc.FeeEstimation{
-		L1GasConsumed:     felt.NewUnsafeFromString[felt.Felt]("0x10"),
-		L1GasPrice:        felt.NewUnsafeFromString[felt.Felt]("0x20"),
-		L2GasConsumed:     felt.NewUnsafeFromString[felt.Felt]("0x30"),
-		L2GasPrice:        felt.NewUnsafeFromString[felt.Felt]("0x40"),
-		L1DataGasConsumed: felt.NewUnsafeFromString[felt.Felt]("0x50"),
-		L1DataGasPrice:    felt.NewUnsafeFromString[felt.Felt]("0x60"),
-		OverallFee:        felt.NewFromUint64[felt.Felt](overallFee),
-		Unit:              rpc.FriUnit,
+		FeeEstimationCommon: rpc.FeeEstimationCommon{
+			L1GasConsumed:     felt.NewUnsafeFromString[felt.Felt]("0x10"),
+			L1GasPrice:        felt.NewUnsafeFromString[felt.Felt]("0x20"),
+			L2GasConsumed:     felt.NewUnsafeFromString[felt.Felt]("0x30"),
+			L2GasPrice:        felt.NewUnsafeFromString[felt.Felt]("0x40"),
+			L1DataGasConsumed: felt.NewUnsafeFromString[felt.Felt]("0x50"),
+			L1DataGasPrice:    felt.NewUnsafeFromString[felt.Felt]("0x60"),
+			OverallFee:        felt.NewFromUint64[felt.Felt](overallFee),
+		},
+		Unit: rpc.FriUnit,
 	}
 }
 
@@ -847,7 +905,9 @@ func expectAddInvoke(
 				return rpc.AddInvokeTransactionResponse{}, err
 			}
 
-			return rpc.AddInvokeTransactionResponse{Hash: felt.NewUnsafeFromString[felt.Felt]("0xabc")}, nil
+			return rpc.AddInvokeTransactionResponse{
+				Hash: felt.NewUnsafeFromString[felt.Felt]("0xabc"),
+			}, nil
 		})
 
 	return sent

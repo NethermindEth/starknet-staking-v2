@@ -95,8 +95,16 @@ func TestCheckBalance(t *testing.T) {
 		signerBalance uint64
 		rewardBalance uint64
 	}{
-		{name: "Signer balance above, reward balance below threshold", signerBalance: 150, rewardBalance: 50},
-		{name: "Signer balance below, reward balance above threshold", signerBalance: 50, rewardBalance: 150},
+		{
+			name:          "Signer balance above, reward balance below threshold",
+			signerBalance: 150,
+			rewardBalance: 50,
+		},
+		{
+			name:          "Signer balance below, reward balance above threshold",
+			signerBalance: 50,
+			rewardBalance: 150,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

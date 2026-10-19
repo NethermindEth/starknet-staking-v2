@@ -10,9 +10,13 @@ import (
 )
 
 var (
-	errRewardAddressNotSet        = errors.New("address is not set in reward configuration")
-	errRewardBothKeysAndURL       = errors.New("both private key and external signer URL set in reward configuration where only one is allowed")
-	errRewardNoKeysOrURL          = errors.New("you must set either a private key or an external signer URL in reward configuration")
+	errRewardAddressNotSet  = errors.New("address is not set in reward configuration")
+	errRewardBothKeysAndURL = errors.New(
+		"both private key and external signer URL set in reward configuration where only one is allowed",
+	)
+	errRewardNoKeysOrURL = errors.New(
+		"you must set either a private key or an external signer URL in reward configuration",
+	)
 	errRewardClaimThresholdNotSet = errors.New(
 		"claim threshold must be set to a positive value in reward configuration",
 	)
