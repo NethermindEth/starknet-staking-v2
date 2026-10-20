@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testProviderHTTP = "http://localhost:1234"
+
 func TestNewCommand(t *testing.T) {
 	t.Run("PreRunE returns an error: cannot load inexisting config", func(t *testing.T) {
 		command := main.NewCommand()
@@ -25,7 +27,7 @@ func TestNewCommand(t *testing.T) {
 
 		conf := config.Config{
 			Provider: config.Provider{
-				HTTP: "http://localhost:1234",
+				HTTP: testProviderHTTP,
 				WS:   "ws://localhost:1235",
 			},
 			Signer: config.Signer{
@@ -44,7 +46,7 @@ func TestNewCommand(t *testing.T) {
 	t.Run("Full command setup works with config file", func(t *testing.T) {
 		conf := config.Config{
 			Provider: config.Provider{
-				HTTP: "http://localhost:1234",
+				HTTP: testProviderHTTP,
 				WS:   "ws://localhost:1235",
 			},
 			Signer: config.Signer{
@@ -63,7 +65,7 @@ func TestNewCommand(t *testing.T) {
 	t.Run("Full command setup works with config through flags", func(t *testing.T) {
 		command := newTestCommandWithArgs(
 			t,
-			"--provider-http", "http://localhost:1234",
+			"--provider-http", testProviderHTTP,
 			"--provider-ws", "ws://localhost:1234",
 			"--signer-op-address", "0x456",
 			"--signer-url", "http://localhost:5555",
@@ -124,6 +126,121 @@ func TestNewCommand(t *testing.T) {
 		// Very hard to test with the current architecture
 		// return in the future to fix it
 		require.NoError(t, err)
+	})
+
+	// Any reward flag given, even `--reward-braavos-account=false`, requires the rest
+	// of the reward configuration
+	t.Run("Reward flags require the full reward configuration", func(t *testing.T) {
+		const (
+			errAddressNotSet = "address is not set in reward configuration"
+			errNoKeyOrURL    = "you must set either a private key or an external signer URL"
+		)
+
+		testCases := []struct {
+			name        string
+			rewardFlags []string
+			expectedErr string // empty if the configuration is valid
+		}{
+			{
+				name:        "Only reward address",
+				rewardFlags: []string{"--reward-address", "0x789"},
+				expectedErr: errNoKeyOrURL,
+			},
+			{
+				name:        "Only reward private key",
+				rewardFlags: []string{"--reward-priv-key", "0xabc"},
+				expectedErr: errAddressNotSet,
+			},
+			{
+				name:        "Only reward signer url",
+				rewardFlags: []string{"--reward-signer-url", "http://localhost:9012"},
+				expectedErr: errAddressNotSet,
+			},
+			{
+				name:        "Only reward claim threshold",
+				rewardFlags: []string{"--reward-claim-threshold", "10"},
+				expectedErr: errAddressNotSet,
+			},
+			{
+				name:        "Only reward claim max fee",
+				rewardFlags: []string{"--reward-claim-max-fee", "1000"},
+				expectedErr: errAddressNotSet,
+			},
+			{
+				name:        "Only reward braavos account",
+				rewardFlags: []string{"--reward-braavos-account"},
+				expectedErr: errAddressNotSet,
+			},
+			{
+				name:        "Only reward braavos account explicitly false",
+				rewardFlags: []string{"--reward-braavos-account=false"},
+				expectedErr: errAddressNotSet,
+			},
+			{
+				name: "Full reward configuration, without optional fields",
+				rewardFlags: []string{
+					"--reward-address", "0x789",
+					"--reward-priv-key", "0xabc",
+					"--reward-claim-threshold", "10",
+				},
+			},
+			{
+				name: "Full reward configuration, with claim max fee",
+				rewardFlags: []string{
+					"--reward-address", "0x789",
+					"--reward-priv-key", "0xabc",
+					"--reward-claim-threshold", "10",
+					"--reward-claim-max-fee", "1000",
+				},
+			},
+			{
+				name: "Full reward configuration, with braavos account",
+				rewardFlags: []string{
+					"--reward-address", "0x789",
+					"--reward-priv-key", "0xabc",
+					"--reward-claim-threshold", "10",
+					"--reward-braavos-account",
+				},
+			},
+			{
+				name: "Full reward configuration, with braavos account explicitly false",
+				rewardFlags: []string{
+					"--reward-address", "0x789",
+					"--reward-priv-key", "0xabc",
+					"--reward-claim-threshold", "10",
+					"--reward-braavos-account=false",
+				},
+			},
+			{
+				name: "Full reward configuration",
+				rewardFlags: []string{
+					"--reward-address", "0x789",
+					"--reward-priv-key", "0xabc",
+					"--reward-claim-threshold", "10",
+					"--reward-claim-max-fee", "1000",
+					"--reward-braavos-account",
+				},
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				args := []string{
+					"--provider-http", testProviderHTTP,
+					"--provider-ws", "ws://localhost:1234",
+					"--signer-op-address", "0x456",
+					"--signer-url", "http://localhost:5555",
+				}
+				command := newTestCommandWithArgs(t, append(args, tc.rewardFlags...)...)
+
+				err := command.ExecuteContext(t.Context())
+				if tc.expectedErr == "" {
+					require.NoError(t, err)
+				} else {
+					require.ErrorContains(t, err, tc.expectedErr)
+				}
+			})
+		}
 	})
 }
 

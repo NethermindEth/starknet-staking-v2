@@ -108,6 +108,10 @@ type Reward struct {
 	ClaimThreshold uint64 `json:"claimThreshold"`
 	// Max fee, in FRI, to pay for the claim transaction
 	ClaimMaxFee uint64 `json:"claimMaxFee"`
+	// If the reward account is a Braavos account. It's a pointer so that an explicit
+	// `false` can be told apart from a value not set, and isn't overridden by a lower
+	// priority config source
+	Braavos *bool `json:"braavos"`
 }
 
 func RewardFromEnv() (Reward, error) {
@@ -135,12 +139,25 @@ func RewardFromEnv() (Reward, error) {
 		claimMaxFee = parsed
 	}
 
+	var braavos *bool
+	if value := os.Getenv("REWARD_BRAAVOS_ACCOUNT"); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return Reward{}, fmt.Errorf(
+				"invalid REWARD_BRAAVOS_ACCOUNT env var, not a valid boolean: %w",
+				err,
+			)
+		}
+		braavos = &parsed
+	}
+
 	return Reward{
 		ExternalURL:    os.Getenv("REWARD_EXTERNAL_URL"),
 		PrivKey:        os.Getenv("REWARD_PRIVATE_KEY"),
 		Address:        os.Getenv("REWARD_ADDRESS"),
 		ClaimThreshold: claimThreshold,
 		ClaimMaxFee:    claimMaxFee,
+		Braavos:        braavos,
 	}, nil
 }
 
@@ -171,7 +188,8 @@ func (r *Reward) IsSet() bool {
 		r.PrivKey != "" ||
 		r.ExternalURL != "" ||
 		r.ClaimThreshold != 0 ||
-		r.ClaimMaxFee != 0
+		r.ClaimMaxFee != 0 ||
+		r.Braavos != nil
 }
 
 // Sets default values for the fields not provided. It should be called after
@@ -183,6 +201,11 @@ func (r *Reward) SetDefaults() {
 	if isZero(r.ClaimMaxFee) {
 		r.ClaimMaxFee = math.MaxUint64
 	}
+}
+
+// Returns whether the reward account is a Braavos account, false if not set
+func (r *Reward) IsBraavos() bool {
+	return r.Braavos != nil && *r.Braavos
 }
 
 func (r *Reward) IsExternal() bool {
@@ -205,6 +228,9 @@ func (r *Reward) Fill(other *Reward) {
 	}
 	if isZero(r.ClaimMaxFee) {
 		r.ClaimMaxFee = other.ClaimMaxFee
+	}
+	if r.Braavos == nil {
+		r.Braavos = other.Braavos
 	}
 }
 

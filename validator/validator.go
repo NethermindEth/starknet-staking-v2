@@ -98,7 +98,7 @@ func New(
 			&conf.Reward,
 			&snConfig.ContractAddresses,
 			&epochInfo.StakerAddress,
-			braavos,
+			conf.Reward.IsBraavos(),
 			conf.Reward.IsExternal(),
 		)
 		if err != nil {

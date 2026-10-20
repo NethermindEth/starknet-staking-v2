@@ -55,7 +55,8 @@ func TestConfigFromFile(t *testing.T) {
                 "privateKey": "0x789",
                 "address": "0xabc",
                 "claimThreshold": 100,
-                "claimMaxFee": 1000
+                "claimMaxFee": 1000,
+                "braavos": true
             }
         }`)
 		config, err := FromData(data)
@@ -77,6 +78,7 @@ func TestConfigFromFile(t *testing.T) {
 				Address:        "0xabc",
 				ClaimThreshold: 100,
 				ClaimMaxFee:    1000,
+				Braavos:        new(true),
 			},
 		}
 		require.Equal(t, expectedConfig, config)
@@ -130,6 +132,7 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("REWARD_ADDRESS", rewardAddress)
 	t.Setenv("REWARD_CLAIM_THRESHOLD", "100")
 	t.Setenv("REWARD_CLAIM_MAX_FEE", "1000")
+	t.Setenv("REWARD_BRAAVOS_ACCOUNT", "true")
 
 	reward, err := RewardFromEnv()
 	require.NoError(t, err)
@@ -139,6 +142,7 @@ func TestConfigFromEnv(t *testing.T) {
 		Address:        rewardAddress,
 		ClaimThreshold: 100,
 		ClaimMaxFee:    1000,
+		Braavos:        new(true),
 	}
 	require.Equal(
 		t,
@@ -161,6 +165,7 @@ func TestRewardFromEnvInvalidValues(t *testing.T) {
 	const (
 		thresholdEnv = "REWARD_CLAIM_THRESHOLD"
 		maxFeeEnv    = "REWARD_CLAIM_MAX_FEE"
+		braavosEnv   = "REWARD_BRAAVOS_ACCOUNT"
 	)
 
 	testCases := []struct {
@@ -174,6 +179,7 @@ func TestRewardFromEnvInvalidValues(t *testing.T) {
 		{name: "Non numeric claim max fee", envVar: maxFeeEnv, value: "abc"},
 		{name: "Negative claim max fee", envVar: maxFeeEnv, value: "-1"},
 		{name: "Decimal claim max fee", envVar: maxFeeEnv, value: "1.5"},
+		{name: "Non boolean braavos account", envVar: braavosEnv, value: "yes"},
 	}
 
 	for _, tc := range testCases {
@@ -371,6 +377,30 @@ func TestRewardIsSet(t *testing.T) {
 		require.True(t, (&Reward{ExternalURL: "http://localhost:9012"}).IsSet())
 		require.True(t, (&Reward{ClaimThreshold: 10}).IsSet())
 		require.True(t, (&Reward{ClaimMaxFee: 1000}).IsSet())
+		require.True(t, (&Reward{Braavos: new(true)}).IsSet())
+		// Any value explicitly given counts, even `false`
+		require.True(t, (&Reward{Braavos: new(false)}).IsSet())
+	})
+}
+
+func TestRewardIsBraavos(t *testing.T) {
+	require.False(t, (&Reward{}).IsBraavos())
+	require.False(t, (&Reward{Braavos: new(false)}).IsBraavos())
+	require.True(t, (&Reward{Braavos: new(true)}).IsBraavos())
+}
+
+func TestRewardFillBraavos(t *testing.T) {
+	t.Run("Not set takes the other value", func(t *testing.T) {
+		reward := Reward{}
+		reward.Fill(&Reward{Braavos: new(true)})
+		require.Equal(t, new(true), reward.Braavos)
+	})
+
+	// A higher priority source explicitly disabling it must not be overridden
+	t.Run("Explicit false is kept", func(t *testing.T) {
+		reward := Reward{Braavos: new(false)}
+		reward.Fill(&Reward{Braavos: new(true)})
+		require.Equal(t, new(false), reward.Braavos)
 	})
 }
 
@@ -425,7 +455,8 @@ func TestConfigFill(t *testing.T) {
                 "privateKey": "0x888",
                 "address": "0xabc",
                 "claimThreshold": 99,
-                "claimMaxFee": 1000
+                "claimMaxFee": 1000,
+                "braavos": true
             }
         }`),
 	)
@@ -447,7 +478,8 @@ func TestConfigFill(t *testing.T) {
                 "privateKey": "0x321",
                 "address": "0xabc",
                 "claimThreshold": 10,
-                "claimMaxFee": 1000
+                "claimMaxFee": 1000,
+                "braavos": true
             }
         }`),
 	)
@@ -458,4 +490,20 @@ func TestConfigFill(t *testing.T) {
 	config1.Fill(&config2)
 	assert.Equal(t, expectedConfig1, config1)
 	assert.Equal(t, expectedConfig2, config2)
+}
+
+func TestRewardFromEnvBraavos(t *testing.T) {
+	t.Run("Not set", func(t *testing.T) {
+		reward, err := RewardFromEnv()
+		require.NoError(t, err)
+		require.Nil(t, reward.Braavos)
+	})
+
+	t.Run("Explicitly false", func(t *testing.T) {
+		t.Setenv("REWARD_BRAAVOS_ACCOUNT", "false")
+
+		reward, err := RewardFromEnv()
+		require.NoError(t, err)
+		require.Equal(t, new(false), reward.Braavos)
+	})
 }

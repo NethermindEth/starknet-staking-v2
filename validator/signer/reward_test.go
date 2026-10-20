@@ -24,6 +24,7 @@ const (
 
 	testStakerAddress = "0x7f3f971211da11bbf86527424b9fb7640c0f3fc3c426d3cd1ad833389476a6"
 	testRewardAddress = "0x5c85dd30df86ed1f2cfe1806417efb2cae421bffdee8110a74a3d3eb95b28d3"
+	testSignerURL     = "http://localhost:1234"
 )
 
 func TestRewardSignerAddress(t *testing.T) {
@@ -45,7 +46,7 @@ func TestRewardSignerAddress(t *testing.T) {
 
 func TestMakeSignerConfFromRewardConf(t *testing.T) {
 	rewardConf := config.Reward{
-		ExternalURL:    "http://localhost:1234",
+		ExternalURL:    testSignerURL,
 		PrivKey:        "0x123",
 		Address:        testRewardAddress,
 		ClaimThreshold: 10,
@@ -99,7 +100,7 @@ func TestNewRewardSigner(t *testing.T) {
 			rewardConf,
 			new(config.ContractAddresses),
 			&stakerAddress,
-			false,
+			rewardConf.IsBraavos(),
 			rewardConf.IsExternal(),
 		)
 	}
@@ -131,7 +132,7 @@ func TestNewRewardSigner(t *testing.T) {
 
 	t.Run("External signer", func(t *testing.T) {
 		rewardConf := config.Reward{
-			ExternalURL:    "http://localhost:1234",
+			ExternalURL:    testSignerURL,
 			Address:        testRewardAddress,
 			ClaimThreshold: claimThreshold,
 			ClaimMaxFee:    claimMaxFee,
@@ -149,6 +150,32 @@ func TestNewRewardSigner(t *testing.T) {
 		require.Equal(t, &stakerAddress, rstype.stakerAddress)
 		require.Equal(t, felt.FromUint64[felt.Felt](claimMaxFee), rstype.claimMaxFee)
 		require.Equal(t, claimThreshold, rstype.claimThreshold)
+	})
+
+	t.Run("Braavos reward account", func(t *testing.T) {
+		internalConf := config.Reward{
+			PrivKey:        "0x123",
+			Address:        testRewardAddress,
+			ClaimThreshold: claimThreshold,
+			Braavos:        new(true),
+		}
+		rs, err := newRewardSigner(t, newProvider(t, stakerInfo), &internalConf)
+		require.NoError(t, err)
+		internalSigner, ok := rs.(*rewardSigner).signer.(*InternalSigner)
+		require.True(t, ok)
+		require.True(t, internalSigner.braavos)
+
+		externalConf := config.Reward{
+			ExternalURL:    testSignerURL,
+			Address:        testRewardAddress,
+			ClaimThreshold: claimThreshold,
+			Braavos:        new(true),
+		}
+		rs, err = newRewardSigner(t, newProvider(t, stakerInfo), &externalConf)
+		require.NoError(t, err)
+		externalSigner, ok := rs.(*rewardSigner).signer.(*ExternalSigner)
+		require.True(t, ok)
+		require.True(t, externalSigner.braavos)
 	})
 
 	t.Run("Staker address as reward account", func(t *testing.T) {

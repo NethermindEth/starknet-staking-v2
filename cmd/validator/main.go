@@ -50,6 +50,7 @@ func NewCommand() cobra.Command {
 	var metricsHostF string
 	var metricsPortF string
 	var braavosAccount bool
+	var rewardBraavosF bool
 
 	var config configP.Config
 	var maxRetries types.Retries
@@ -58,6 +59,10 @@ func NewCommand() cobra.Command {
 	var logger *log.ZapLogger
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
+		// Only set when passed, so an unset flag doesn't override the other config sources
+		if cmd.Flags().Changed("reward-braavos-account") {
+			config.Reward.Braavos = &rewardBraavosF
+		}
 		if err := loadConfig(&config, configPath); err != nil {
 			return err
 		}
@@ -220,6 +225,13 @@ func NewCommand() cobra.Command {
 		"",
 		"(Optional) Reward signer url address, used for external signing of the reward account. \n"+
 			"Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag.",
+	)
+	cmd.Flags().BoolVar(
+		&rewardBraavosF,
+		"reward-braavos-account",
+		false,
+		"(Optional) Same as 'braavos-account', but for the reward account.\n"+
+			"Set it if the reward account is a Braavos account.",
 	)
 
 	// Config starknet flags
