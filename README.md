@@ -124,11 +124,11 @@ In addition to the configuration described above, the tool allows for other non-
 
 4. `--log-level` set's the tool logging level. Defaults to `info`.
 
-5. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. 
+5. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. It only applies to the operational account, use `--reward-braavos-account` for the reward account.
 
 ## Other features
 
-We offer advance features such as **[external signing](https://nethermindeth.github.io/starknet-staking-v2/external-signer)** and **[monitoring via prometheus](https://nethermindeth.github.io/starknet-staking-v2/metrics)**. 
+We offer advance features such as **[external signing](https://nethermindeth.github.io/starknet-staking-v2/external-signer)**, **[monitoring via prometheus](https://nethermindeth.github.io/starknet-staking-v2/metrics)** and **[automatic reward claiming](https://nethermindeth.github.io/starknet-staking-v2/auto-claim)**. 
 
 
 For further general details of the tool you can reference the [official documentation](https://nethermindeth.github.io/starknet-staking-v2/).

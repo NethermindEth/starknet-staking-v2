@@ -149,7 +149,24 @@ The validator supports two signing approaches:
 If both `privateKey` and `url` are provided, the validator will prioritize external signing over internal signing.
 :::
 
+## Auto-Claim Rewards
+
+Optionally, the validator can automatically claim the staking rewards once they reach a threshold. It is configured through the `reward` section of the configuration file, the `REWARD_*` environment variables or the `--reward-*` flags:
+
+```json
+{
+  "reward": {
+    "address": "0x789",
+    "privateKey": "0xabc",
+    "claimThreshold": 100
+  }
+}
+```
+
+See [Auto-Claim Rewards](./auto-claim) for how it works and all of its options.
+
 ## What's Next?
 
 - **[Configuration Options](./configuration-options)** - Complete reference of all available options
 - **[External Signer](./external-signer)** - Secure signing for production deployments
+- **[Auto-Claim Rewards](./auto-claim)** - Claim your staking rewards automatically
