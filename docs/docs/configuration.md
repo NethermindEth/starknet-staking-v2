@@ -116,7 +116,7 @@ docker run \
 ```
 
 :::warning Signing Method Required
-You must provide either `privateKey` for internal signing or `url` for external signing. If both are provided, external signing will be used.
+You must provide exactly one signing method: either `privateKey` for internal signing or `url` for external signing. If both are provided, the validator won't start.
 :::
 
 ## Mixed Configuration
@@ -145,11 +145,28 @@ The validator supports two signing approaches:
 - The validator requests signatures from the external service
 - **✅ Recommended**: For mainnet and cloud deployments
 
-:::tip Priority Note
-If both `privateKey` and `url` are provided, the validator will prioritize external signing over internal signing.
+:::tip One Signing Method
+Only one of `privateKey` and `url` can be set. Since the configuration sources are merged field by field, this also applies across sources: e.g. a `url` in the configuration file together with a `--signer-priv-key` flag is an error as well.
 :::
+
+## Auto-Claim Rewards
+
+Optionally, the validator can automatically claim the staking rewards once they reach a threshold. It is configured through the `reward` section of the configuration file, the `REWARD_*` environment variables or the `--reward-*` flags:
+
+```json
+{
+  "reward": {
+    "address": "0x789",
+    "privateKey": "0xabc",
+    "claimThreshold": 100
+  }
+}
+```
+
+See [Auto-Claim Rewards](./auto-claim) for how it works and all of its options.
 
 ## What's Next?
 
 - **[Configuration Options](./configuration-options)** - Complete reference of all available options
 - **[External Signer](./external-signer)** - Secure signing for production deployments
+- **[Auto-Claim Rewards](./auto-claim)** - Claim your staking rewards automatically

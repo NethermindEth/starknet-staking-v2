@@ -32,6 +32,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'external-signer',
         'metrics',
+        'auto-claim',
       ],
     },
     'support',

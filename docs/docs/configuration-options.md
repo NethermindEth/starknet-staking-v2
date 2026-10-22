@@ -23,11 +23,17 @@ In addition to the core configuration described in the [Configuration](./configu
 | `--signer-op-address` | `SIGNER_OPERATIONAL_ADDRESS` | `signer.operationalAddress` | - | Your validator's operational address |
 | `--signer-priv-key` | `SIGNER_PRIVATE_KEY` | `signer.privateKey` | - | Private key for internal signing |
 | `--signer-url` | `SIGNER_EXTERNAL_URL` | `signer.url` | - | URL for external signing service |
+| `--reward-address` | `REWARD_ADDRESS` | `reward.address` | - | Reward account address, used by the [auto-claim rewards](./auto-claim) feature |
+| `--reward-priv-key` | `REWARD_PRIVATE_KEY` | `reward.privateKey` | - | Reward account private key, for internal signing of the claim transactions |
+| `--reward-signer-url` | `REWARD_EXTERNAL_URL` | `reward.url` | - | URL for external signing of the claim transactions |
+| `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | Amount of unclaimed rewards, in STRK, that triggers a claim |
+| `--reward-claim-max-fee` | `REWARD_CLAIM_MAX_FEE` | `reward.claimMaxFee` | Unlimited | Max fee, in FRI, to pay for a claim transaction |
+| `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | Set it if the reward account is a Braavos account |
 | `--config` | - | - | - | Path to JSON configuration file |
 | `--staking-contract-address` | - | - | Auto-detected | Custom staking contract address |
 | `--attest-contract-address` | - | - | Auto-detected | Custom attestation contract address |
 | `--max-tries` | - | - | `10` | Maximum attempts to get attestation info (or "infinite") |
-| `--balance-threshold` | - | - | `100` | riggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. One stark equals 1e18 |
+| `--balance-threshold` | - | - | `100` | Triggers a warning if it detects the signer account (i.e. operational address) stark balance, or the reward account one when the auto-claim feature is configured, below the specified threshold. One stark equals 1e18 |
 | `--log-level` | - | - | `info` | Set logging level (trace, debug, info, warn, error) |
 | `--metrics` | - | - | `false` | Enable metrics server |
 | `--metrics-host` | - | - | `localhost` | Metrics server host |
@@ -40,8 +46,10 @@ In addition to the core configuration described in the [Configuration](./configu
 
 2. **Max Tries**: `--max-tries` allows you to set how many attempts the tool does to get attestation information. It can be set to any positive number or to _"infinite"_ if you want the tool to never stop execution. Defaults to 10.
 
-4. **Balance Threshold**: `--balance-threshold` represents the balance amount you want your signer account to be above of. Checks are performed after every attestation window ends and if the balance is below the specified amount a warning is emitted. Defaults to 100 STRK.
+4. **Balance Threshold**: `--balance-threshold` represents the balance amount you want your signer account to be above of. If the auto-claim reward feature is configured, the same threshold also applies to the reward account. Checks are performed after every attestation window ends and if a balance is below the specified amount a warning is emitted. Defaults to 100 STRK.
 
 5. **Log Level**: `--log-level` set's the tool logging level. Default to `info`.
 
-6. **Braavos Account**: `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_.
+6. **Braavos Account**: `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_. It only applies to the operational account: use `--reward-braavos-account` for the reward account.
+
+7. **Auto-Claim Rewards**: the `--reward-*` options configure the optional automatic claiming of the staking rewards. If any of them is set, `--reward-address`, `--reward-claim-threshold` and exactly one of `--reward-priv-key` or `--reward-signer-url` are required. See [Auto-Claim Rewards](./auto-claim) for the details.
