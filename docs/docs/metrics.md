@@ -38,10 +38,19 @@ The following metrics are available:
 | `validator_attestation_attestation_confirmed_count` | Counter | The total number of attestations that have been confirmed on the network since validator startup | `validator_attestation_attestation_confirmed_count{network="SN_SEPOLIA"} 52` |
 | `validator_attestation_signer_balance` | Gauge | The balance of the account that signs the attestation after each attest transaction | `validator_attestation_signer_balance{network="SN_SEPOLIA"} 113` |
 | `validator_attestation_signer_below_threshold` | Gauge | Set to one if the account that signs the attestation has it's balance below certain threshold | `validator_attestation_signer_below_threshold{network="SN_SEPOLIA"} 0` |
-| `validator_attestation_reward_balance` | Gauge | The balance of the reward account, checked after each attestation window. Only reported if the auto-claim reward feature is configured | `validator_attestation_reward_balance{network="SN_SEPOLIA"} 25` |
-| `validator_attestation_reward_below_threshold` | Gauge | Set to one if the reward account has it's balance below certain threshold. Only reported if the auto-claim reward feature is configured | `validator_attestation_reward_below_threshold{network="SN_SEPOLIA"} 0` |
+| `validator_attestation_reward_balance` | Gauge | The balance of the reward account, checked after each attestation window | `validator_attestation_reward_balance{network="SN_SEPOLIA"} 25` |
+| `validator_attestation_reward_below_threshold` | Gauge | Set to one if the reward account has it's balance below certain threshold | `validator_attestation_reward_below_threshold{network="SN_SEPOLIA"} 0` |
+| `validator_attestation_reward_unclaimed` | Gauge | The staker's unclaimed rewards, in STRK, checked after each attestation window | `validator_attestation_reward_unclaimed{network="SN_SEPOLIA"} 0.83` |
+| `validator_attestation_reward_claim_submitted_count` | Counter | The total number of reward claim transactions submitted by the validator since startup | `validator_attestation_reward_claim_submitted_count{network="SN_SEPOLIA"} 2` |
+| `validator_attestation_reward_claim_failure_count` | Counter | The total number of reward claim failures encountered by the validator since startup | `validator_attestation_reward_claim_failure_count{network="SN_SEPOLIA"} 1` |
+| `validator_attestation_reward_claim_max_fee_exceeded_count` | Counter | The total number of reward claims skipped since startup because the estimated fee exceeded the claim max fee | `validator_attestation_reward_claim_max_fee_exceeded_count{network="SN_SEPOLIA"} 1` |
+| `validator_attestation_reward_last_claim_timestamp_seconds` | Gauge | The Unix timestamp (in seconds) of the last successful reward claim submission | `validator_attestation_reward_last_claim_timestamp_seconds{network="SN_SEPOLIA"} 1678886400` |
 
 All metrics include a `network` label that indicates the Starknet network (e.g., "SN_MAINNET", "SN_SEPOLIA").
+
+:::info Reward metrics
+All the `validator_attestation_reward_*` metrics are only reported if the [auto-claim rewards](./auto-claim) feature is enabled.
+:::
 
 ## Using with Prometheus
 

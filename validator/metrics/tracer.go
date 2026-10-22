@@ -16,4 +16,8 @@ type Tracer interface {
 	UpdateRewardBalance(balance float64)
 	RecordRewardBalanceAboveThreshold()
 	RecordRewardBalanceBelowThreshold()
+	UpdateRewardUnclaimed(amount float64)
+	RecordRewardClaimSubmitted()
+	RecordRewardClaimFailure()
+	RecordRewardClaimMaxFeeExceeded()
 }

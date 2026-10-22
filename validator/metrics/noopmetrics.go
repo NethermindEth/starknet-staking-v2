@@ -31,3 +31,11 @@ func (m *NoOpMetrics) UpdateRewardBalance(balance float64) {}
 func (m *NoOpMetrics) RecordRewardBalanceAboveThreshold() {}
 
 func (m *NoOpMetrics) RecordRewardBalanceBelowThreshold() {}
+
+func (m *NoOpMetrics) UpdateRewardUnclaimed(amount float64) {}
+
+func (m *NoOpMetrics) RecordRewardClaimSubmitted() {}
+
+func (m *NoOpMetrics) RecordRewardClaimFailure() {}
+
+func (m *NoOpMetrics) RecordRewardClaimMaxFeeExceeded() {}

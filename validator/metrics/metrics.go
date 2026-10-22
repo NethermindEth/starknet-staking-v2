@@ -35,6 +35,11 @@ type Metrics struct {
 	signerBalanceBelowThreshold     *prometheus.GaugeVec
 	rewardBalance                   *prometheus.GaugeVec
 	rewardBalanceBelowThreshold     *prometheus.GaugeVec
+	rewardUnclaimed                 *prometheus.GaugeVec
+	rewardClaimSubmittedCount       *prometheus.CounterVec
+	rewardClaimFailureCount         *prometheus.CounterVec
+	rewardClaimMaxFeeExceededCount  *prometheus.CounterVec
+	lastRewardClaimTimestamp        *prometheus.GaugeVec
 }
 
 // NewMetrics creates a new metrics server
@@ -139,6 +144,41 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			},
 			[]string{networkLabel},
 		),
+		rewardUnclaimed: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "validator_attestation_reward_unclaimed",
+				Help: "The staker's unclaimed rewards, in STRK, checked after each attestation window",
+			},
+			[]string{networkLabel},
+		),
+		rewardClaimSubmittedCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_reward_claim_submitted_count",
+				Help: "The total number of reward claim transactions submitted by the validator since startup",
+			},
+			[]string{networkLabel},
+		),
+		rewardClaimFailureCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_reward_claim_failure_count",
+				Help: "The total number of reward claim failures encountered by the validator since startup",
+			},
+			[]string{networkLabel},
+		),
+		rewardClaimMaxFeeExceededCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_reward_claim_max_fee_exceeded_count",
+				Help: "The total number of reward claims skipped since startup because the estimated fee exceeded the claim max fee",
+			},
+			[]string{networkLabel},
+		),
+		lastRewardClaimTimestamp: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "validator_attestation_reward_last_claim_timestamp_seconds",
+				Help: "The Unix timestamp (in seconds) of the last successful reward claim submission",
+			},
+			[]string{networkLabel},
+		),
 	}
 
 	// Register metrics with Prometheus registry
@@ -156,6 +196,11 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		m.signerBalanceBelowThreshold,
 		m.rewardBalance,
 		m.rewardBalanceBelowThreshold,
+		m.rewardUnclaimed,
+		m.rewardClaimSubmittedCount,
+		m.rewardClaimFailureCount,
+		m.rewardClaimMaxFeeExceededCount,
+		m.lastRewardClaimTimestamp,
 	)
 
 	// Create HTTP server
@@ -272,4 +317,30 @@ func (m *Metrics) RecordRewardBalanceAboveThreshold() {
 func (m *Metrics) RecordRewardBalanceBelowThreshold() {
 	m.logger.Debug("RecordRewardBalanceBelowThreshold")
 	m.rewardBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
+}
+
+// UpdateRewardUnclaimed sets the staker's unclaimed rewards amount, in STRK
+func (m *Metrics) UpdateRewardUnclaimed(amount float64) {
+	m.logger.Debug("UpdateRewardUnclaimed", zap.Float64("amount", amount))
+	m.rewardUnclaimed.WithLabelValues(m.network).Set(amount)
+}
+
+// RecordRewardClaimSubmitted increments the reward claim submitted counter
+func (m *Metrics) RecordRewardClaimSubmitted() {
+	m.logger.Debug("RecordRewardClaimSubmitted")
+	m.rewardClaimSubmittedCount.WithLabelValues(m.network).Inc()
+	m.lastRewardClaimTimestamp.WithLabelValues(m.network).Set(float64(time.Now().Unix()))
+}
+
+// RecordRewardClaimFailure increments the reward claim failure counter
+func (m *Metrics) RecordRewardClaimFailure() {
+	m.logger.Debug("RecordRewardClaimFailure")
+	m.rewardClaimFailureCount.WithLabelValues(m.network).Inc()
+}
+
+// RecordRewardClaimMaxFeeExceeded increments the counter of reward claims skipped because
+// the estimated fee exceeded the claim max fee
+func (m *Metrics) RecordRewardClaimMaxFeeExceeded() {
+	m.logger.Debug("RecordRewardClaimMaxFeeExceeded")
+	m.rewardClaimMaxFeeExceededCount.WithLabelValues(m.network).Inc()
 }
