@@ -10,7 +10,7 @@ The feature is disabled by default. It is enabled as soon as any reward option i
 
 ## How It Works
 
-1. **At startup**, the validator fetches the staker address linked to your operational address and checks that the configured reward account is allowed to claim its rewards. The staking contract only accepts claims sent by the **staker address** or by the staker's **reward address**. Any other account makes the validator fail to start.
+1. **At startup**, the validator fetches the staker address linked to your operational address and checks that the configured reward account is allowed to claim its rewards. The staking contract only accepts claims sent by the **staker address** or by the staker's **reward address**. Any other account makes the validator fail to start. When using an [external signer](#external-signing), the validator also asks it to sign a claim transaction, without sending it, and fails to start if the signer can't be reached.
 2. **After every attestation window ends**, the validator reads the staker's unclaimed rewards from the staking contract. If they reach the claim threshold, it:
    1. builds a `claim_rewards` transaction signed by the reward account,
    2. estimates its fee and skips the claim with a warning if the fee is higher than the configured max fee,
@@ -91,4 +91,4 @@ With a configuration file:
 
 ## External Signing
 
-The reward account can be signed for externally using the same [HTTP protocol](./external-signer) as the operational account. The external signer must hold the private key of the reward account, so it is usually a separate signer instance from the one used for attestations.
+The reward account can be signed for externally using the same [HTTP protocol](./external-signer) as the operational account. The external signer must hold the private key of the reward account, so it is usually a separate signer instance from the one used for attestations. It must be running when the validator starts, since its availability is checked at startup.

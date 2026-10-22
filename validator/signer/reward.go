@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -21,6 +22,15 @@ import (
 const (
 	stakerInfoRewardAddressIndex = 1
 	stakerInfoUnstakeTimeIndex   = 3
+)
+
+const (
+	// Used to log FRI amounts in decimal
+	decimalBase = 10
+	// STRK has 18 decimals: 1 STRK = 1e18 FRI
+	strkDecimals = 18
+	// Decimals used when logging STRK amounts
+	strkLoggedDecimals = 2
 )
 
 var (
@@ -64,6 +74,7 @@ type stakerInfo struct {
 
 // Creates a new RewardSigner and verifies that the configured reward account is allowed
 // to claim the staker rewards, i.e. it's either the staker address or its reward address.
+// When using an external signer, it also verifies that the signer is able to sign.
 func NewRewardSigner(
 	ctx context.Context,
 	provider rpc.RPCProvider,
@@ -110,6 +121,12 @@ func NewRewardSigner(
 		return nil, fmt.Errorf("reward address check: %w", err)
 	}
 
+	if isExternal {
+		if err := rs.checkExternalSigner(); err != nil {
+			return nil, fmt.Errorf("external reward signer check: %w", err)
+		}
+	}
+
 	return rs, nil
 }
 
@@ -148,6 +165,14 @@ func (rs *rewardSigner) checkRewardAddress() error {
 	return nil
 }
 
+// Signs a claim transaction, without sending it, so an unreachable external signer
+// is detected at startup instead of when the first claim is due
+func (rs *rewardSigner) checkExternalSigner() error {
+	_, err := rs.buildClaimRewardTransaction()
+
+	return err
+}
+
 // ClaimRewards claims rewards if the unclaimed rewards amount reaches the claim threshold.
 // All errors and state changes are logged, the feature does not stop the flow.
 func (rs *rewardSigner) ClaimRewards() {
@@ -162,11 +187,11 @@ func (rs *rewardSigner) ClaimRewards() {
 	}
 
 	// The contract returns the unclaimed rewards in FRI
-	unclaimedRewardsStrk := utils.FRIToSTRK(&info.unclaimedRewards)
+	unclaimedRewardsStrk := friToStrkString(&info.unclaimedRewards)
 	if utils.STRKToFRI(float64(rs.claimThreshold)).Cmp(&info.unclaimedRewards) > 0 {
 		rs.logger.Debug(
 			pref+"unclaimed rewards amount is below claim threshold; skipping claim...",
-			zap.Float64("unclaimed rewards (STRK)", unclaimedRewardsStrk),
+			zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
 			zap.Uint64("claim threshold (STRK)", rs.claimThreshold),
 		)
 
@@ -175,7 +200,7 @@ func (rs *rewardSigner) ClaimRewards() {
 
 	rs.logger.Info(
 		pref+"rewards amount reached claim threshold; claiming rewards...",
-		zap.Float64("unclaimed rewards (STRK)", unclaimedRewardsStrk),
+		zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
 	)
 
 	txn, err := rs.buildClaimRewardTransaction()
@@ -190,8 +215,8 @@ func (rs *rewardSigner) ClaimRewards() {
 		if errors.Is(err, errFeeExceedsClaimMaxFee) {
 			rs.logger.Warn(
 				pref+"estimated fee exceeds claim max fee; skipping claim...",
-				zap.String("overall fee", overallFee.String()),
-				zap.String("claim max fee", rs.claimMaxFee.String()),
+				zap.String("overall fee (FRI)", overallFee.Text(decimalBase)),
+				zap.String("claim max fee (FRI)", rs.claimMaxFee.Text(decimalBase)),
 			)
 
 			return
@@ -278,6 +303,20 @@ func (rs *rewardSigner) decodeGetStakerInfoV1(resp []*felt.Felt) (stakerInfo, er
 		rewardAddress:    *resp[stakerInfoRewardAddressIndex],
 		unclaimedRewards: *resp[unclaimedRewardsIndex],
 	}, nil
+}
+
+// Formats an amount in FRI as STRK truncated to 2 decimals. It's truncated instead of
+// rounded so a value below the threshold isn't logged as equal to it, e.g.
+// 999999999999999999 FRI is logged as 0.99 STRK instead of 1
+func friToStrkString(fri *felt.Felt) string {
+	pow10 := func(exp int64) *big.Int {
+		return new(big.Int).Exp(big.NewInt(decimalBase), big.NewInt(exp), nil)
+	}
+	truncated := new(big.Int).Quo(fri.BigInt(new(big.Int)), pow10(strkDecimals-strkLoggedDecimals))
+
+	strk := new(big.Rat).SetFrac(truncated, pow10(strkLoggedDecimals))
+
+	return strk.FloatString(strkLoggedDecimals)
 }
 
 // Returns whether a serialised Cairo `Option` variant is `Some` (0) or `None` (1)

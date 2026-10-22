@@ -3,6 +3,8 @@ package signer
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -132,13 +134,16 @@ func TestNewRewardSigner(t *testing.T) {
 
 	t.Run("External signer", func(t *testing.T) {
 		rewardConf := config.Reward{
-			ExternalURL:    testSignerURL,
+			ExternalURL:    newTestSignerServer(t),
 			Address:        testRewardAddress,
 			ClaimThreshold: claimThreshold,
 			ClaimMaxFee:    claimMaxFee,
 		}
+		provider := newProvider(t, stakerInfo)
+		// The external signer check signs a claim transaction
+		expectBuildClaimTxn(provider, felt.NewFromUint64[felt.Felt](5))
 
-		rs, err := newRewardSigner(t, newProvider(t, stakerInfo), &rewardConf)
+		rs, err := newRewardSigner(t, provider, &rewardConf)
 		require.NoError(t, err)
 		require.NotNil(t, rs)
 
@@ -166,12 +171,14 @@ func TestNewRewardSigner(t *testing.T) {
 		require.True(t, internalSigner.braavos)
 
 		externalConf := config.Reward{
-			ExternalURL:    testSignerURL,
+			ExternalURL:    newTestSignerServer(t),
 			Address:        testRewardAddress,
 			ClaimThreshold: claimThreshold,
 			Braavos:        new(true),
 		}
-		rs, err = newRewardSigner(t, newProvider(t, stakerInfo), &externalConf)
+		provider := newProvider(t, stakerInfo)
+		expectBuildClaimTxn(provider, felt.NewFromUint64[felt.Felt](5))
+		rs, err = newRewardSigner(t, provider, &externalConf)
 		require.NoError(t, err)
 		externalSigner, ok := rs.(*rewardSigner).signer.(*ExternalSigner)
 		require.True(t, ok)
@@ -212,6 +219,24 @@ func TestNewRewardSigner(t *testing.T) {
 		rs, err := newRewardSigner(t, newProvider(t, []string{"0x1"}), &rewardConf)
 		require.ErrorContains(t, err, "not found by the staking contract")
 		require.Nil(t, rs)
+	})
+
+	t.Run("Error: external signer is unreachable", func(t *testing.T) {
+		// Closed right away, so nothing listens on its URL
+		server := httptest.NewServer(http.NotFoundHandler())
+		server.Close()
+
+		rewardConf := config.Reward{
+			ExternalURL:    server.URL,
+			Address:        testRewardAddress,
+			ClaimThreshold: claimThreshold,
+		}
+		provider := newProvider(t, stakerInfo)
+		expectBuildClaimTxn(provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs, err := newRewardSigner(t, provider, &rewardConf)
+		require.ErrorContains(t, err, "external reward signer check")
+		require.True(t, rs == nil)
 	})
 
 	t.Run("Error: invalid private key", func(t *testing.T) {
@@ -816,6 +841,31 @@ func TestClaimRewards(t *testing.T) {
 	})
 }
 
+func TestFriToStrkString(t *testing.T) {
+	testCases := []struct {
+		fri      string
+		expected string
+	}{
+		{fri: "0", expected: "0.00"},
+		{fri: "1", expected: "0.00"},
+		// Truncated, not rounded to 1.00
+		{fri: "999999999999999999", expected: "0.99"},
+		{fri: "1000000000000000000", expected: "1.00"},
+		{fri: "1500000000000000000", expected: "1.50"},
+		// Truncated, not rounded to 0.83
+		{fri: "828251213175784188", expected: "0.82"},
+		{fri: "123456000000000000000000", expected: "123456.00"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.fri+" FRI", func(t *testing.T) {
+			fri, err := felt.NewFromString[felt.Felt](tc.fri)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, friToStrkString(fri))
+		})
+	}
+}
+
 func newTestRewardSigner(
 	t *testing.T,
 	signer Signer,
@@ -836,6 +886,20 @@ func newTestRewardSigner(
 		claimMaxFee:    felt.FromUint64[felt.Felt](claimMaxFeeFri),
 		claimThreshold: claimThresholdStrk,
 	}
+}
+
+// newTestSignerServer starts an external signer answering any request with a dummy
+// signature, and returns its URL
+func newTestSignerServer(t *testing.T) string {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, err := w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
+		require.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+
+	return server.URL
 }
 
 func hexFelts(t *testing.T, values ...string) []*felt.Felt {
