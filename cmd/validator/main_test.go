@@ -134,7 +134,23 @@ func TestNewCommand(t *testing.T) {
 		const (
 			errAddressNotSet = "address is not set in reward configuration"
 			errNoKeyOrURL    = "neither private key nor external url set in reward configuration"
+
+			rewardAddressFlag   = "--reward-address"
+			rewardPrivKeyFlag   = "--reward-priv-key"
+			rewardSignerURLFlag = "--reward-signer-url"
+			rewardThresholdFlag = "--reward-claim-threshold"
+			rewardMaxFeeFlag    = "--reward-claim-max-fee"
+			rewardBraavosFlag   = "--reward-braavos-account"
 		)
+
+		// Returns the required reward flags followed by `optionalFlags`
+		fullRewardFlags := func(optionalFlags ...string) []string {
+			return append([]string{
+				rewardAddressFlag, "0x789",
+				rewardPrivKeyFlag, "0xabc",
+				rewardThresholdFlag, "10",
+			}, optionalFlags...)
+		}
 
 		testCases := []struct {
 			name        string
@@ -143,83 +159,58 @@ func TestNewCommand(t *testing.T) {
 		}{
 			{
 				name:        "Only reward address",
-				rewardFlags: []string{"--reward-address", "0x789"},
+				rewardFlags: []string{rewardAddressFlag, "0x789"},
 				expectedErr: errNoKeyOrURL,
 			},
 			{
 				name:        "Only reward private key",
-				rewardFlags: []string{"--reward-priv-key", "0xabc"},
+				rewardFlags: []string{rewardPrivKeyFlag, "0xabc"},
 				expectedErr: errAddressNotSet,
 			},
 			{
 				name:        "Only reward signer url",
-				rewardFlags: []string{"--reward-signer-url", "http://localhost:9012"},
+				rewardFlags: []string{rewardSignerURLFlag, "http://localhost:9012"},
 				expectedErr: errAddressNotSet,
 			},
 			{
 				name:        "Only reward claim threshold",
-				rewardFlags: []string{"--reward-claim-threshold", "10"},
+				rewardFlags: []string{rewardThresholdFlag, "10"},
 				expectedErr: errAddressNotSet,
 			},
 			{
 				name:        "Only reward claim max fee",
-				rewardFlags: []string{"--reward-claim-max-fee", "1000"},
+				rewardFlags: []string{rewardMaxFeeFlag, "1000"},
 				expectedErr: errAddressNotSet,
 			},
 			{
 				name:        "Only reward braavos account",
-				rewardFlags: []string{"--reward-braavos-account"},
+				rewardFlags: []string{rewardBraavosFlag},
 				expectedErr: errAddressNotSet,
 			},
 			{
 				name:        "Only reward braavos account explicitly false",
-				rewardFlags: []string{"--reward-braavos-account=false"},
+				rewardFlags: []string{rewardBraavosFlag + "=false"},
 				expectedErr: errAddressNotSet,
 			},
 			{
-				name: "Full reward configuration, without optional fields",
-				rewardFlags: []string{
-					"--reward-address", "0x789",
-					"--reward-priv-key", "0xabc",
-					"--reward-claim-threshold", "10",
-				},
+				name:        "Full reward configuration, without optional fields",
+				rewardFlags: fullRewardFlags(),
 			},
 			{
-				name: "Full reward configuration, with claim max fee",
-				rewardFlags: []string{
-					"--reward-address", "0x789",
-					"--reward-priv-key", "0xabc",
-					"--reward-claim-threshold", "10",
-					"--reward-claim-max-fee", "1000",
-				},
+				name:        "Full reward configuration, with claim max fee",
+				rewardFlags: fullRewardFlags(rewardMaxFeeFlag, "1000"),
 			},
 			{
-				name: "Full reward configuration, with braavos account",
-				rewardFlags: []string{
-					"--reward-address", "0x789",
-					"--reward-priv-key", "0xabc",
-					"--reward-claim-threshold", "10",
-					"--reward-braavos-account",
-				},
+				name:        "Full reward configuration, with braavos account",
+				rewardFlags: fullRewardFlags(rewardBraavosFlag),
 			},
 			{
-				name: "Full reward configuration, with braavos account explicitly false",
-				rewardFlags: []string{
-					"--reward-address", "0x789",
-					"--reward-priv-key", "0xabc",
-					"--reward-claim-threshold", "10",
-					"--reward-braavos-account=false",
-				},
+				name:        "Full reward configuration, with braavos account explicitly false",
+				rewardFlags: fullRewardFlags(rewardBraavosFlag + "=false"),
 			},
 			{
-				name: "Full reward configuration",
-				rewardFlags: []string{
-					"--reward-address", "0x789",
-					"--reward-priv-key", "0xabc",
-					"--reward-claim-threshold", "10",
-					"--reward-claim-max-fee", "1000",
-					"--reward-braavos-account",
-				},
+				name:        "Full reward configuration",
+				rewardFlags: fullRewardFlags(rewardMaxFeeFlag, "1000", rewardBraavosFlag),
 			},
 		}
 
