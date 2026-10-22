@@ -133,7 +133,7 @@ func TestNewCommand(t *testing.T) {
 	t.Run("Reward flags require the full reward configuration", func(t *testing.T) {
 		const (
 			errAddressNotSet = "address is not set in reward configuration"
-			errNoKeyOrURL    = "you must set either a private key or an external signer URL"
+			errNoKeyOrURL    = "neither private key nor external url set in reward configuration"
 		)
 
 		testCases := []struct {

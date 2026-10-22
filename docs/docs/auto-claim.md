@@ -40,7 +40,7 @@ The reward account pays the fee of the claim transactions, so it needs enough ST
 If any of these options is set, even `--reward-braavos-account=false`, the reward configuration must be complete:
 
 - `--reward-address` is required.
-- Exactly one signing method is required: either `--reward-priv-key` or `--reward-signer-url`. Unlike the operational signer, setting both is an error.
+- Exactly one signing method is required: either `--reward-priv-key` or `--reward-signer-url`. As for the operational signer, setting both is an error.
 - `--reward-claim-threshold` is required and must be greater than zero.
 
 The options follow the same [precedence](./configuration) as the rest of the configuration: command line flags, then environment variables, then the configuration file.

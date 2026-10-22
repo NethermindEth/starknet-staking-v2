@@ -10,12 +10,19 @@ import (
 )
 
 var (
+	errSignerBothKeysAndURL = errors.New(
+		"both private key and external signer URL set in signer configuration where only one is allowed",
+	)
+	errSignerNoKeysOrURL = errors.New(
+		"neither private key nor external url set in signer configuration",
+	)
+
 	errRewardAddressNotSet  = errors.New("address is not set in reward configuration")
 	errRewardBothKeysAndURL = errors.New(
 		"both private key and external signer URL set in reward configuration where only one is allowed",
 	)
 	errRewardNoKeysOrURL = errors.New(
-		"you must set either a private key or an external signer URL in reward configuration",
+		"neither private key nor external url set in reward configuration",
 	)
 	errRewardClaimThresholdNotSet = errors.New(
 		"claim threshold must be set to a positive value in reward configuration",
@@ -65,11 +72,11 @@ func (s *Signer) Check() error {
 	if s.OperationalAddress == "" {
 		return errors.New("operational address is not set in signer configuration")
 	}
-	if s.IsExternal() {
-		return nil
+	if s.PrivKey != "" && s.ExternalURL != "" {
+		return errSignerBothKeysAndURL
 	}
-	if s.PrivKey == "" {
-		return errors.New("neither private key nor external url set in signer configuration")
+	if s.PrivKey == "" && s.ExternalURL == "" {
+		return errSignerNoKeysOrURL
 	}
 
 	return nil

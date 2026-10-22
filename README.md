@@ -43,7 +43,7 @@ For the `signer`, you need to specify the *operational address* and a signing me
 The signing method can be either internal to the tool or asked externally, based on if you provide a *private key* or an external *url*:
 1. By provding a *private key* the program will sign the transactions internally.
 2. By providing an external *url* to program from which the validator will ask for signatures, see exactly how [here](#external-signer).
-3. If both are provided, the validator will use the remote signer over the internal one.
+3. Only one of them can be set: providing both is an error and the validator won't start.
 
 
 A full configuration file looks like this:
@@ -56,13 +56,12 @@ A full configuration file looks like this:
   },
   "signer": {
       "url": "http://localhost:8080",
-      "operationalAddress": "0x123",
-      "privateKey": "0x456"
+      "operationalAddress": "0x123"
   }
 }
 ```
 
-Note that because both `url` and `privateKey` fields are set in the previous example the tool will prioritize remote signing through the `url` than internally signing with the `privateKey`. Be sure to  be explicit on your configuration file and leave just one of them.
+Note that only one signing method can be set, either `url` or `privateKey`. Since the configuration sources are merged field by field, this also applies across sources: e.g. a `url` in the configuration file together with a `--signer-priv-key` flag is an error as well.
 
 
 ### With Environment Variables
@@ -74,7 +73,6 @@ export PROVIDER_WS_URL="ws://localhost:6061/v0_10"
 
 export SIGNER_EXTERNAL_URL="http://localhost:8080"
 export SIGNER_OPERATIONAL_ADDRESS="0x123"
-export SIGNER_PRIVATE_KEY="0x456"
 ```
 
 Source the enviroment vars and run the validator:
@@ -94,8 +92,7 @@ Finally, as a third alternative, you can specify the necessary validation config
     --provider-http "http://localhost:6060/v0_10" \
     --provider-ws "ws://localhost:6061/v0_10" \
     --signer-url "http://localhost:8080" \
-    --signer-op-address "0x123" \
-    --signer-priv-key "0x456"
+    --signer-op-address "0x123"
 ```
 
 
@@ -108,8 +105,7 @@ PROVIDER_HTTP_URL="http://localhost:6060/v0_10" ./build/validator \
     --config <path_to_config_file> \
     --provider-ws "ws://localhost:6061/v0_10" \
     --signer-url "http://localhost:8080" \
-    --signer-op-address "0x123" \
-    --signer-priv-key "0x456"
+    --signer-op-address "0x123"
 ```
 
 ## Additional configurations

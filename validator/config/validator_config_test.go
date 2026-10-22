@@ -48,7 +48,6 @@ func TestConfigFromFile(t *testing.T) {
             },
             "signer": {
                 "url": "http://localhost:5678",
-                "privateKey": "0x123", 
                 "operationalAddress": "0x456"
             },
             "reward": {
@@ -70,7 +69,6 @@ func TestConfigFromFile(t *testing.T) {
 			},
 			Signer: Signer{
 				ExternalURL:        "http://localhost:5678",
-				PrivKey:            "0x123",
 				OperationalAddress: "0x456",
 			},
 			Reward: Reward{
@@ -203,7 +201,6 @@ func TestCorrectConfig(t *testing.T) {
         }`
 		validSigner = `{
             "url": "http://localhost:5678",
-            "privateKey": "0x123",
             "operationalAddress": "0x456"
         }`
 	)
@@ -257,6 +254,11 @@ func TestCorrectConfig(t *testing.T) {
 		{
 			name:   "With external signer URL and NO private key",
 			signer: `{"url": "http://localhost:5678", "operationalAddress": "0x456"}`,
+		},
+		{
+			name:   "With both private key and external signer URL",
+			signer: `{"url": "http://localhost:5678", "privateKey": "0x123", "operationalAddress": "0x456"}`,
+			errMsg: errSignerBothKeysAndURL.Error(),
 		},
 		{
 			name:   "Missing operational address",
@@ -346,11 +348,6 @@ func TestSignerExternal(t *testing.T) {
 	t.Run("With private key only", func(t *testing.T) {
 		signer := Signer{PrivKey: "0x123"}
 		require.False(t, signer.IsExternal())
-	})
-
-	t.Run("External url takes priority over private key", func(t *testing.T) {
-		signer := Signer{ExternalURL: externalURL, PrivKey: "0x123"}
-		require.True(t, signer.IsExternal())
 	})
 }
 
