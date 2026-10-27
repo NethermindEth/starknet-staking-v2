@@ -3,7 +3,30 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"os"
+	"strconv"
+)
+
+var (
+	errSignerBothKeysAndURL = errors.New(
+		"both private key and external signer URL set in signer configuration where only one is allowed",
+	)
+	errSignerNoKeysOrURL = errors.New(
+		"neither private key nor external url set in signer configuration",
+	)
+
+	errRewardAddressNotSet  = errors.New("address is not set in reward configuration")
+	errRewardBothKeysAndURL = errors.New(
+		"both private key and external signer URL set in reward configuration where only one is allowed",
+	)
+	errRewardNoKeysOrURL = errors.New(
+		"neither private key nor external url set in reward configuration",
+	)
+	errRewardClaimThresholdNotSet = errors.New(
+		"claim threshold must be set to a positive value in reward configuration",
+	)
 )
 
 type Provider struct {
@@ -49,11 +72,11 @@ func (s *Signer) Check() error {
 	if s.OperationalAddress == "" {
 		return errors.New("operational address is not set in signer configuration")
 	}
-	if s.External() {
-		return nil
+	if s.PrivKey != "" && s.ExternalURL != "" {
+		return errSignerBothKeysAndURL
 	}
-	if s.PrivKey == "" {
-		return errors.New("neither private key nor external url set in signer configuration")
+	if s.PrivKey == "" && s.ExternalURL == "" {
+		return errSignerNoKeysOrURL
 	}
 
 	return nil
@@ -80,20 +103,161 @@ func (s *Signer) Fill(other *Signer) {
 	}
 }
 
-func (s *Signer) External() bool {
+func (s *Signer) IsExternal() bool {
 	return s.ExternalURL != ""
+}
+
+type Reward struct {
+	ExternalURL string `json:"url"`
+	PrivKey     string `json:"privateKey"`
+	Address     string `json:"address"`
+	// Amount of unclaimed rewards, in STRK, that triggers an automatic claim
+	ClaimThreshold uint64 `json:"claimThreshold"`
+	// Max fee, in FRI, to pay for the claim transaction
+	ClaimMaxFee uint64 `json:"claimMaxFee"`
+	// If the reward account is a Braavos account. It's a pointer so that an explicit
+	// `false` can be told apart from a value not set, and isn't overridden by a lower
+	// priority config source
+	Braavos *bool `json:"braavos"`
+}
+
+func RewardFromEnv() (Reward, error) {
+	var claimThreshold uint64
+	if value := os.Getenv("REWARD_CLAIM_THRESHOLD"); value != "" {
+		parsed, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return Reward{}, fmt.Errorf(
+				"invalid REWARD_CLAIM_THRESHOLD env var, not a valid integer: %w",
+				err,
+			)
+		}
+		claimThreshold = parsed
+	}
+
+	var claimMaxFee uint64
+	if value := os.Getenv("REWARD_CLAIM_MAX_FEE"); value != "" {
+		parsed, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return Reward{}, fmt.Errorf(
+				"invalid REWARD_CLAIM_MAX_FEE env var, not a valid integer: %w",
+				err,
+			)
+		}
+		claimMaxFee = parsed
+	}
+
+	var braavos *bool
+	if value := os.Getenv("REWARD_BRAAVOS_ACCOUNT"); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return Reward{}, fmt.Errorf(
+				"invalid REWARD_BRAAVOS_ACCOUNT env var, not a valid boolean: %w",
+				err,
+			)
+		}
+		braavos = &parsed
+	}
+
+	return Reward{
+		ExternalURL:    os.Getenv("REWARD_EXTERNAL_URL"),
+		PrivKey:        os.Getenv("REWARD_PRIVATE_KEY"),
+		Address:        os.Getenv("REWARD_ADDRESS"),
+		ClaimThreshold: claimThreshold,
+		ClaimMaxFee:    claimMaxFee,
+		Braavos:        braavos,
+	}, nil
+}
+
+// Reward configuration is optional, but if any field is set, it requires the address
+// and exactly one signing method: either a private key or an external url
+func (r *Reward) Check() error {
+	if !r.IsSet() {
+		return nil
+	}
+	if r.Address == "" {
+		return errRewardAddressNotSet
+	}
+	if r.PrivKey != "" && r.ExternalURL != "" {
+		return errRewardBothKeysAndURL
+	}
+	if r.PrivKey == "" && r.ExternalURL == "" {
+		return errRewardNoKeysOrURL
+	}
+	if r.ClaimThreshold == 0 {
+		return errRewardClaimThresholdNotSet
+	}
+
+	return nil
+}
+
+func (r *Reward) IsSet() bool {
+	return r.Address != "" ||
+		r.PrivKey != "" ||
+		r.ExternalURL != "" ||
+		r.ClaimThreshold != 0 ||
+		r.ClaimMaxFee != 0 ||
+		r.Braavos != nil
+}
+
+// Sets default values for the fields not provided. It should be called after
+// all config sources are merged, otherwise the defaults would take priority
+func (r *Reward) SetDefaults() {
+	if !r.IsSet() {
+		return
+	}
+	if isZero(r.ClaimMaxFee) {
+		r.ClaimMaxFee = math.MaxUint64
+	}
+}
+
+// Returns whether the reward account is a Braavos account, false if not set
+func (r *Reward) IsBraavos() bool {
+	return r.Braavos != nil && *r.Braavos
+}
+
+func (r *Reward) IsExternal() bool {
+	return r.ExternalURL != ""
+}
+
+// Merge its missing fields with data from other reward
+func (r *Reward) Fill(other *Reward) {
+	if isZero(r.ExternalURL) {
+		r.ExternalURL = other.ExternalURL
+	}
+	if isZero(r.PrivKey) {
+		r.PrivKey = other.PrivKey
+	}
+	if isZero(r.Address) {
+		r.Address = other.Address
+	}
+	if isZero(r.ClaimThreshold) {
+		r.ClaimThreshold = other.ClaimThreshold
+	}
+	if isZero(r.ClaimMaxFee) {
+		r.ClaimMaxFee = other.ClaimMaxFee
+	}
+	if r.Braavos == nil {
+		r.Braavos = other.Braavos
+	}
 }
 
 type Config struct {
 	Provider Provider `json:"provider"`
 	Signer   Signer   `json:"signer"`
+	Reward   Reward   `json:"reward"`
 }
 
-func FromEnv() Config {
+func FromEnv() (Config, error) {
+	reward, err := RewardFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Provider: ProviderFromEnv(),
 		Signer:   SignerFromEnv(),
-	}
+		Reward:   reward,
+	}, nil
 }
 
 // Function to load and parse the JSON file
@@ -119,15 +283,24 @@ func FromData(data []byte) (Config, error) {
 func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
+	c.Reward.Fill(&other.Reward)
+}
+
+// Sets default values for the fields not provided by any config source
+func (c *Config) SetDefaults() {
+	c.Reward.SetDefaults()
 }
 
 // Verifies its data is appropiatly set
 func (c *Config) Check() error {
 	if err := c.Provider.Check(); err != nil {
-		return err
+		return fmt.Errorf("provider: %w", err)
 	}
 	if err := c.Signer.Check(); err != nil {
-		return err
+		return fmt.Errorf("signer: %w", err)
+	}
+	if err := c.Reward.Check(); err != nil {
+		return fmt.Errorf("reward: %w", err)
 	}
 
 	return nil

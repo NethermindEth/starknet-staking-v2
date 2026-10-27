@@ -46,7 +46,6 @@ func TestConfigFromFile(t *testing.T) {
             },
             "signer": {
                 "url": "http://localhost:5678",
-                "privateKey": "0x123", 
                 "operationalAddress": "0x456"
             }
         }`)
@@ -61,7 +60,6 @@ func TestConfigFromFile(t *testing.T) {
 			},
 			Signer: Signer{
 				ExternalURL:        "http://localhost:5678",
-				PrivKey:            "0x123",
 				OperationalAddress: "0x456",
 			},
 		}
@@ -108,7 +106,8 @@ func TestConfigFromEnv(t *testing.T) {
 	)
 
 	// Test Config
-	config := FromEnv()
+	config, err := FromEnv()
+	require.NoError(t, err)
 	expectedConfig := Config{
 		Provider: expectedProvider,
 		Signer:   expectedSigner,
@@ -179,7 +178,7 @@ func TestCorrectConfig(t *testing.T) {
 		config, err := FromData(data)
 		require.NoError(t, err)
 		require.NoError(t, config.Check())
-		require.False(t, config.Signer.External())
+		require.False(t, config.Signer.IsExternal())
 	})
 
 	t.Run("Missing private key", func(t *testing.T) {
@@ -196,7 +195,7 @@ func TestCorrectConfig(t *testing.T) {
 		config, err := FromData(data)
 		require.NoError(t, err)
 		require.NoError(t, config.Check())
-		require.True(t, config.Signer.External())
+		require.True(t, config.Signer.IsExternal())
 	})
 
 	t.Run("Missing private key and external signer", func(t *testing.T) {
