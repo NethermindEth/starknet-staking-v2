@@ -164,9 +164,12 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	}
 }
 
-//nolint:gocyclo // Refactor in another time
+//nolint:gocyclo,funlen // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
-	signer S, balanceThreshold float64, logger log.Logger, tracer metrics.Tracer,
+	signer S,
+	rewardSigner signerP.RewardSigner,
+	balanceThreshold float64,
+	logger log.Logger, tracer metrics.Tracer,
 ) {
 	var targetBlockHash types.BlockHash
 
@@ -291,6 +294,11 @@ func (d *EventDispatcher[S]) Dispatch(
 			d.CurrentAttest = NewAttestTracker()
 			// check the account balance
 			go CheckBalance(signer, balanceThreshold, logger, tracer)
+
+			// Claim rewards if the feature is enabled
+			if rewardSigner != nil {
+				go rewardSigner.ClaimRewards()
+			}
 		}
 	}
 }

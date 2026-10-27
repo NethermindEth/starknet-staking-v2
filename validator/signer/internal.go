@@ -30,7 +30,7 @@ type InternalSigner struct {
 
 func NewInternalSigner(
 	ctx context.Context,
-	provider *rpc.Provider,
+	provider rpc.RPCProvider,
 	logger log.Logger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
@@ -58,10 +58,6 @@ func NewInternalSigner(
 	}
 	validationContracts := types.ValidationContractsFromAddresses(
 		addresses.SetDefaults(chainIDStr),
-	)
-	logger.Info(
-		"Validation contracts",
-		zap.String("validationContracts", validationContracts.String()),
 	)
 
 	logger.Debug(
