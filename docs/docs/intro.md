@@ -17,6 +17,7 @@ Starknet Staking v2 is a validator software that enables users to participate in
 - ⚙️ **Flexible Configuration**: Support for configuration files, environment variables, and command-line flags
 - 🔐 **Security First**: Support for external signers to keep private keys secure
 - 📊 **Built-in Metrics**: Comprehensive metrics for monitoring validator performance
+- 💰 **Auto-Claim Rewards**: Optionally claim your staking rewards automatically once they reach a threshold
 - 🐳 **Docker Ready**: Full Docker support for containerized deployments
 
 ## Getting Started
