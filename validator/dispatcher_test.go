@@ -609,7 +609,7 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 
 	signerAddress := types.AddressFromString("0x123")
 	rewardAddress := types.AddressFromString("0x456")
-	balanceChecked := make(chan struct{}, 1)
+	balanceChecked := make(chan struct{}, 2)
 	rewardsClaimed := make(chan struct{}, 1)
 
 	mockSigner := mocks.NewMockSigner(mockCtrl)
@@ -623,7 +623,7 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 		TransactionStatus(gomock.Any()).
 		Return(nil, validator.ErrTxnHashNotFound).
 		AnyTimes()
-	// Called by the `CheckBalance` goroutine launched at the end of the window
+	// Called by the `CheckBalance` goroutine for the signer and the reward accounts
 	mockSigner.EXPECT().
 		Call(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ rpc.FunctionCall, _ rpc.BlockID) ([]*felt.Felt, error) {
@@ -631,7 +631,7 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 
 			return nil, errors.New("balance unavailable")
 		}).
-		Times(1)
+		Times(2)
 
 	mockRewardSigner := mocks.NewMockRewardSigner(mockCtrl)
 	mockRewardSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
@@ -654,10 +654,12 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 
 	// Wait for the goroutines launched at the end of the window
 	timeout := time.After(5 * time.Second)
-	select {
-	case <-balanceChecked:
-	case <-timeout:
-		require.Fail(t, "balance check was not performed at the end of the window")
+	for range 2 {
+		select {
+		case <-balanceChecked:
+		case <-timeout:
+			require.Fail(t, "the accounts balances were not checked at the end of the window")
+		}
 	}
 	select {
 	case <-rewardsClaimed:
