@@ -40,7 +40,12 @@ func CheckBalance[S signerP.Signer](
 		return
 	}
 	if balance, ok := fetchStrkBalance(signer, rewardAccount, rewardS.Address(), logger); ok {
-		isBelowThreshold(rewardAccount, balance, threshold, logger)
+		tracer.UpdateRewardBalance(balance)
+		if isBelowThreshold(rewardAccount, balance, threshold, logger) {
+			tracer.RecordRewardBalanceBelowThreshold()
+		} else {
+			tracer.RecordRewardBalanceAboveThreshold()
+		}
 	}
 }
 

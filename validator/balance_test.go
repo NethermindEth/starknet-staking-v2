@@ -15,9 +15,6 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 )
 
 // Records the balance related calls, ignoring the rest
@@ -26,6 +23,8 @@ type balanceTracer struct {
 
 	signerBalance *float64
 	signerBelow   *bool
+	rewardBalance *float64
+	rewardBelow   *bool
 }
 
 func (b *balanceTracer) UpdateSignerBalance(balance float64) { b.signerBalance = &balance }
@@ -37,31 +36,13 @@ func (b *balanceTracer) RecordSignerBalanceBelowThreshold() {
 	b.signerBelow = &below
 }
 
-// Returns a logger whose entries can be inspected, since the reward account
-// balance is only reported through the logs
-func observedLogger() (*log.ZapLogger, *observer.ObservedLogs) {
-	core, logs := observer.New(zapcore.DebugLevel)
+func (b *balanceTracer) UpdateRewardBalance(balance float64) { b.rewardBalance = &balance }
 
-	return log.NewZapLoggerWithCore(core), logs
-}
+func (b *balanceTracer) RecordRewardBalanceAboveThreshold() { b.rewardBelow = new(bool) }
 
-// Returns the log entries with the given message for the reward account
-func rewardLogs(logs *observer.ObservedLogs, msg string) *observer.ObservedLogs {
-	return logs.FilterMessage(msg).FilterField(zap.String("account", "reward"))
-}
-
-// Checks that the reward account balance was logged and, only if it's below
-// the threshold, warned about
-func requireRewardBalanceLogged(
-	t *testing.T, logs *observer.ObservedLogs, balance, threshold float64,
-) {
-	t.Helper()
-
-	require.Equal(t, 1, rewardLogs(logs, "Account balance").
-		FilterField(zap.Float64("STRK", balance)).Len())
-
-	below := rewardLogs(logs, "Balance below threshold").Len() == 1
-	require.Equal(t, balance <= threshold, below)
+func (b *balanceTracer) RecordRewardBalanceBelowThreshold() {
+	below := true
+	b.rewardBelow = &below
 }
 
 // Returns a `balance_of` call for the given address
@@ -86,6 +67,7 @@ func TestCheckBalance(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
+	logger := log.NewNopZapLogger()
 	signerAddress := types.AddressFromString("0x123")
 	rewardAddress := types.AddressFromString("0x456")
 	rewardSigner := mocks.NewMockRewardSigner(mockCtrl)
@@ -99,13 +81,13 @@ func TestCheckBalance(t *testing.T) {
 			Call(balanceOfCall(&signerAddress)).
 			Return(strkBalance(150), nil)
 
-		logger, logs := observedLogger()
 		tracer := &balanceTracer{}
 		validator.CheckBalance(mockSigner, nil, threshold, logger, tracer)
 
 		require.Equal(t, 150.0, *tracer.signerBalance)
 		require.False(t, *tracer.signerBelow)
-		require.Zero(t, logs.FilterField(zap.String("account", "reward")).Len())
+		require.Nil(t, tracer.rewardBalance)
+		require.Nil(t, tracer.rewardBelow)
 	})
 
 	t.Run(
@@ -157,13 +139,13 @@ func TestCheckBalance(t *testing.T) {
 				Call(balanceOfCall(&rewardAddress)).
 				Return(strkBalance(tc.rewardBalance), nil)
 
-			logger, logs := observedLogger()
 			tracer := &balanceTracer{}
 			validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
 
 			require.Equal(t, float64(tc.signerBalance), *tracer.signerBalance)
 			require.Equal(t, float64(tc.signerBalance) <= threshold, *tracer.signerBelow)
-			requireRewardBalanceLogged(t, logs, float64(tc.rewardBalance), threshold)
+			require.Equal(t, float64(tc.rewardBalance), *tracer.rewardBalance)
+			require.Equal(t, float64(tc.rewardBalance) <= threshold, *tracer.rewardBelow)
 		})
 	}
 
@@ -177,13 +159,13 @@ func TestCheckBalance(t *testing.T) {
 			Call(balanceOfCall(&rewardAddress)).
 			Return(strkBalance(150), nil)
 
-		logger, logs := observedLogger()
 		tracer := &balanceTracer{}
 		validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
 
 		require.Nil(t, tracer.signerBalance)
 		require.Nil(t, tracer.signerBelow)
-		requireRewardBalanceLogged(t, logs, 150, threshold)
+		require.Equal(t, 150.0, *tracer.rewardBalance)
+		require.False(t, *tracer.rewardBelow)
 	})
 
 	t.Run("Signer balance is recorded even if reward balance fetch fails", func(t *testing.T) {
@@ -196,13 +178,12 @@ func TestCheckBalance(t *testing.T) {
 			Call(balanceOfCall(&rewardAddress)).
 			Return(nil, errors.New("some error"))
 
-		logger, logs := observedLogger()
 		tracer := &balanceTracer{}
 		validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
 
 		require.Equal(t, 150.0, *tracer.signerBalance)
 		require.False(t, *tracer.signerBelow)
-		require.Equal(t, 1, rewardLogs(logs, "Unable to get STRK balance of account").Len())
-		require.Zero(t, rewardLogs(logs, "Account balance").Len())
+		require.Nil(t, tracer.rewardBalance)
+		require.Nil(t, tracer.rewardBelow)
 	})
 }

@@ -13,4 +13,11 @@ type Tracer interface {
 	RecordAttestationConfirmed()
 	RecordSignerBalanceAboveThreshold()
 	RecordSignerBalanceBelowThreshold()
+	UpdateRewardBalance(balance float64)
+	RecordRewardBalanceAboveThreshold()
+	RecordRewardBalanceBelowThreshold()
+	UpdateRewardUnclaimed(amount float64)
+	RecordRewardClaimSubmitted()
+	RecordRewardClaimFailure()
+	RecordRewardClaimMaxFeeExceeded()
 }
