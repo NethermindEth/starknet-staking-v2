@@ -636,8 +636,8 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 	mockRewardSigner := mocks.NewMockRewardSigner(mockCtrl)
 	mockRewardSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
 	mockRewardSigner.EXPECT().
-		ClaimRewards().
-		Do(func() { rewardsClaimed <- struct{}{} }).
+		ClaimRewards(gomock.Any()).
+		Do(func(metrics.Tracer) { rewardsClaimed <- struct{}{} }).
 		Times(1)
 
 	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()

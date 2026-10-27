@@ -12,6 +12,7 @@ package mocks
 import (
 	reflect "reflect"
 
+	metrics "github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	types "github.com/NethermindEth/starknet-staking-v2/validator/types"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -55,13 +56,13 @@ func (mr *MockRewardSignerMockRecorder) Address() *gomock.Call {
 }
 
 // ClaimRewards mocks base method.
-func (m *MockRewardSigner) ClaimRewards() {
+func (m *MockRewardSigner) ClaimRewards(tracer metrics.Tracer) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ClaimRewards")
+	m.ctrl.Call(m, "ClaimRewards", tracer)
 }
 
 // ClaimRewards indicates an expected call of ClaimRewards.
-func (mr *MockRewardSignerMockRecorder) ClaimRewards() *gomock.Call {
+func (mr *MockRewardSignerMockRecorder) ClaimRewards(tracer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimRewards", reflect.TypeOf((*MockRewardSigner)(nil).ClaimRewards))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimRewards", reflect.TypeOf((*MockRewardSigner)(nil).ClaimRewards), tracer)
 }

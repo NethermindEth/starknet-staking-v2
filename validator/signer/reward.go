@@ -10,6 +10,7 @@ import (
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
+	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -45,7 +46,7 @@ var (
 //go:generate go tool mockgen -destination=../../mocks/mock_reward_signer.go -package=mocks github.com/NethermindEth/starknet-staking-v2/validator/signer RewardSigner
 type RewardSigner interface {
 	Address() *types.Address
-	ClaimRewards()
+	ClaimRewards(tracer metrics.Tracer)
 }
 
 // rewardSigner is the implementation of the RewardSigner interface.
@@ -174,17 +175,20 @@ func (rs *rewardSigner) checkExternalSigner() error {
 }
 
 // ClaimRewards claims rewards if the unclaimed rewards amount reaches the claim threshold.
-// All errors and state changes are logged, the feature does not stop the flow.
-func (rs *rewardSigner) ClaimRewards() {
+// All errors and state changes are logged and recorded in the tracer, the feature does not
+// stop the flow.
+func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
 	pref := "Auto-Claiming Rewards: "
 	rs.logger.Debug(pref + "starting claim rewards")
 
 	info, err := rs.fetchStakerInfo()
 	if err != nil {
 		rs.logger.Error(pref+"failed to get unclaimed rewards amount", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
 
 		return
 	}
+	tracer.UpdateRewardUnclaimed(utils.FRIToSTRK(&info.unclaimedRewards))
 
 	// The contract returns the unclaimed rewards in FRI
 	unclaimedRewardsStrk := friToStrkString(&info.unclaimedRewards)
@@ -206,6 +210,7 @@ func (rs *rewardSigner) ClaimRewards() {
 	txn, err := rs.buildClaimRewardTransaction()
 	if err != nil {
 		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
 
 		return
 	}
@@ -218,10 +223,12 @@ func (rs *rewardSigner) ClaimRewards() {
 				zap.String("overall fee (FRI)", overallFee.Text(decimalBase)),
 				zap.String("claim max fee (FRI)", rs.claimMaxFee.Text(decimalBase)),
 			)
+			tracer.RecordRewardClaimMaxFeeExceeded()
 
 			return
 		}
 		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
 
 		return
 	}
@@ -229,9 +236,11 @@ func (rs *rewardSigner) ClaimRewards() {
 	resp, err := rs.provider.AddInvokeTransaction(rs.ctx, &txn)
 	if err != nil {
 		rs.logger.Error(pref+"failed to send reward claim transaction", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
 
 		return
 	}
+	tracer.RecordRewardClaimSubmitted()
 
 	rs.logger.Info(
 		pref+"reward claim transaction sent successfully",

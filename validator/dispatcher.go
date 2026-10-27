@@ -297,7 +297,7 @@ func (d *EventDispatcher[S]) Dispatch(
 
 			// Claim rewards if the feature is enabled
 			if rewardSigner != nil {
-				go rewardSigner.ClaimRewards()
+				go rewardSigner.ClaimRewards(tracer)
 			}
 		}
 	}
