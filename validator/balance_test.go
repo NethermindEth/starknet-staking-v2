@@ -101,14 +101,13 @@ func TestCheckBalance(t *testing.T) {
 			sameRewardSigner := mocks.NewMockRewardSigner(mockCtrl)
 			sameRewardSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
 
-			logger, logs := observedLogger()
 			tracer := &balanceTracer{}
 			validator.CheckBalance(mockSigner, sameRewardSigner, threshold, logger, tracer)
 
 			require.Equal(t, 50.0, *tracer.signerBalance)
 			require.True(t, *tracer.signerBelow)
-			require.Equal(t, 1, logs.FilterMessage("Balance below threshold").Len())
-			require.Zero(t, logs.FilterField(zap.String("account", "reward")).Len())
+			require.Nil(t, tracer.rewardBalance)
+			require.Nil(t, tracer.rewardBelow)
 		},
 	)
 
