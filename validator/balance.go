@@ -17,8 +17,7 @@ const (
 
 // Checks the STRK balance of the signer account and, if [rewardS] is not nil
 // and its address differs from the signer one, of the reward account as well.
-// Each balance is logged and a warning is given if it is below the threshold.
-// Only the signer balance is recorded in the tracer
+// Each balance is recorded and a warning is given if it is below the threshold
 func CheckBalance[S signerP.Signer](
 	signer S,
 	rewardS signerP.RewardSigner,
