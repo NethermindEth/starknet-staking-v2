@@ -15,8 +15,8 @@ const (
 	rewardAccount = "reward"
 )
 
-// Checks the STRK balance of the signer account and, if [rewardS] is not nil,
-// of the reward account as well.
+// Checks the STRK balance of the signer account and, if [rewardS] is not nil
+// and its address differs from the signer one, of the reward account as well.
 // Each balance is logged and a warning is given if it is below the threshold.
 // Only the signer balance is recorded in the tracer
 func CheckBalance[S signerP.Signer](
@@ -35,7 +35,8 @@ func CheckBalance[S signerP.Signer](
 		}
 	}
 
-	if rewardS == nil {
+	// If the reward address is the signer one, its balance was already checked
+	if rewardS == nil || rewardS.Address().Felt().Equal(signer.Address().Felt()) {
 		return
 	}
 	if balance, ok := fetchStrkBalance(signer, rewardAccount, rewardS.Address(), logger); ok {
