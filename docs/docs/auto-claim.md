@@ -47,18 +47,58 @@ The options follow the same [precedence](./configuration) as the rest of the con
 
 ### Examples
 
+```mdx-code-block
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+```
+
 With command line flags:
+
+<Tabs groupId="install">
+<TabItem value="docker" label="Docker" default>
+
+```bash
+docker run \
+  -v /path/to/config.json:/app/config/config.json \
+  nethermind/starknet-staking-v2 \
+  --config /app/config/config.json \
+  --reward-address "0x789" \
+  --reward-signer-url "http://host.docker.internal:8081" \
+  --reward-claim-threshold 100 \
+  --reward-claim-max-fee 1000000000000000000
+```
+
+</TabItem>
+<TabItem value="binary" label="Binary">
 
 ```bash
 ./build/validator \
-    --config config.json \
-    --reward-address "0x789" \
-    --reward-signer-url "http://localhost:8081" \
-    --reward-claim-threshold 100 \
-    --reward-claim-max-fee 1000000000000000000
+  --config config.json \
+  --reward-address "0x789" \
+  --reward-signer-url "http://localhost:8081" \
+  --reward-claim-threshold 100 \
+  --reward-claim-max-fee 1000000000000000000
 ```
 
+</TabItem>
+</Tabs>
+
 With environment variables:
+
+<Tabs groupId="install">
+<TabItem value="docker" label="Docker" default>
+
+```bash
+docker run \
+  -v /path/to/config.json:/app/config/config.json \
+  -e REWARD_ADDRESS="0x789" \
+  -e REWARD_PRIVATE_KEY="0xabc" \
+  -e REWARD_CLAIM_THRESHOLD=100 \
+  nethermind/starknet-staking-v2 --config /app/config/config.json
+```
+
+</TabItem>
+<TabItem value="binary" label="Binary">
 
 ```bash
 REWARD_ADDRESS="0x789" \
@@ -66,6 +106,9 @@ REWARD_PRIVATE_KEY="0xabc" \
 REWARD_CLAIM_THRESHOLD=100 \
 ./build/validator --config config.json
 ```
+
+</TabItem>
+</Tabs>
 
 With a configuration file:
 
