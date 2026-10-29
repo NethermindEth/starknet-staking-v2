@@ -58,7 +58,7 @@ func fetchStrkBalance[S signerP.Signer](
 		zap.String("account", account),
 		zap.String("address", address.String()),
 	)
-	balanceWei, err := signerP.FetchBalance(signer, address)
+	balanceFri, err := signerP.FetchBalance(signer, address)
 	if err != nil {
 		logger.Warn(
 			"Unable to get STRK balance of account",
@@ -69,13 +69,13 @@ func fetchStrkBalance[S signerP.Signer](
 
 		return 0, false
 	}
-	balance := balanceWei.Strk()
+	balance := balanceFri.Strk()
 	logger.Info(
 		"Account balance",
 		zap.String("account", account),
 		zap.String("address", address.String()),
 		zap.Float64("STRK", balance),
-		zap.String("WEI", balanceWei.Text(10)), //nolint:mnd // Decimal base
+		zap.String("FRI", balanceFri.Text(10)), //nolint:mnd // Decimal base
 	)
 
 	if math.IsInf(balance, 1) {
@@ -86,9 +86,9 @@ func fetchStrkBalance[S signerP.Signer](
 		)
 	} else if math.IsInf(balance, -1) || math.IsNaN(balance) {
 		logger.Error(
-			"Unexpected balance conversion value from WEI to STRK",
+			"Unexpected balance conversion value from FRI to STRK",
 			zap.String("account", account),
-			zap.String("WEI", balanceWei.Text(10)), //nolint:mnd // Decimal base
+			zap.String("FRI", balanceFri.Text(10)), //nolint:mnd // Decimal base
 			zap.Float64("STRK", balance),
 		)
 
