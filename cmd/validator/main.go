@@ -239,7 +239,7 @@ func NewCommand() cobra.Command {
 		&snConfig.ContractAddresses.Attest,
 		"attest-contract-address",
 		"",
-		"Staking contract address. Defaults values are provided for Sepolia and Mainnet",
+		"Attestation contract address. Defaults values are provided for Sepolia and Mainnet",
 	)
 	cmd.Flags().StringVar(
 		&snConfig.ContractAddresses.Staking,
