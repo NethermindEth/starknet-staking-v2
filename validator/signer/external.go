@@ -42,18 +42,28 @@ func NewExternalSigner(
 	addresses *config.ContractAddresses,
 	braavos bool,
 ) (ExternalSigner, error) {
+	operationalAddress, err := types.AddressFromString(sig.OperationalAddress)
+	if err != nil {
+		return ExternalSigner{}, fmt.Errorf("invalid operational address: %w", err)
+	}
+
 	chainIDStr, err := provider.ChainID(ctx)
 	if err != nil {
 		return ExternalSigner{}, err
 	}
 	chainID := new(felt.Felt).SetBytes([]byte(chainIDStr))
 
-	validationContracts := types.ValidationContractsFromAddresses(addresses.SetDefaults(chainIDStr))
+	validationContracts, err := types.ValidationContractsFromAddresses(
+		addresses.SetDefaults(chainIDStr),
+	)
+	if err != nil {
+		return ExternalSigner{}, fmt.Errorf("invalid staking contracts: %w", err)
+	}
 
 	return ExternalSigner{
 		ctx:                 ctx,
 		Provider:            provider,
-		operationalAddress:  types.AddressFromString(sig.OperationalAddress),
+		operationalAddress:  operationalAddress,
 		url:                 sig.ExternalURL,
 		chainID:             *chainID,
 		validationContracts: validationContracts,

@@ -12,13 +12,13 @@ func (a *Address) Felt() *felt.Felt {
 	return (*felt.Felt)(a)
 }
 
-func AddressFromString(addrStr string) Address {
-	adr, err := new(felt.Felt).SetString(addrStr)
+func AddressFromString(addrStr string) (Address, error) {
+	adr, err := felt.NewFromString[felt.Felt](addrStr)
 	if err != nil {
-		panic(fmt.Sprintf("cannot turn string `%s` into an address: %s", addrStr, err.Error()))
+		return Address{}, fmt.Errorf("cannot turn string `%s` into an address: %w", addrStr, err)
 	}
 
-	return Address(*adr)
+	return Address(*adr), nil
 }
 
 func (a *Address) String() string {
