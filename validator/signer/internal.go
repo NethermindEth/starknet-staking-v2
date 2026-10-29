@@ -46,7 +46,10 @@ func NewInternalSigner(
 	publicKeyStr := publicKey.String()
 	ks := account.SetNewMemKeystore(publicKeyStr, privateKey)
 
-	accountAddr := types.AddressFromString(signer.OperationalAddress)
+	accountAddr, err := types.AddressFromString(signer.OperationalAddress)
+	if err != nil {
+		return InternalSigner{}, fmt.Errorf("invalid operational address: %w", err)
+	}
 	acc, err := account.NewAccount(provider, accountAddr.Felt(), publicKeyStr, ks, 2)
 	if err != nil {
 		return InternalSigner{}, errors.Errorf("cannot create internal signer: %w", err)
@@ -56,9 +59,12 @@ func NewInternalSigner(
 	if err != nil {
 		return InternalSigner{}, err
 	}
-	validationContracts := types.ValidationContractsFromAddresses(
+	validationContracts, err := types.ValidationContractsFromAddresses(
 		addresses.SetDefaults(chainIDStr),
 	)
+	if err != nil {
+		return InternalSigner{}, fmt.Errorf("invalid staking contracts: %w", err)
+	}
 
 	logger.Debug(
 		"internal signer has been set up",

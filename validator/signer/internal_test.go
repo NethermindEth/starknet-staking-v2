@@ -61,6 +61,26 @@ func TestNewInternalSigner(t *testing.T) {
 		)
 		require.Equal(t, expectedErrorMsg, err.Error())
 	})
+	t.Run("Error: malformed operational address", func(t *testing.T) {
+		const malformedAddress = "0xZZZ"
+
+		mockRPC := validator.MockRPCServer(t, felt.NewUnsafeFromString[felt.Felt]("0x123"), "")
+		defer mockRPC.Close()
+
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
+		require.NoError(t, err)
+
+		_, err = signer.NewInternalSigner(
+			t.Context(),
+			provider,
+			logger,
+			&config.Signer{PrivKey: "0x123", OperationalAddress: malformedAddress},
+			contractAddresses,
+			braavosAccount,
+		)
+		require.ErrorContains(t, err, "invalid operational address")
+		require.ErrorContains(t, err, malformedAddress)
+	})
 	t.Run("Successful account creation", func(t *testing.T) {
 		if !loadedEnvVars {
 			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
@@ -270,7 +290,8 @@ func TestFetchEpochInfo(t *testing.T) {
 	)
 
 	t.Run("Return error: contract internal error", func(t *testing.T) {
-		validatorOperationalAddress := types.AddressFromString("0x123")
+		validatorOperationalAddress, err := types.AddressFromString("0x123")
+		require.NoError(t, err)
 
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
@@ -298,7 +319,8 @@ func TestFetchEpochInfo(t *testing.T) {
 	})
 
 	t.Run("Return error: wrong contract response length", func(t *testing.T) {
-		validatorOperationalAddress := types.AddressFromString("0x123")
+		validatorOperationalAddress, err := types.AddressFromString("0x123")
+		require.NoError(t, err)
 
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
@@ -331,7 +353,8 @@ func TestFetchEpochInfo(t *testing.T) {
 	})
 
 	t.Run("Successful contract call", func(t *testing.T) {
-		validatorOperationalAddress := types.AddressFromString("0x123")
+		validatorOperationalAddress, err := types.AddressFromString("0x123")
+		require.NoError(t, err)
 
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 		mockSigner.EXPECT().ValidationContracts().Return(
@@ -557,7 +580,8 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 	logger := log.NewNopZapLogger()
 
 	t.Run("Return error: fetching epoch info error", func(t *testing.T) {
-		validatorOperationalAddress := types.AddressFromString("0x123")
+		validatorOperationalAddress, err := types.AddressFromString("0x123")
+		require.NoError(t, err)
 
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
@@ -588,7 +612,8 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 	})
 
 	t.Run("Return error: fetching window error", func(t *testing.T) {
-		validatorOperationalAddress := types.AddressFromString("0x123")
+		validatorOperationalAddress, err := types.AddressFromString("0x123")
+		require.NoError(t, err)
 
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
@@ -648,9 +673,10 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		// Setup
 
 		// Mock fetchEpochInfo call
-		validatorOperationalAddress := types.AddressFromString(
+		validatorOperationalAddress, err := types.AddressFromString(
 			"0x011efbf2806a9f6fe043c91c176ed88c38907379e59d2d3413a00eeeef08aa7e",
 		)
+		require.NoError(t, err)
 		mockSigner.EXPECT().Address().Return(&validatorOperationalAddress)
 
 		mockSigner.EXPECT().ValidationContracts().Return(

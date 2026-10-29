@@ -59,6 +59,10 @@ func NewCommand() cobra.Command {
 	var logger *log.ZapLogger
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
+		// Flags and args are already parsed at this point, so from here on
+		// errors are not about the command usage and it shouldn't be printed
+		cmd.SilenceUsage = true
+
 		// Only set when passed, so an unset flag doesn't override the other config sources
 		if cmd.Flags().Changed("reward-braavos-account") {
 			config.Reward.Braavos = &rewardBraavosF
@@ -239,7 +243,7 @@ func NewCommand() cobra.Command {
 		&snConfig.ContractAddresses.Attest,
 		"attest-contract-address",
 		"",
-		"Staking contract address. Defaults values are provided for Sepolia and Mainnet",
+		"Attestation contract address. Defaults values are provided for Sepolia and Mainnet",
 	)
 	cmd.Flags().StringVar(
 		&snConfig.ContractAddresses.Staking,

@@ -12,7 +12,6 @@ import (
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/signer"
-	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/stretchr/testify/require"
@@ -26,7 +25,8 @@ func TestExternalSignerAddress(t *testing.T) {
 	logger := log.NewNopZapLogger()
 
 	t.Run("Return signer address", func(t *testing.T) {
-		operationalAddress := felt.NewUnsafeFromString[felt.Felt]("0x123")
+		const opAddress = "0x123"
+		operationalAddress := felt.NewUnsafeFromString[felt.Felt](opAddress)
 
 		mockRPC := validator.MockRPCServer(t, operationalAddress, "")
 		defer mockRPC.Close()
@@ -40,14 +40,34 @@ func TestExternalSignerAddress(t *testing.T) {
 			logger,
 			&config.Signer{
 				ExternalURL:        "http://localhost:1234",
-				OperationalAddress: "0x123",
+				OperationalAddress: opAddress,
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
 			false,
 		)
 		require.NoError(t, err)
 
-		require.Equal(t, *externalSigner.Address(), types.AddressFromString("0x123"))
+		require.Equal(t, operationalAddress, externalSigner.Address().Felt())
+	})
+	t.Run("Error: malformed operational address", func(t *testing.T) {
+		const malformedAddress = "0xZZZ"
+
+		mockRPC := validator.MockRPCServer(t, felt.NewUnsafeFromString[felt.Felt]("0x123"), "")
+		defer mockRPC.Close()
+
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
+		require.NoError(t, err)
+
+		_, err = signer.NewExternalSigner(
+			t.Context(),
+			provider,
+			logger,
+			&config.Signer{OperationalAddress: malformedAddress},
+			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+			false,
+		)
+		require.ErrorContains(t, err, "invalid operational address")
+		require.ErrorContains(t, err, malformedAddress)
 	})
 }
 
