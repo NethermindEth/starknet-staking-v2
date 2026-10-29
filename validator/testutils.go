@@ -128,7 +128,8 @@ func SepoliaValidationContracts(t *testing.T) *types.ValidationContracts {
 	t.Helper()
 
 	addresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
-	contracts := types.ValidationContractsFromAddresses(addresses)
+	contracts, err := types.ValidationContractsFromAddresses(addresses)
+	require.NoError(t, err)
 
 	return &contracts
 }
