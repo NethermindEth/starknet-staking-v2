@@ -87,18 +87,18 @@ func (mr *MockSignerMockRecorder) BuildAttestTransaction(blockHash any) *gomock.
 }
 
 // Call mocks base method.
-func (m *MockSigner) Call(call rpc.FunctionCall, blockId rpc.BlockID) ([]*felt.Felt, error) {
+func (m *MockSigner) Call(call rpc.FunctionCall, blockID rpc.BlockID) ([]*felt.Felt, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Call", call, blockId)
+	ret := m.ctrl.Call(m, "Call", call, blockID)
 	ret0, _ := ret[0].([]*felt.Felt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Call indicates an expected call of Call.
-func (mr *MockSignerMockRecorder) Call(call, blockId any) *gomock.Call {
+func (mr *MockSignerMockRecorder) Call(call, blockID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockSigner)(nil).Call), call, blockId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockSigner)(nil).Call), call, blockID)
 }
 
 // EstimateFee mocks base method.
