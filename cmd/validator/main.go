@@ -89,7 +89,10 @@ func NewCommand() cobra.Command {
 		return nil
 	}
 
-	run := func(cmd *cobra.Command, args []string) {
+	runE := func(cmd *cobra.Command, args []string) error {
+		// Errors from here on are already logged, so cobra shouldn't print them again
+		cmd.SilenceErrors = true
+
 		fmt.Printf(greeting, validator.Version)
 
 		v, err := tryNewValidator(
@@ -103,7 +106,7 @@ func NewCommand() cobra.Command {
 		if err != nil {
 			logger.Error("couldn't start validator", zap.Error(err))
 
-			return
+			return err
 		}
 
 		var tracer metrics.Tracer = metrics.NewNoOpMetrics()
@@ -146,12 +149,20 @@ func NewCommand() cobra.Command {
 		// run upgrader tracker
 		go trackLatestRelease(cmd.Context(), logger)
 
-		// Wait for signal or error
+		// Wait for signal, context cancellation or error
 		select {
 		case <-signalCh:
 			logger.Info("Received shutdown signal")
+
+			return nil
+		case <-cmd.Context().Done():
+			logger.Info("Context cancelled, shutting down")
+
+			return nil
 		case err := <-errCh:
 			logger.Error("validator stopped with error", zap.Error(err))
+
+			return err
 		}
 	}
 
@@ -162,7 +173,7 @@ func NewCommand() cobra.Command {
 		Long:    longDescription,
 		Version: validator.Version,
 		PreRunE: preRunE,
-		Run:     run,
+		RunE:    runE,
 		Args:    cobra.NoArgs,
 	}
 
