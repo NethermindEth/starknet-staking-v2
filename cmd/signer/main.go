@@ -21,7 +21,11 @@ func NewCommand() cobra.Command {
 	var privKey string
 	var logger *log.ZapLogger
 
-	preRunE := func(_ *cobra.Command, args []string) error {
+	preRunE := func(cmd *cobra.Command, args []string) error {
+		// Flags and args are already parsed at this point, so from here on
+		// errors are not about the command usage and it shouldn't be printed
+		cmd.SilenceUsage = true
+
 		var err error
 
 		logLevel := log.NewLevel(log.INFO)
