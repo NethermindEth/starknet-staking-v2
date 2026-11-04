@@ -28,8 +28,7 @@ func TestExternalSignerAddress(t *testing.T) {
 		const opAddress = "0x123"
 		operationalAddress := felt.NewUnsafeFromString[felt.Felt](opAddress)
 
-		mockRPC := validator.MockRPCServer(t, operationalAddress, "")
-		defer mockRPC.Close()
+		mockRPC := validator.MockRPCServer(t, validator.MockRPC{})
 
 		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
 		require.NoError(t, err)
@@ -52,8 +51,7 @@ func TestExternalSignerAddress(t *testing.T) {
 	t.Run("Error: malformed operational address", func(t *testing.T) {
 		const malformedAddress = "0xZZZ"
 
-		mockRPC := validator.MockRPCServer(t, felt.NewUnsafeFromString[felt.Felt]("0x123"), "")
-		defer mockRPC.Close()
+		mockRPC := validator.MockRPCServer(t, validator.MockRPC{})
 
 		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
 		require.NoError(t, err)

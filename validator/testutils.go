@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
-	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,9 +12,7 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
-	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
-	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
@@ -54,74 +51,80 @@ func LoadEnv(t *testing.T) (EnvVariable, error) {
 	return EnvVariable{base, wsProviderURL}, nil
 }
 
-func MockRPCServer(
-	t *testing.T, operationalAddress *felt.Felt, serverInternalError string,
-) *httptest.Server {
+// Configures the responses of the server started by `MockRPCServer`. Every result is a
+// raw JSON value.
+type MockRPC struct {
+	// Results by method name. `starknet_specVersion` and `starknet_chainId` (Sepolia)
+	// are answered by default, since creating an `rpc.Provider` requires them
+	Results map[string]string
+	// `starknet_call` results by entry point selector name
+	CallResults map[string]string
+	// Called on a websocket upgrade request, which is always refused
+	OnWSUpgrade func()
+}
+
+// Starts a JSON-RPC server answering with the results configured in `mock`, closed on
+// test cleanup. Any other request gets a JSON-RPC error instead of failing the test,
+// since requests from background goroutines can arrive after it ends.
+func MockRPCServer(t *testing.T, mock MockRPC) *httptest.Server {
 	t.Helper()
 
-	mockRPC := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Read and decode JSON body
-		bodyBytes, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		defer func() {
-			err = r.Body.Close()
-			require.NoError(t, err)
-		}()
+	results := map[string]string{
+		"starknet_specVersion": `"v0.10.2"`,
+		"starknet_chainId":     `"0x534e5f5345504f4c4941"`, // SN_SEPOLIA
+	}
+	maps.Copy(results, mock.Results)
 
-		var req Method
-		err = json.Unmarshal(bodyBytes, &req)
-		require.NoError(t, err)
+	callResults := make(map[felt.Felt]string, len(mock.CallResults))
+	for name, result := range mock.CallResults {
+		callResults[*snGoUtils.GetSelectorFromNameFelt(name)] = result
+	}
 
-		switch req.Name {
-		case "starknet_chainId":
-			const SNSepoliaID = "0x534e5f5345504f4c4941"
-			chainIDResponse := fmt.Sprintf(
-				`{"jsonrpc": "2.0", "result": %q, "id": 1}`, SNSepoliaID,
-			)
-			w.WriteHeader(http.StatusOK)
-			_, err = w.Write([]byte(chainIDResponse))
-			require.NoError(t, err)
-		case "starknet_call":
-			// Marshal the `Params` back into JSON
-			var paramsBytes []byte
-			paramsBytes, err = json.Marshal(req.Params[0])
-			require.NoError(t, err)
-
-			// Unmarshal `Params` into `FunctionCall`
-			var fnCall rpc.FunctionCall
-			err = json.Unmarshal(paramsBytes, &fnCall)
-			require.NoError(t, err)
-
-			// Just making sure it's the call expected
-			expectedEpochInfoFnCall := rpc.FunctionCall{
-				ContractAddress: felt.NewUnsafeFromString[felt.Felt](
-					constants.SepoliaStakingContractAddress,
-				),
-				EntryPointSelector: snGoUtils.GetSelectorFromNameFelt(
-					"get_attestation_info_by_operational_address",
-				),
-				Calldata: []*felt.Felt{operationalAddress},
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") == "websocket" {
+			if mock.OnWSUpgrade != nil {
+				mock.OnWSUpgrade()
 			}
+			w.WriteHeader(http.StatusServiceUnavailable)
 
-			require.Equal(t, expectedEpochInfoFnCall, fnCall)
-
-			w.WriteHeader(http.StatusInternalServerError)
-			_, err = w.Write([]byte(serverInternalError))
-			require.NoError(t, err)
-
-		// Called when calling `rpc.NewProvider` in Starknet.Go
-		case "starknet_specVersion":
-			w.WriteHeader(http.StatusOK)
-			_, err = w.Write([]byte(`{"jsonrpc": "2.0", "result": "v0.10.2", "id": 1}`))
-			require.NoError(t, err)
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, err = w.Write([]byte(`Should not get here, method: ` + html.EscapeString(req.Name)))
-			require.NoError(t, err)
+			return
 		}
-	}))
 
-	return mockRPC
+		var req struct {
+			ID     json.RawMessage   `json:"id"`
+			Method string            `json:"method"`
+			Params []json.RawMessage `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+
+		result, ok := results[req.Method]
+		if req.Method == "starknet_call" && len(req.Params) > 0 {
+			var call struct {
+				Selector felt.Felt `json:"entry_point_selector"`
+			}
+			if err := json.Unmarshal(req.Params[0], &call); err == nil {
+				result, ok = callResults[call.Selector]
+			}
+		}
+
+		if !ok {
+			_, _ = fmt.Fprintf(
+				w,
+				`{"jsonrpc": "2.0", "id": %s, "error": {"code": -32601, "message": %q}}`,
+				req.ID, "unexpected request: "+req.Method,
+			)
+
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"jsonrpc": "2.0", "id": %s, "result": %s}`, req.ID, result)
+	}))
+	t.Cleanup(server.Close)
+
+	return server
 }
 
 func SepoliaValidationContracts(t *testing.T) *types.ValidationContracts {
