@@ -49,11 +49,22 @@ type ValidationContracts struct {
 	Attest  Address
 }
 
-func ValidationContractsFromAddresses(ca *config.ContractAddresses) ValidationContracts {
-	return ValidationContracts{
-		Attest:  AddressFromString(ca.Attest),
-		Staking: AddressFromString(ca.Staking),
+func ValidationContractsFromAddresses(
+	ca *config.ContractAddresses,
+) (ValidationContracts, error) {
+	attest, err := AddressFromString(ca.Attest)
+	if err != nil {
+		return ValidationContracts{}, fmt.Errorf("invalid attest contract address: %w", err)
 	}
+	staking, err := AddressFromString(ca.Staking)
+	if err != nil {
+		return ValidationContracts{}, fmt.Errorf("invalid staking contract address: %w", err)
+	}
+
+	return ValidationContracts{
+		Attest:  attest,
+		Staking: staking,
+	}, nil
 }
 
 func (c *ValidationContracts) String() string {

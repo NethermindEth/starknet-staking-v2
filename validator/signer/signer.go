@@ -1,6 +1,7 @@
 package signer
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/crypto"
@@ -89,7 +90,10 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 
 // Fetches the STRK balance of any account, using the signer only to perform the call
 func FetchBalance[S Signer](signer S, address *types.Address) (types.Balance, error) {
-	StrkTokenContract := types.AddressFromString(constants.StrkContractAddress)
+	StrkTokenContract, err := types.AddressFromString(constants.StrkContractAddress)
+	if err != nil {
+		return types.Balance{}, fmt.Errorf("invalid STRK contract address: %w", err)
+	}
 	result, err := signer.Call(
 		rpc.FunctionCall{
 			ContractAddress:    StrkTokenContract.Felt(),

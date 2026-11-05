@@ -68,8 +68,10 @@ func TestCheckBalance(t *testing.T) {
 	t.Cleanup(mockCtrl.Finish)
 
 	logger := log.NewNopZapLogger()
-	signerAddress := types.AddressFromString("0x123")
-	rewardAddress := types.AddressFromString("0x456")
+	signerAddress, err := types.AddressFromString("0x123")
+	require.NoError(t, err)
+	rewardAddress, err := types.AddressFromString("0x456")
+	require.NoError(t, err)
 	rewardSigner := mocks.NewMockRewardSigner(mockCtrl)
 	rewardSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
 	threshold := 100.0

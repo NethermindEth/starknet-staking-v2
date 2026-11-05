@@ -1,11 +1,15 @@
 package main_test
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	main "github.com/NethermindEth/starknet-staking-v2/cmd/validator"
+	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
@@ -44,10 +48,12 @@ func TestNewCommand(t *testing.T) {
 	})
 
 	t.Run("Full command setup works with config file", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
 		conf := config.Config{
 			Provider: config.Provider{
-				HTTP: testProviderHTTP,
-				WS:   "ws://localhost:1235",
+				HTTP: httpURL,
+				WS:   wsURL,
 			},
 			Signer: config.Signer{
 				OperationalAddress: "0x456",
@@ -58,31 +64,35 @@ func TestNewCommand(t *testing.T) {
 		defer deleteFile(t, filePath)
 
 		command := newTestCommandWithArgs(t, "--config", filePath)
-		err := command.ExecuteContext(t.Context())
-		require.Nil(t, err)
+		err := command.ExecuteContext(ctx)
+		require.NoError(t, err)
 	})
 
 	t.Run("Full command setup works with config through flags", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
 		command := newTestCommandWithArgs(
 			t,
-			"--provider-http", testProviderHTTP,
-			"--provider-ws", "ws://localhost:1234",
+			"--provider-http", httpURL,
+			"--provider-ws", wsURL,
 			"--signer-op-address", "0x456",
 			"--signer-url", "http://localhost:5555",
 		)
-		err := command.ExecuteContext(t.Context())
+		err := command.ExecuteContext(ctx)
 		require.NoError(t, err)
 	})
 
 	t.Run("Full command setup works with config file and with flags", func(t *testing.T) {
-		conf, err := config.FromData([]byte(`{
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		conf, err := config.FromData(fmt.Appendf(nil, `{
             "provider": {
-                "http": "http://localhost:1234"
+                "http": %q
             },
             "signer": {
                 "url": "http://localhost:5678"
             }
-        }`),
+        }`, httpURL),
 		)
 		require.NoError(t, err)
 		filePath := createTemporaryConfigFile(t, &conf)
@@ -91,24 +101,27 @@ func TestNewCommand(t *testing.T) {
 		command := newTestCommandWithArgs(
 			t,
 			"--config", filePath,
-			"--provider-ws", "ws://localhost:1234",
+			"--provider-ws", wsURL,
 			"--signer-op-address", "0x456",
 		)
-		err = command.ExecuteContext(t.Context())
+		err = command.ExecuteContext(ctx)
 		require.NoError(t, err)
 	})
 	t.Run("Priority order is flags -> env vars -> config file", func(t *testing.T) {
-		// Configuration through file
-		conf, err := config.FromData([]byte(`{
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		// Configuration through file. Its http provider is unreachable, so the
+		// command only succeeds if the flag value takes priority
+		conf, err := config.FromData(fmt.Appendf(nil, `{
             "provider": {
                 "http": "http://localhost:1234",
-                "ws": "ws://localhost:1235"
+                "ws": %q
             },
             "signer": {
                 "url": "http://localhost:5678",
                 "operationalAddress": "0x456"
             }
-        }`),
+        }`, wsURL),
 		)
 		require.NoError(t, err)
 		filePath := createTemporaryConfigFile(t, &conf)
@@ -120,11 +133,9 @@ func TestNewCommand(t *testing.T) {
 		command := newTestCommandWithArgs(
 			t,
 			"--config", filePath,
-			"--provider-http", "12",
+			"--provider-http", httpURL,
 		)
-		err = command.ExecuteContext(t.Context())
-		// Very hard to test with the current architecture
-		// return in the future to fix it
+		err = command.ExecuteContext(ctx)
 		require.NoError(t, err)
 	})
 
@@ -216,15 +227,17 @@ func TestNewCommand(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
+				ctx, httpURL, wsURL := newTestNode(t)
+
 				args := []string{
-					"--provider-http", testProviderHTTP,
-					"--provider-ws", "ws://localhost:1234",
+					"--provider-http", httpURL,
+					"--provider-ws", wsURL,
 					"--signer-op-address", "0x456",
 					"--signer-url", "http://localhost:5555",
 				}
 				command := newTestCommandWithArgs(t, append(args, tc.rewardFlags...)...)
 
-				err := command.ExecuteContext(t.Context())
+				err := command.ExecuteContext(ctx)
 				if tc.expectedErr == "" {
 					require.NoError(t, err)
 				} else {
@@ -267,4 +280,33 @@ func newTestCommandWithArgs(t *testing.T, args ...string) cobra.Command {
 	cmd.SetArgs(args)
 
 	return cmd
+}
+
+// Starts a server answering the node calls the validator makes on startup, with the
+// reward account "0x789" being the staker account. Once the validator subscribes to
+// new block headers through the ws endpoint it is fully started, so the server cancels
+// the returned context to stop it.
+func newTestNode(t *testing.T) (ctx context.Context, httpURL, wsURL string) {
+	t.Helper()
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(t.Context())
+
+	server := validator.MockRPCServer(t, validator.MockRPC{
+		Results: map[string]string{
+			"starknet_getNonce":        `"0x0"`,
+			"starknet_getBlockWithTxs": `{"block_hash": "0x1", "transactions": []}`,
+		},
+		CallResults: map[string]string{
+			// staker address, stake, epoch length, epoch id and starting block
+			"get_attestation_info_by_operational_address": `["0x789", "0x1", "0xa", "0x1", "0x1"]`,
+			// Some(staker info) with the reward address, the operational address,
+			// None unstake time, own amount and unclaimed rewards
+			"get_staker_info_v1": `["0x0", "0x789", "0x456", "0x1", "0x0", "0x0"]`,
+			"balance_of":         `["0x0", "0x0"]`,
+		},
+		OnWSUpgrade: cancel,
+	})
+
+	return ctx, server.URL, "ws" + strings.TrimPrefix(server.URL, "http")
 }

@@ -549,7 +549,8 @@ func TestTrackAttest(t *testing.T) {
 func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 
-	signerAddress := types.AddressFromString("0x123")
+	signerAddress, err := types.AddressFromString("0x123")
+	require.NoError(t, err)
 	balanceChecked := make(chan struct{}, 1)
 
 	mockSigner := mocks.NewMockSigner(mockCtrl)
@@ -607,8 +608,10 @@ func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
 func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 
-	signerAddress := types.AddressFromString("0x123")
-	rewardAddress := types.AddressFromString("0x456")
+	signerAddress, err := types.AddressFromString("0x123")
+	require.NoError(t, err)
+	rewardAddress, err := types.AddressFromString("0x456")
+	require.NoError(t, err)
 	balanceChecked := make(chan struct{}, 2)
 	rewardsClaimed := make(chan struct{}, 1)
 
