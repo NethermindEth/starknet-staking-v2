@@ -1,6 +1,7 @@
 package validator_test
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -250,6 +251,70 @@ func TestNewRejectsNonWebsocketURL(t *testing.T) {
 
 			require.ErrorContains(t, err, "WS provider URL must use ws:// or wss://")
 			require.NotErrorIs(t, err, validator.ErrTransient)
+		})
+	}
+}
+
+// The startup lines naming the signers say whether the Braavos transaction version is used
+// (QA report 01, finding OBS-4)
+func TestNewLogsBraavosMode(t *testing.T) {
+	server := validator.MockRPCServer(t, validator.MockRPC{
+		Results: nil,
+		CallResults: map[string]string{
+			// staker address, stake, epoch length, epoch id and starting block
+			"get_attestation_info_by_operational_address": `["0x789", "0x1", "0xa", "0x1", "0x1"]`,
+			// Some(staker info) with the reward address, the operational address,
+			// None unstake time, own amount and unclaimed rewards
+			"get_staker_info_v1": `["0x0", "0x789", "0x456", "0x1", "0x0", "0x0"]`,
+		},
+		OnWSUpgrade: nil,
+	})
+	rewardBraavos := true
+
+	testCases := []struct {
+		name         string
+		signer       config.Signer
+		braavos      bool
+		expectedLine string
+	}{
+		{
+			name:         "internal signer",
+			signer:       config.Signer{OperationalAddress: "0x456", PrivKey: "0x123"},
+			braavos:      true,
+			expectedLine: `using internal signer	{"braavosAccount": true}`,
+		},
+		{
+			name: "external signer",
+			signer: config.Signer{
+				OperationalAddress: "0x456", ExternalURL: "http://localhost:1",
+			},
+			expectedLine: `using external signer	{"externalSignerURL": ` +
+				`"http://localhost:1", "braavosAccount": false}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger, err := log.NewZapLogger(
+				log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+			)
+			require.NoError(t, err)
+			conf := config.Config{
+				Provider: config.Provider{HTTP: server.URL, WS: "ws://localhost:1"},
+				Signer:   tc.signer,
+				Reward: config.Reward{
+					Address: "0x789", PrivKey: "0xabc", ClaimThreshold: 1, Braavos: &rewardBraavos,
+				},
+			}
+
+			_, err = validator.New(
+				t.Context(), &conf, new(config.StarknetConfig), logger, tc.braavos,
+			)
+
+			require.NoError(t, err)
+			require.Contains(t, buf.String(), tc.expectedLine)
+			require.Contains(t, buf.String(), `"rewardAddress": "0x789", "braavosAccount": true}`)
 		})
 	}
 }

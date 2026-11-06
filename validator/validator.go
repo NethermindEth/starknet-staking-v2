@@ -68,6 +68,7 @@ func New(
 		logger.Info(
 			"using external signer",
 			zap.String("externalSignerURL", conf.Signer.ExternalURL),
+			zap.Bool("braavosAccount", braavos),
 		)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
@@ -84,7 +85,7 @@ func New(
 			)
 		}
 		signer = &internalSigner
-		logger.Info("using internal signer")
+		logger.Info("using internal signer", zap.Bool("braavosAccount", braavos))
 	}
 
 	logger.Info(
@@ -120,6 +121,7 @@ func New(
 		logger.Info(
 			"Reward auto-claiming enabled",
 			zap.String("rewardAddress", rewardSigner.Address().String()),
+			zap.Bool("braavosAccount", conf.Reward.IsBraavos()),
 		)
 	}
 
