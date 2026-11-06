@@ -39,6 +39,7 @@ const (
 
 const (
 	claimLogPrefix = "Auto-Claiming Rewards: "
+	rewardAccount  = "reward"
 	claimTimeout   = 30 * time.Second
 	claimMaxBlocks = constants.MinAttestationWindow - 3
 
@@ -103,12 +104,13 @@ func NewRewardSigner(
 	isExternal bool,
 ) (RewardSigner, error) {
 	signerConf := makeSignerConfFromRewardConf(rewardConfig)
+	signerLogger := withAccountField(logger, rewardAccount)
 
 	var signer Signer
 
 	if isExternal {
 		externalSigner, err := NewExternalSigner(
-			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+			ctx, provider, signerLogger, &signerConf, contractAddresses, braavos,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create external signer: %w", err)
@@ -116,7 +118,7 @@ func NewRewardSigner(
 		signer = &externalSigner
 	} else {
 		internalSigner, err := NewInternalSigner(
-			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+			ctx, provider, signerLogger, &signerConf, contractAddresses, braavos,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create internal signer: %w", err)
@@ -149,6 +151,14 @@ func NewRewardSigner(
 	}
 
 	return rs, nil
+}
+
+func withAccountField(logger log.Logger, accountName string) log.Logger {
+	if zapLogger, ok := logger.(*log.ZapLogger); ok {
+		return zapLogger.WithOptions(zap.Fields(zap.String("account", accountName)))
+	}
+
+	return logger
 }
 
 func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {

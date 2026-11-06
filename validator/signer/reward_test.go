@@ -1523,6 +1523,33 @@ func TestClaimRewardsLogKeys(t *testing.T) {
 	}
 }
 
+func TestNewRewardSignerLogsAccount(t *testing.T) {
+	stakerAddress, err := types.AddressFromString(testStakerAddress)
+	require.NoError(t, err)
+	provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+	provider.EXPECT().ChainID(gomock.Any()).Return("SN_SEPOLIA", nil).AnyTimes()
+	provider.EXPECT().
+		Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+		Return(stakerInfoResponse(t, &felt.Zero), nil)
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	_, err = NewRewardSigner(
+		t.Context(),
+		provider,
+		log.NewZapLoggerWithCore(core),
+		&config.Reward{PrivKey: "0x123", Address: testRewardAddress, ClaimThreshold: 1},
+		new(config.ContractAddresses),
+		&stakerAddress,
+		false,
+		false,
+	)
+	require.NoError(t, err)
+
+	setUp := logs.FilterMessage("internal signer has been set up").All()
+	require.Len(t, setUp, 1)
+	require.Equal(t, "reward", setUp[0].ContextMap()["account"])
+}
+
 func TestFriToStrkString(t *testing.T) {
 	testCases := []struct {
 		fri      string
