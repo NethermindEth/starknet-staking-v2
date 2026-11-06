@@ -40,7 +40,7 @@ const (
 const (
 	claimLogPrefix = "Auto-Claiming Rewards: "
 	claimTimeout   = 30 * time.Second
-	claimMaxBlocks = constants.MinAttestationWindow / 2
+	claimMaxBlocks = constants.MinAttestationWindow - 3
 
 	claimTrackingTimeout = 2 * time.Minute
 	claimStatusInterval  = 2 * time.Second

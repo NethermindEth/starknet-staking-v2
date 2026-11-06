@@ -932,6 +932,11 @@ func TestClaimRewardsBounds(t *testing.T) {
 	require.NoError(t, err)
 	const claimMaxFee = uint64(1e15)
 
+	t.Run("The block limit leaves room before the next attest nonce read", func(t *testing.T) {
+		require.Equal(t, uint64(8), uint64(claimMaxBlocks))
+		require.LessOrEqual(t, claimMaxBlocks+2, constants.MinAttestationWindow-1)
+	})
+
 	t.Run("A claim still running makes the next one skip", func(t *testing.T) {
 		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
 		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
