@@ -74,7 +74,6 @@ func NewCommand() cobra.Command {
 		if cmd.Flags().Changed("reward-braavos-account") {
 			config.Reward.Braavos = &rewardBraavosF
 		}
-		// Before loading the other sources, which replace a zero claim threshold
 		if err := checkThresholdFlags(cmd, &config, balanceThreshold); err != nil {
 			return err
 		}
@@ -97,7 +96,6 @@ func NewCommand() cobra.Command {
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
-			// Juno's error lists the trace level as "Level(-2)"
 			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
 		}
 
@@ -269,29 +267,23 @@ func NewCommand() cobra.Command {
 	return cmd
 }
 
-// What the validator runs with, set from the flags and the config sources
 type runOptions struct {
 	config           *configP.Config
 	snConfig         *configP.StarknetConfig
 	maxRetries       types.Retries
 	balanceThreshold float64
 	braavosAccount   bool
-	// Address of the metrics server, empty when metrics are disabled
-	metricsAddress string
-	logger         *log.ZapLogger
+	metricsAddress   string
+	logger           *log.ZapLogger
 }
 
-// Starts the validator and runs it until a shutdown signal, the end of `ctx` or an error
 func run(ctx context.Context, opts *runOptions) error {
 	logger := opts.logger
 
-	// Installed before the startup calls, which can take long, so a shutdown signal
-	// during them also stops the validator cleanly
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signalCh)
 
-	// Cancelled on return, which aborts the calls still running then
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -310,8 +302,6 @@ func run(ctx context.Context, opts *runOptions) error {
 	}
 
 	var tracer metrics.Tracer = metrics.NewNoOpMetrics()
-	// Receives if the metrics server fails, which stops the validator. It stays nil,
-	// and so never receives, while metrics are disabled
 	var metricsErrCh <-chan error
 	if opts.metricsAddress != "" {
 		metricsServer, errCh, stopMetrics := startMetricsServer(
@@ -356,8 +346,6 @@ func run(ctx context.Context, opts *runOptions) error {
 	}
 }
 
-// Runs `newValidator`, which makes the startup calls, until it returns. A shutdown signal or
-// the end of `ctx` stops the wait: `stopped` is then true and the validator isn't usable
 func startValidator(
 	ctx context.Context,
 	signalCh <-chan os.Signal,
@@ -388,15 +376,10 @@ func startValidator(
 	}
 }
 
-// Logs only the error message. `zap.Error` adds an "errorVerbose" field holding the whole
-// stack trace for errors that implement `fmt.Formatter`, like the cockroachdb ones
 func errorField(err error) zap.Field {
 	return zap.String("error", err.Error())
 }
 
-// Verifies the threshold flags. A zero claim threshold means "not set", so an explicit
-// `--reward-claim-threshold 0` would be silently replaced by the value of a lower priority
-// source, and a non-finite balance threshold (NaN, infinite) makes the balance check meaningless
 func checkThresholdFlags(
 	cmd *cobra.Command, config *configP.Config, balanceThreshold float64,
 ) error {
@@ -410,8 +393,6 @@ func checkThresholdFlags(
 	return nil
 }
 
-// Verifies the metrics server can listen on the given host and port, so that a typo in
-// the port or a port already in use stops the validator at startup
 func checkMetricsAddress(ctx context.Context, host, port string) error {
 	portNumber, err := strconv.ParseUint(port, 10, 16)
 	if err != nil || portNumber == 0 {
@@ -428,8 +409,6 @@ func checkMetricsAddress(ctx context.Context, host, port string) error {
 	return listener.Close()
 }
 
-// Starts the metrics server in a goroutine. The returned channel receives the error that
-// stopped the server, if any, and the returned function shuts the server down
 func startMetricsServer(
 	ctx context.Context, address, chainID string, logger *log.ZapLogger,
 ) (server *metrics.Metrics, failed <-chan error, stop func()) {

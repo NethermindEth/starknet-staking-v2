@@ -39,8 +39,6 @@ func TestNew(t *testing.T) {
 	})
 }
 
-// Returns a signer for the test key 0x123 logging at debug level into the returned logs,
-// and a test server for its routes
 func newTestSigner(t *testing.T) (*observer.ObservedLogs, *httptest.Server) {
 	t.Helper()
 
@@ -54,8 +52,6 @@ func newTestSigner(t *testing.T) (*observer.ObservedLogs, *httptest.Server) {
 	return logs, server
 }
 
-// Sends `method` request with `body` to the sign endpoint of `server`. Returns the
-// response status code and body
 func sendSignRequest(
 	t *testing.T, server *httptest.Server, method, body string,
 ) (statusCode int, respBody string) {
@@ -199,7 +195,6 @@ func TestListen(t *testing.T) {
 			listenErr <- signer.Listen(ctx, "127.0.0.1:0")
 		}()
 
-		// The address the server listens on is logged once it is bound
 		require.Eventually(t, func() bool {
 			return logs.FilterMessage("server running").Len() == 1
 		}, 5*time.Second, 10*time.Millisecond)

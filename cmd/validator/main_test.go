@@ -318,14 +318,12 @@ func TestHelpText(t *testing.T) {
 	for _, defect := range []string{"the the", "Defaults values", "1 << 1e18", "Only applies for"} {
 		require.NotContains(t, help, defect)
 	}
-	// The flags for the two signing methods say they are mutually exclusive
 	require.Contains(t, help, "Exclusive with --signer-url")
 	require.Contains(t, help, "Exclusive with --signer-priv-key")
 }
 
 func TestThresholdFlags(t *testing.T) {
 	t.Run("Explicit zero claim threshold is rejected", func(t *testing.T) {
-		// Without the check, the env var value would silently replace the flag value
 		t.Setenv("REWARD_CLAIM_THRESHOLD", "5")
 
 		for _, flag := range []string{"--reward-claim-threshold=0", "--reward-claim-threshold=00"} {
@@ -361,7 +359,6 @@ func TestThresholdFlags(t *testing.T) {
 	})
 }
 
-// Returns the flags of a valid configuration for the given node URLs, with `extraFlags`
 func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
 	return append([]string{
 		"--provider-http", httpURL,

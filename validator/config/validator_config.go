@@ -312,15 +312,11 @@ func (c *Config) Check() error {
 	return nil
 }
 
-// A config source, so that errors can name where a value comes from
 type Source struct {
 	Name   string
 	Config *Config
 }
 
-// Like `Check`, for a config merged from `sources`. When both a private key and an external
-// URL are set, the error also names the sources setting each of them, since a stale env var
-// next to a config file gives the same error as two flags
 func (c *Config) CheckSources(sources ...Source) error {
 	err := c.Check()
 	switch {
@@ -341,8 +337,6 @@ func rewardSigning(c *Config) (privKey, url string) {
 	return c.Reward.PrivKey, c.Reward.ExternalURL
 }
 
-// Names the sources setting the private key and the external URL that `signing` returns
-// for a config
 func signingSources(sources []Source, signing func(*Config) (privKey, url string)) string {
 	privKeySources := make([]string, 0, len(sources))
 	urlSources := make([]string, 0, len(sources))

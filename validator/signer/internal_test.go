@@ -39,8 +39,6 @@ func TestNewInternalSigner(t *testing.T) {
 	braavosAccount := false
 
 	t.Run("Error: private key conversion", func(t *testing.T) {
-		// The key is parsed before the provider is used, so no provider is needed. The
-		// error never includes the key
 		for _, privKey := range []string{
 			"", "0x", "0x0", "zzz-dummy", "0xZZdummy", " 0x123abc", "0x123abc\n", "-0x123abc",
 			"123456", "0x800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",

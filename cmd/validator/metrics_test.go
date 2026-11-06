@@ -33,7 +33,6 @@ func TestStartMetricsServer(t *testing.T) {
 		_, failed, stop := startMetricsServer(
 			t.Context(), "127.0.0.1:0", "SN_SEPOLIA", log.NewNopZapLogger(),
 		)
-		// Give the server time to start listening before it is stopped
 		time.Sleep(50 * time.Millisecond)
 		stop()
 

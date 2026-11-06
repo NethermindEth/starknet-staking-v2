@@ -9,7 +9,6 @@ import (
 
 type chainID int
 
-// Chain ids, as returned by `starknet_chainId`, of the networks with default addresses
 const (
 	mainnetChainID = "SN_MAIN"
 	sepoliaChainID = "SN_SEPOLIA"
@@ -51,7 +50,6 @@ func chainIDFromStr(s string) chainID {
 type ContractAddresses struct {
 	Staking string
 	Attest  string
-	// Chain id the defaults were looked up for, so `Check` can name it
 	chainID string
 }
 
@@ -73,8 +71,6 @@ func (ca *ContractAddresses) SetDefaults(chainIDStr string) *ContractAddresses {
 	return ca
 }
 
-// Verifies both addresses are set. They are only missing on a network without default
-// values, so the error names the chain id and the flags that must be passed
 func (ca *ContractAddresses) Check() error {
 	var missingFlags []string
 	if isZero(ca.Staking) {

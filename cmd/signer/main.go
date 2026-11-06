@@ -37,7 +37,6 @@ func NewCommand() cobra.Command {
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
-			// Juno's error lists the trace level as "Level(-2)"
 			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
 		}
 		logger, err = log.NewZapLogger(logLevel, log.WithColour(true))
@@ -59,7 +58,6 @@ func NewCommand() cobra.Command {
 			return err
 		}
 
-		// SIGINT and SIGTERM stop the server gracefully, and the signer exits with code 0
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
@@ -93,14 +91,11 @@ func NewCommand() cobra.Command {
 
 func main() {
 	cmd := NewCommand()
-	// Cobra already printed the error
 	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		os.Exit(1)
 	}
 }
 
-// Reads the private key from the SIGNER_PRIVATE_KEY env var, which the env file can set.
-// The env file is optional unless it is passed explicitly
 func readSignerKeyFromEnv(
 	envFilePath string, explicitEnvFile bool, logger *log.ZapLogger,
 ) (string, error) {
@@ -113,7 +108,6 @@ func readSignerKeyFromEnv(
 	case errors.As(err, &pathErr):
 		return "", fmt.Errorf("cannot read the env var file: %w", err)
 	default:
-		// The parse error isn't shown: it can quote the file content, and so the key
 		return "", fmt.Errorf(
 			"cannot parse the env var file %s: it must be a dotenv file with KEY=value lines",
 			envFilePath,

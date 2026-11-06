@@ -21,7 +21,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const SignEndpoint = "/sign"
+const (
+	SignEndpoint    = "/sign"
+	shutdownTimeout = 5 * time.Second
+)
 
 type Request struct {
 	*rpc.BroadcastInvokeTxnV3 `json:"transaction"`
@@ -63,7 +66,6 @@ func New(privateKey string, logger log.Logger) (Signer, error) {
 	}, nil
 }
 
-// Routes `POST` requests at `/sign` to the handler. Other methods get a 405 response
 func (s *Signer) router() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(http.MethodPost+" "+SignEndpoint, s.handler)
@@ -71,8 +73,8 @@ func (s *Signer) router() http.Handler {
 	return mux
 }
 
-// Listen for requests of the type `POST` at `<address>/sign` until `ctx` is done, then
-// shut the server down gracefully. The request should include the transaction being signed.
+// Listen for requests of the type `POST` at `<address>/sign`. The request
+// should include the hash of the transaction being signed.
 func (s *Signer) Listen(ctx context.Context, address string) error {
 	var listenConfig net.ListenConfig
 	listener, err := listenConfig.Listen(ctx, "tcp", address)
@@ -88,7 +90,6 @@ func (s *Signer) Listen(ctx context.Context, address string) error {
 		Handler:      s.router(),
 	}
 
-	// Logged once listening, so a bind failure is never preceded by it
 	s.logger.Info(
 		"server running",
 		zap.String("URL", listener.Addr().String()),
@@ -105,7 +106,7 @@ func (s *Signer) Listen(ctx context.Context, address string) error {
 	case <-ctx.Done():
 		s.logger.Info("Shutting down the server")
 		shutdownCtx, cancel := context.WithTimeout(
-			context.WithoutCancel(ctx), 5*time.Second, //nolint:mnd // Shutdown timeout
+			context.WithoutCancel(ctx), shutdownTimeout,
 		)
 		defer cancel()
 

@@ -63,7 +63,6 @@ func TestAddressFromString(t *testing.T) {
 }
 
 func TestPrivateKeyFromString(t *testing.T) {
-	// Order of the Stark curve
 	const curveOrder = "0x800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f"
 
 	t.Run("Valid private keys", func(t *testing.T) {
@@ -78,7 +77,6 @@ func TestPrivateKeyFromString(t *testing.T) {
 			require.Equal(t, big.NewInt(expected), key, keyStr)
 		}
 
-		// The largest valid key is the curve order minus one
 		key, err := types.PrivateKeyFromString(
 			"0x800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2e",
 		)

@@ -23,8 +23,6 @@ const (
 	processTimeout = 30 * time.Second
 )
 
-// When started by `runMain`, the test binary runs the signer's main function instead of
-// the tests, so the tests can check its output and exit code
 func TestMain(m *testing.M) {
 	if os.Getenv(runMainEnvVar) != "" {
 		os.Args = append([]string{"signer"}, os.Args[1:]...)
@@ -34,23 +32,17 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// Returns a command running the signer's main function in a new process with the given
-// private key and arguments, and the buffer collecting its combined output
 func newMainProcess(
 	t *testing.T, privKey string, args ...string,
 ) (cmd *exec.Cmd, output *syncBuffer) {
 	t.Helper()
 
-	// Killed after a while, so a signer that keeps running can't hang the tests
 	ctx, cancel := context.WithTimeout(t.Context(), processTimeout)
 	t.Cleanup(cancel)
-	// Never the default address, so the tests can't take a port in use elsewhere
 	if !slices.Contains(args, "--address") {
 		args = append(args, "--address", "127.0.0.1:0")
 	}
 	cmd = exec.CommandContext(ctx, os.Args[0], args...)
-	// Only the variables running main and setting the key, if any, so the test
-	// environment can't change the result
 	cmd.Env = []string{runMainEnvVar + "=1"}
 	if privKey != "" {
 		cmd.Env = append(cmd.Env, "SIGNER_PRIVATE_KEY="+privKey)
@@ -62,12 +54,9 @@ func newMainProcess(
 	return cmd, output
 }
 
-// Runs the signer's main function in a new process with the given private key and
-// arguments. Returns its combined output and exit code
 func runMain(t *testing.T, privKey string, args ...string) (output string, exitCode int) {
 	t.Helper()
 
-	// An empty env file, so only the env var sets the private key
 	cmd, outputBuffer := newMainProcess(
 		t, privKey, append([]string{"--env", writeEnvFile(t, "")}, args...)...,
 	)
@@ -76,7 +65,6 @@ func runMain(t *testing.T, privKey string, args ...string) (output string, exitC
 	return outputBuffer.String(), exitCode
 }
 
-// Writes `content` to an env file in a temporary directory and returns its path
 func writeEnvFile(t *testing.T, content string) string {
 	t.Helper()
 
@@ -86,7 +74,6 @@ func writeEnvFile(t *testing.T, content string) string {
 	return envFile
 }
 
-// Returns the exit code of a process that ended with `err`
 func processExitCode(t *testing.T, err error) int {
 	t.Helper()
 
@@ -99,7 +86,6 @@ func processExitCode(t *testing.T, err error) int {
 	return 0
 }
 
-// A buffer safe to read while a process writes its output to it
 type syncBuffer struct {
 	mu     sync.Mutex
 	buffer bytes.Buffer
@@ -158,7 +144,6 @@ func TestVersionFlag(t *testing.T) {
 
 func TestEnvFile(t *testing.T) {
 	t.Run("Env file sets the private key", func(t *testing.T) {
-		// The signer gets past reading the key and fails to listen on a port in use
 		var listenConfig net.ListenConfig
 		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
 		require.NoError(t, err)
