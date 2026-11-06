@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 	"time"
 
@@ -1390,9 +1391,112 @@ func TestClaimRewardsBelowThresholdLog(t *testing.T) {
 		entries[0].Message,
 	)
 	require.Equal(t, map[string]any{
-		"unclaimed rewards (STRK)": "1.50",
-		"claim threshold (STRK)":   uint64(2),
+		"unclaimedRewardsSTRK": "1.50",
+		"unclaimedRewardsFRI":  "1500000000000000000",
+		"claimThresholdSTRK":   uint64(2),
 	}, entries[0].ContextMap())
+}
+
+func TestClaimRewardsLogKeys(t *testing.T) {
+	rewardAddress, err := types.AddressFromString(testRewardAddress)
+	require.NoError(t, err)
+	const claimMaxFee = uint64(1e15)
+	camelCase := regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`)
+
+	newMocks := func(t *testing.T) (*mocks.MockSigner, *mocks.MockRPCProvider) {
+		t.Helper()
+
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil).
+			AnyTimes()
+		mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil).AnyTimes()
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		return mockSigner, provider
+	}
+	sendClaim := func(provider *mocks.MockRPCProvider, status *rpc.TxnStatusResult) {
+		provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock, nil)
+		provider.EXPECT().
+			AddInvokeTransaction(gomock.Any(), gomock.Any()).
+			Return(rpc.AddInvokeTransactionResponse{Hash: new(felt.Felt).SetUint64(0xabc)}, nil)
+		provider.EXPECT().TransactionStatus(gomock.Any(), gomock.Any()).Return(status, nil)
+	}
+
+	testCases := []struct {
+		name         string
+		setup        func(*mocks.MockSigner, *mocks.MockRPCProvider)
+		expectedKeys []string
+	}{
+		{
+			name: "max fee exceeded",
+			setup: func(mockSigner *mocks.MockSigner, _ *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().
+					EstimateFee(gomock.Any()).
+					Return(newFeeEstimation(t, claimMaxFee+1), nil)
+			},
+			expectedKeys: []string{"overallFeeFRI", "claimMaxFeeFRI"},
+		},
+		{
+			name: "block limit passed",
+			setup: func(mockSigner *mocks.MockSigner, provider *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(newFeeEstimation(t, 1), nil)
+				provider.EXPECT().
+					BlockNumber(gomock.Any()).
+					Return(testClaimStartBlock+claimMaxBlocks+1, nil)
+			},
+			expectedKeys: []string{"startBlockNumber", "latestBlockNumber", "blockLimit"},
+		},
+		{
+			name: "accepted",
+			setup: func(mockSigner *mocks.MockSigner, provider *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(newFeeEstimation(t, 1), nil)
+				sendClaim(provider, &rpc.TxnStatusResult{
+					FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+				})
+			},
+			expectedKeys: []string{"transactionHash", "finalityStatus"},
+		},
+		{
+			name: "reverted",
+			setup: func(mockSigner *mocks.MockSigner, provider *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(newFeeEstimation(t, 1), nil)
+				sendClaim(provider, &rpc.TxnStatusResult{
+					FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+					ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
+					FailureReason:   "out of gas",
+				})
+			},
+			expectedKeys: []string{"transactionHash", "failureReason"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockSigner, provider := newMocks(t)
+			tc.setup(mockSigner, provider)
+
+			core, logs := observer.New(zapcore.DebugLevel)
+			rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+			rs.logger = log.NewZapLoggerWithCore(core)
+			rs.ClaimRewards(metrics.NewNoOpMetrics())
+
+			keys := make(map[string]bool)
+			for _, entry := range logs.All() {
+				for key := range entry.ContextMap() {
+					require.Regexp(t, camelCase, key, entry.Message)
+					keys[key] = true
+				}
+			}
+			for _, key := range append(tc.expectedKeys, "unclaimedRewardsSTRK") {
+				require.True(t, keys[key], key)
+			}
+		})
+	}
 }
 
 func TestFriToStrkString(t *testing.T) {

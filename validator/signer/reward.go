@@ -251,8 +251,9 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 	if utils.STRKToFRI(float64(rs.claimThreshold)).Cmp(&info.unclaimedRewards) > 0 {
 		rs.logger.Info(
 			pref+"unclaimed rewards amount is below claim threshold; skipping claim...",
-			zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
-			zap.Uint64("claim threshold (STRK)", rs.claimThreshold),
+			zap.String("unclaimedRewardsSTRK", unclaimedRewardsStrk),
+			zap.String("unclaimedRewardsFRI", info.unclaimedRewards.Text(decimalBase)),
+			zap.Uint64("claimThresholdSTRK", rs.claimThreshold),
 		)
 
 		return nil
@@ -260,7 +261,8 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 
 	rs.logger.Info(
 		pref+"rewards amount reached claim threshold; claiming rewards...",
-		zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
+		zap.String("unclaimedRewardsSTRK", unclaimedRewardsStrk),
+		zap.String("unclaimedRewardsFRI", info.unclaimedRewards.Text(decimalBase)),
 	)
 
 	return rs.sendClaim(ctx, tracer)
@@ -290,8 +292,8 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 		if errors.Is(err, errFeeExceedsClaimMaxFee) {
 			rs.logger.Warn(
 				pref+"estimated fee exceeds claim max fee; skipping claim...",
-				zap.String("overall fee (FRI)", overallFee.Text(decimalBase)),
-				zap.String("claim max fee (FRI)", rs.claimMaxFee.Text(decimalBase)),
+				zap.String("overallFeeFRI", overallFee.Text(decimalBase)),
+				zap.String("claimMaxFeeFRI", rs.claimMaxFee.Text(decimalBase)),
 			)
 			tracer.RecordRewardClaimMaxFeeExceeded()
 
@@ -314,9 +316,9 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 		rs.logger.Warn(
 			pref+"claim not ready within the block limit; skipping claim so it can't take "+
 				"the nonce of the next attestation...",
-			zap.Uint64("claim start block", startBlock),
-			zap.Uint64("latest block", latestBlock),
-			zap.Uint64("block limit", claimMaxBlocks),
+			zap.Uint64("startBlockNumber", startBlock),
+			zap.Uint64("latestBlockNumber", latestBlock),
+			zap.Uint64("blockLimit", claimMaxBlocks),
 		)
 		tracer.RecordRewardClaimFailure()
 
@@ -334,7 +336,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 
 	rs.logger.Info(
 		pref+"reward claim transaction sent successfully",
-		zap.String("transaction hash", resp.Hash.String()),
+		zap.String("transactionHash", resp.Hash.String()),
 	)
 
 	return resp.Hash
@@ -354,7 +356,7 @@ func (rs *rewardSigner) trackClaim(hash *felt.Felt, tracer metrics.Tracer) {
 				rs.logger.Warn(
 					claimLogPrefix+"reward claim transaction not accepted on L2 in time; "+
 						"check its status manually",
-					zap.String("transaction hash", hash.String()),
+					zap.String("transactionHash", hash.String()),
 					zap.Duration("waited", rs.claimTrackingTimeout),
 				)
 			}
@@ -367,7 +369,7 @@ func (rs *rewardSigner) trackClaim(hash *felt.Felt, tracer metrics.Tracer) {
 		if err != nil {
 			rs.logger.Debug(
 				claimLogPrefix+"reward claim transaction status not available yet",
-				zap.String("transaction hash", hash.String()),
+				zap.String("transactionHash", hash.String()),
 				zap.Error(err),
 			)
 
@@ -377,8 +379,8 @@ func (rs *rewardSigner) trackClaim(hash *felt.Felt, tracer metrics.Tracer) {
 		if status.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
 			rs.logger.Error(
 				claimLogPrefix+"reward claim transaction REVERTED",
-				zap.String("transaction hash", hash.String()),
-				zap.String("failure reason", status.FailureReason),
+				zap.String("transactionHash", hash.String()),
+				zap.String("failureReason", status.FailureReason),
 			)
 			tracer.RecordRewardClaimFailure()
 
@@ -389,8 +391,8 @@ func (rs *rewardSigner) trackClaim(hash *felt.Felt, tracer metrics.Tracer) {
 			status.FinalityStatus == rpc.TxnStatusAcceptedOnL1 {
 			rs.logger.Info(
 				claimLogPrefix+"reward claim transaction accepted",
-				zap.String("transaction hash", hash.String()),
-				zap.String("finality status", string(status.FinalityStatus)),
+				zap.String("transactionHash", hash.String()),
+				zap.String("finalityStatus", string(status.FinalityStatus)),
 			)
 			tracer.RecordRewardClaimConfirmed()
 			rs.refreshUnclaimed(ctx, tracer)
