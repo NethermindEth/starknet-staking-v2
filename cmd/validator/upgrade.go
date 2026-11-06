@@ -70,17 +70,43 @@ func needsUpdate(currentVersion, latestVersion string) (bool, error) {
 }
 
 func trackLatestRelease(ctx context.Context, logger log.Logger) {
+	trackRelease(ctx, logger, getLatestRelease, time.Hour)
+}
+
+func trackRelease(
+	ctx context.Context,
+	logger log.Logger,
+	latestRelease func(context.Context) (string, error),
+	interval time.Duration,
+) {
 	timer := time.NewTimer(time.Millisecond) // Don't wait the first time
 	defer timer.Stop()
+
+	failing := false
+	checkFailed := func(err error) {
+		if failing {
+			logger.Debug("cannot check for a new release", errorField(err))
+
+			return
+		}
+		failing = true
+		logger.Warn(
+			"cannot check for a new release",
+			errorField(err),
+			zap.Duration("nextCheckIn", interval),
+		)
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			latestVersion, err := getLatestRelease(ctx)
+			timer.Reset(interval)
+
+			latestVersion, err := latestRelease(ctx)
 			if err != nil {
-				logger.Debug("cannot get latest release", zap.Error(err))
+				checkFailed(fmt.Errorf("cannot get latest release: %w", err))
 
 				continue
 			}
@@ -88,10 +114,11 @@ func trackLatestRelease(ctx context.Context, logger log.Logger) {
 			currentVersion := validator.Version
 			needsUpdate, err := needsUpdate(currentVersion, latestVersion)
 			if err != nil {
-				logger.Debug("error checking if update is needed", zap.Error(err))
+				checkFailed(fmt.Errorf("error checking if update is needed: %w", err))
 
 				continue
 			}
+			failing = false
 
 			if needsUpdate {
 				const releasesURL = "https://github.com/NethermindEth/starknet-staking-v2/releases"
@@ -102,7 +129,6 @@ func trackLatestRelease(ctx context.Context, logger log.Logger) {
 					zap.String("releasesURL", releasesURL),
 				)
 			}
-			timer.Reset(time.Hour)
 		}
 	}
 }
