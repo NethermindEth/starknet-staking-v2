@@ -1,7 +1,10 @@
 package metrics
 
 import (
+	"errors"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils/log"
@@ -63,6 +66,29 @@ func counterValue(t *testing.T, m *Metrics, name string, labels map[string]strin
 	require.FailNow(t, "metric not found", "%s %v", name, labels)
 
 	return 0
+}
+
+type failingWriter struct {
+	httptest.ResponseRecorder
+}
+
+func (w *failingWriter) Write([]byte) (int, error) {
+	return 0, errors.New("write failed")
+}
+
+func TestHealthWriteErrorIsLoggedAsError(t *testing.T) {
+	core, logs := observer.New(zapcore.InfoLevel)
+	m := NewMetrics("127.0.0.1:0", "SN_SEPOLIA", log.NewZapLoggerWithCore(core))
+
+	writer := &failingWriter{ResponseRecorder: *httptest.NewRecorder()}
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil)
+	m.server.Handler.ServeHTTP(writer, request)
+
+	entries := logs.All()
+	require.Len(t, entries, 1)
+	require.Equal(t, zapcore.ErrorLevel, entries[0].Level)
+	require.Equal(t, "failed to write health check response", entries[0].Message)
+	require.Equal(t, map[string]any{"error": "write failed"}, entries[0].ContextMap())
 }
 
 func TestUpdateEpochInfoDebugLog(t *testing.T) {
