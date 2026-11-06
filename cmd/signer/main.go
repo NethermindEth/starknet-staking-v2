@@ -17,6 +17,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const logLevels = "trace, debug, info, warn, error"
+
 func NewCommand() cobra.Command {
 	var address string
 	var envFilePath string
@@ -35,7 +37,8 @@ func NewCommand() cobra.Command {
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
-			return err
+			// Juno's error lists the trace level as "Level(-2)"
+			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
 		}
 		logger, err = log.NewZapLogger(logLevel, log.WithColour(true))
 		if err != nil {
@@ -83,9 +86,7 @@ func NewCommand() cobra.Command {
 		"Path to a dotenv file (KEY=value lines) that can set SIGNER_PRIVATE_KEY.\n"+
 			"The default file is optional, a file passed with this flag must exist",
 	)
-	cmd.Flags().StringVar(
-		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error",
-	)
+	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels)
 
 	return cmd
 }

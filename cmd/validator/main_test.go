@@ -20,6 +20,7 @@ import (
 
 const (
 	testProviderHTTP = "http://localhost:1234"
+	testProviderWS   = "ws://localhost:1235"
 	testSignerURL    = "http://localhost:5555"
 	configFlag       = "--config"
 )
@@ -48,7 +49,7 @@ func TestNewCommand(t *testing.T) {
 
 	t.Run("PreRunE returns an error naming the sources of a key and a URL", func(t *testing.T) {
 		conf := config.Config{
-			Provider: config.Provider{HTTP: testProviderHTTP, WS: "ws://localhost:1235"},
+			Provider: config.Provider{HTTP: testProviderHTTP, WS: testProviderWS},
 			Signer: config.Signer{
 				OperationalAddress: "0x456",
 				ExternalURL:        testSignerURL,
@@ -65,6 +66,16 @@ func TestNewCommand(t *testing.T) {
 			t,
 			err,
 			"(private key set by env vars, external URL set by config file "+filePath+")",
+		)
+	})
+
+	t.Run("PreRunE returns an error: unknown log level", func(t *testing.T) {
+		command := main.NewCommand()
+		command.SetArgs(validFlags(testProviderHTTP, testProviderWS, "--log-level", "verbose"))
+
+		err := command.ExecuteContext(t.Context())
+		require.EqualError(
+			t, err, `unknown log level "verbose" (known: trace, debug, info, warn, error)`,
 		)
 	})
 
@@ -312,23 +323,23 @@ func TestHelpText(t *testing.T) {
 	require.Contains(t, help, "Exclusive with --signer-priv-key")
 }
 
-func TestMetricsFlags(t *testing.T) {
-	// Returns the flags of a valid configuration for the given test node, with `extraFlags`
-	commandFlags := func(httpURL, wsURL string, extraFlags ...string) []string {
-		return append([]string{
-			"--provider-http", httpURL,
-			"--provider-ws", wsURL,
-			"--signer-op-address", "0x456",
-			"--signer-url", testSignerURL,
-		}, extraFlags...)
-	}
+// Returns the flags of a valid configuration for the given node URLs, with `extraFlags`
+func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
+	return append([]string{
+		"--provider-http", httpURL,
+		"--provider-ws", wsURL,
+		"--signer-op-address", "0x456",
+		"--signer-url", testSignerURL,
+	}, extraFlags...)
+}
 
+func TestMetricsFlags(t *testing.T) {
 	t.Run("Invalid metrics port is rejected at startup", func(t *testing.T) {
 		for _, port := range []string{"abc", "99999", "0", "-1", ""} {
 			t.Run(port, func(t *testing.T) {
 				command := newTestCommandWithArgs(
 					t,
-					commandFlags(testProviderHTTP, "ws://localhost:1235",
+					validFlags(testProviderHTTP, testProviderWS,
 						"--metrics", "--metrics-port", port)...,
 				)
 				err := command.ExecuteContext(t.Context())
@@ -347,7 +358,7 @@ func TestMetricsFlags(t *testing.T) {
 
 		command := newTestCommandWithArgs(
 			t,
-			commandFlags(testProviderHTTP, "ws://localhost:1235",
+			validFlags(testProviderHTTP, testProviderWS,
 				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...,
 		)
 		err = command.ExecuteContext(t.Context())
@@ -359,7 +370,7 @@ func TestMetricsFlags(t *testing.T) {
 		ctx, httpURL, wsURL := newTestNode(t)
 
 		command := newTestCommandWithArgs(
-			t, commandFlags(httpURL, wsURL, "--metrics-port", "abc")...,
+			t, validFlags(httpURL, wsURL, "--metrics-port", "abc")...,
 		)
 		require.NoError(t, command.ExecuteContext(ctx))
 	})
@@ -376,7 +387,7 @@ func TestMetricsFlags(t *testing.T) {
 
 		command := newTestCommandWithArgs(
 			t,
-			commandFlags(httpURL, wsURL,
+			validFlags(httpURL, wsURL,
 				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...,
 		)
 		require.NoError(t, command.ExecuteContext(ctx))

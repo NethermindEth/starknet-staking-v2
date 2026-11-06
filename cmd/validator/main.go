@@ -45,6 +45,8 @@ Auto-claim reward feature (optional):
 Full documentation: https://nethermindeth.github.io/starknet-staking-v2/
 `
 
+const logLevels = "trace, debug, info, warn, error"
+
 //nolint:funlen // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {
 	var configPath string
@@ -90,7 +92,8 @@ func NewCommand() cobra.Command {
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
-			return err
+			// Juno's error lists the trace level as "Level(-2)"
+			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
 		}
 
 		loadedLogger, err := log.NewZapLogger(logLevel, log.WithColour(true))
@@ -305,9 +308,7 @@ func NewCommand() cobra.Command {
 			"query-bit transaction version (1<<128 + 0x3) that Braavos accounts require.\n"+
 			"Applies to both internal and external signing.",
 	)
-	cmd.Flags().StringVar(
-		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error.",
-	)
+	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels+".")
 
 	return cmd
 }
