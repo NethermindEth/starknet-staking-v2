@@ -40,6 +40,9 @@ const (
 	claimLogPrefix = "Auto-Claiming Rewards: "
 	claimTimeout   = 30 * time.Second
 	claimMaxBlocks = constants.MinAttestationWindow / 2
+
+	claimTrackingTimeout = 2 * time.Minute
+	claimStatusInterval  = 2 * time.Second
 )
 
 var (
@@ -73,6 +76,9 @@ type rewardSigner struct {
 	claimThreshold uint64
 	claimTimeout   time.Duration
 	claiming       atomic.Bool
+
+	claimTrackingTimeout time.Duration
+	claimStatusInterval  time.Duration
 }
 
 type contextBinder interface {
@@ -132,6 +138,9 @@ func NewRewardSigner(
 		claimThreshold: rewardConfig.ClaimThreshold,
 		claimTimeout:   claimTimeout,
 		claiming:       atomic.Bool{},
+
+		claimTrackingTimeout: claimTrackingTimeout,
+		claimStatusInterval:  claimStatusInterval,
 	}
 
 	if err := rs.checkRewardAddress(); err != nil {
@@ -220,10 +229,12 @@ func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
 	ctx, cancel := context.WithTimeout(rs.ctx, rs.claimTimeout)
 	defer cancel()
 
-	rs.claimRewards(ctx, tracer)
+	if hash := rs.claimRewards(ctx, tracer); hash != nil {
+		rs.trackClaim(hash, tracer)
+	}
 }
 
-func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer) {
+func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer) *felt.Felt {
 	pref := claimLogPrefix
 	rs.logger.Debug(pref + "starting claim rewards")
 
@@ -232,7 +243,7 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 		rs.logger.Error(pref+"failed to get unclaimed rewards amount", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 	tracer.UpdateRewardUnclaimed(utils.FRIToSTRK(&info.unclaimedRewards))
 
@@ -245,7 +256,7 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 			zap.Uint64("claim threshold (STRK)", rs.claimThreshold),
 		)
 
-		return
+		return nil
 	}
 
 	rs.logger.Info(
@@ -253,10 +264,10 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 		zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
 	)
 
-	rs.sendClaim(ctx, tracer)
+	return rs.sendClaim(ctx, tracer)
 }
 
-func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
+func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *felt.Felt {
 	pref := claimLogPrefix
 
 	startBlock, err := rs.provider.BlockNumber(ctx)
@@ -264,7 +275,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
 		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 
 	txn, err := rs.buildClaimRewardTransaction(ctx)
@@ -272,7 +283,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
 		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 
 	overallFee, err := rs.populateFees(ctx, &txn)
@@ -285,12 +296,12 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
 			)
 			tracer.RecordRewardClaimMaxFeeExceeded()
 
-			return
+			return nil
 		}
 		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 
 	latestBlock, err := rs.provider.BlockNumber(ctx)
@@ -298,7 +309,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
 		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 	if latestBlock > startBlock+claimMaxBlocks {
 		rs.logger.Warn(
@@ -310,7 +321,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
 		)
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 
 	resp, err := rs.provider.AddInvokeTransaction(ctx, &txn)
@@ -318,7 +329,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
 		rs.logger.Error(pref+"failed to send reward claim transaction", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 	tracer.RecordRewardClaimSubmitted()
 
@@ -326,6 +337,67 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
 		pref+"reward claim transaction sent successfully",
 		zap.String("transaction hash", resp.Hash.String()),
 	)
+
+	return resp.Hash
+}
+
+func (rs *rewardSigner) trackClaim(hash *felt.Felt, tracer metrics.Tracer) {
+	ctx, cancel := context.WithTimeout(rs.ctx, rs.claimTrackingTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(rs.claimStatusInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			if rs.ctx.Err() == nil {
+				rs.logger.Warn(
+					claimLogPrefix+"reward claim transaction not accepted on L2 in time; "+
+						"check its status manually",
+					zap.String("transaction hash", hash.String()),
+					zap.Duration("waited", rs.claimTrackingTimeout),
+				)
+			}
+
+			return
+		case <-ticker.C:
+		}
+
+		status, err := rs.provider.TransactionStatus(ctx, hash)
+		if err != nil {
+			rs.logger.Debug(
+				claimLogPrefix+"reward claim transaction status not available yet",
+				zap.String("transaction hash", hash.String()),
+				zap.Error(err),
+			)
+
+			continue
+		}
+
+		if status.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
+			rs.logger.Error(
+				claimLogPrefix+"reward claim transaction REVERTED",
+				zap.String("transaction hash", hash.String()),
+				zap.String("failure reason", status.FailureReason),
+			)
+			tracer.RecordRewardClaimFailure()
+
+			return
+		}
+
+		if status.FinalityStatus == rpc.TxnStatusAcceptedOnL2 ||
+			status.FinalityStatus == rpc.TxnStatusAcceptedOnL1 {
+			rs.logger.Info(
+				claimLogPrefix+"reward claim transaction accepted",
+				zap.String("transaction hash", hash.String()),
+				zap.String("finality status", string(status.FinalityStatus)),
+			)
+			tracer.RecordRewardClaimConfirmed()
+
+			return
+		}
+	}
 }
 
 func (rs *rewardSigner) fetchStakerInfo(ctx context.Context) (stakerInfo, error) {
