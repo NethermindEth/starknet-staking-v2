@@ -37,6 +37,7 @@ type Metrics struct {
 	rewardBalanceBelowThreshold     *prometheus.GaugeVec
 	rewardUnclaimed                 *prometheus.GaugeVec
 	rewardClaimSubmittedCount       *prometheus.CounterVec
+	rewardClaimConfirmedCount       *prometheus.CounterVec
 	rewardClaimFailureCount         *prometheus.CounterVec
 	rewardClaimMaxFeeExceededCount  *prometheus.CounterVec
 	lastRewardClaimTimestamp        *prometheus.GaugeVec
@@ -158,6 +159,13 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			},
 			[]string{networkLabel},
 		),
+		rewardClaimConfirmedCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_reward_claim_confirmed_count",
+				Help: "The total number of reward claim transactions accepted on L2 with a successful execution since startup",
+			},
+			[]string{networkLabel},
+		),
 		rewardClaimFailureCount: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "validator_attestation_reward_claim_failure_count",
@@ -198,6 +206,7 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		m.rewardBalanceBelowThreshold,
 		m.rewardUnclaimed,
 		m.rewardClaimSubmittedCount,
+		m.rewardClaimConfirmedCount,
 		m.rewardClaimFailureCount,
 		m.rewardClaimMaxFeeExceededCount,
 		m.lastRewardClaimTimestamp,
@@ -330,6 +339,11 @@ func (m *Metrics) RecordRewardClaimSubmitted() {
 	m.logger.Debug("RecordRewardClaimSubmitted")
 	m.rewardClaimSubmittedCount.WithLabelValues(m.network).Inc()
 	m.lastRewardClaimTimestamp.WithLabelValues(m.network).Set(float64(time.Now().Unix()))
+}
+
+func (m *Metrics) RecordRewardClaimConfirmed() {
+	m.logger.Debug("RecordRewardClaimConfirmed")
+	m.rewardClaimConfirmedCount.WithLabelValues(m.network).Inc()
 }
 
 // RecordRewardClaimFailure increments the reward claim failure counter
