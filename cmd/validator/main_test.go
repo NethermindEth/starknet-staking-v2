@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -17,7 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testProviderHTTP = "http://localhost:1234"
+const (
+	testProviderHTTP = "http://localhost:1234"
+	testSignerURL    = "http://localhost:5555"
+	configFlag       = "--config"
+)
 
 func TestNewCommand(t *testing.T) {
 	t.Run("PreRunE returns an error: cannot load inexisting config", func(t *testing.T) {
@@ -26,6 +31,41 @@ func TestNewCommand(t *testing.T) {
 
 		err := command.ExecuteContext(t.Context())
 		require.ErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("PreRunE returns an error: config file is not valid JSON", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(filePath, []byte(`{"provider": {}`), 0o600))
+
+		command := main.NewCommand()
+		command.SetArgs([]string{configFlag, filePath})
+
+		err := command.ExecuteContext(t.Context())
+		require.EqualError(
+			t, err, "cannot parse config file "+filePath+": unexpected end of JSON input",
+		)
+	})
+
+	t.Run("PreRunE returns an error naming the sources of a key and a URL", func(t *testing.T) {
+		conf := config.Config{
+			Provider: config.Provider{HTTP: testProviderHTTP, WS: "ws://localhost:1235"},
+			Signer: config.Signer{
+				OperationalAddress: "0x456",
+				ExternalURL:        testSignerURL,
+			},
+		}
+		filePath := createTemporaryConfigFile(t, &conf)
+		t.Setenv("SIGNER_PRIVATE_KEY", "0x123")
+
+		command := main.NewCommand()
+		command.SetArgs([]string{configFlag, filePath})
+
+		err := command.ExecuteContext(t.Context())
+		require.ErrorContains(
+			t,
+			err,
+			"(private key set by env vars, external URL set by config file "+filePath+")",
+		)
 	})
 
 	t.Run("PreRunE returns an error: config file verification fails", func(t *testing.T) {
@@ -279,7 +319,7 @@ func TestMetricsFlags(t *testing.T) {
 			"--provider-http", httpURL,
 			"--provider-ws", wsURL,
 			"--signer-op-address", "0x456",
-			"--signer-url", "http://localhost:5555",
+			"--signer-url", testSignerURL,
 		}, extraFlags...)
 	}
 
