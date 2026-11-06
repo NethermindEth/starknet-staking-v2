@@ -1,6 +1,9 @@
 package validator_test
 
 import (
+	"bytes"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -25,9 +28,27 @@ const (
 	testWindowLen  = 40
 )
 
-// Signer mock answering the epoch and attestation window calls with a fixed epoch
-func newEpochSigner(t *testing.T) *mocks.MockSigner {
+// Signer mock answering the epoch and attestation window calls. The n-th epoch info call
+// answers the epoch `testEpochID + epochOffsets[n]` (the last offset once they are used up, 0 if
+// there are none), epochs being contiguous.
+func newEpochSigner(t *testing.T, epochOffsets ...uint64) *mocks.MockSigner {
 	t.Helper()
+
+	var epochCalls sync.Mutex
+	epochOffset := func() uint64 {
+		epochCalls.Lock()
+		defer epochCalls.Unlock()
+
+		if len(epochOffsets) == 0 {
+			return 0
+		}
+		offset := epochOffsets[0]
+		if len(epochOffsets) > 1 {
+			epochOffsets = epochOffsets[1:]
+		}
+
+		return offset
+	}
 
 	operationalAddress, err := types.AddressFromString("0x123")
 	require.NoError(t, err)
@@ -47,12 +68,14 @@ func newEpochSigner(t *testing.T) *mocks.MockSigner {
 				return []*felt.Felt{new(felt.Felt).SetUint64(testWindowLen)}, nil
 			}
 
+			offset := epochOffset()
+
 			return []*felt.Felt{
 				new(felt.Felt).SetUint64(0x456), // staker address
 				new(felt.Felt).SetUint64(1),     // stake
 				new(felt.Felt).SetUint64(testEpochLen),
-				new(felt.Felt).SetUint64(testEpochID),
-				new(felt.Felt).SetUint64(testEpochStart),
+				new(felt.Felt).SetUint64(testEpochID + offset),
+				new(felt.Felt).SetUint64(testEpochStart + offset*testEpochLen),
 			}, nil
 		}).
 		AnyTimes()
@@ -140,4 +163,37 @@ func TestProcessBlockHeadersSkipsReplayedHeaders(t *testing.T) {
 
 	require.Equal(t, 1, counter.doAttest)
 	require.Equal(t, 1, counter.endOfWindow)
+}
+
+// The first block of an epoch is logged relative to that epoch, after its "epoch started" line,
+// and not as "0 blocks for the next epoch" of the previous one (QA report 01, H4)
+func TestProcessBlockHeadersLogsBlockAfterEpochSwitch(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	// The first epoch at startup, the next one at the switch
+	mockSigner := newEpochSigner(t, 0, 1)
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	counter := countEvents(&dispatcher)
+
+	nextEpochStart := uint64(testEpochStart + testEpochLen)
+	err = validator.ProcessBlockHeaders(
+		t.Context(), headersFeed(nextEpochStart-1, nextEpochStart), mockSigner, logger,
+		&dispatcher, types.Retries{}, metrics.NewNoOpMetrics(),
+	)
+	require.NoError(t, err)
+	close(dispatcher.DoAttest)
+	close(dispatcher.EndOfWindow)
+	close(dispatcher.PrepareAttest)
+	counter.wg.Wait()
+
+	out := buf.String()
+	blockLine := fmt.Sprintf("block %d received, ", nextEpochStart)
+	require.Contains(t, out, blockLine)
+	require.NotContains(t, out, blockLine+"0 blocks for the next epoch")
+	newEpochLine := fmt.Sprintf(`"epochID": %d,`, testEpochID+1)
+	require.Contains(t, out, newEpochLine)
+	require.Less(t, strings.Index(out, newEpochLine), strings.Index(out, blockLine))
 }

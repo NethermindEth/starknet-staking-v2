@@ -27,10 +27,11 @@ func logNewEpoch(
 	logger = skipCaller(logger)
 	logger.Info(
 		"epoch started",
-		zap.Uint64("epochID", epochInfo.EpochID+1),
+		zap.Uint64("epochID", epochInfo.EpochID),
 		zap.Uint64("epochLength", epochInfo.EpochLen),
 		zap.Uint64("startBlock", epochInfo.StartingBlock.Uint64()),
-		zap.Uint64("endBlock", epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen),
+		// Last block of the epoch, the next one starts the next epoch
+		zap.Uint64("endBlock", epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen-1),
 	)
 	logger.Info(
 		"attest info",
