@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -245,7 +246,7 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 
 		return nil
 	}
-	tracer.UpdateRewardUnclaimed(utils.FRIToSTRK(&info.unclaimedRewards))
+	tracer.UpdateRewardUnclaimed(friToStrkFloor(&info.unclaimedRewards))
 
 	// The contract returns the unclaimed rewards in FRI
 	unclaimedRewardsStrk := friToStrkString(&info.unclaimedRewards)
@@ -394,10 +395,24 @@ func (rs *rewardSigner) trackClaim(hash *felt.Felt, tracer metrics.Tracer) {
 				zap.String("finality status", string(status.FinalityStatus)),
 			)
 			tracer.RecordRewardClaimConfirmed()
+			rs.refreshUnclaimed(ctx, tracer)
 
 			return
 		}
 	}
+}
+
+func (rs *rewardSigner) refreshUnclaimed(ctx context.Context, tracer metrics.Tracer) {
+	info, err := rs.fetchStakerInfo(ctx)
+	if err != nil {
+		rs.logger.Warn(
+			claimLogPrefix+"failed to refresh the unclaimed rewards amount after the claim",
+			zap.Error(err),
+		)
+
+		return
+	}
+	tracer.UpdateRewardUnclaimed(friToStrkFloor(&info.unclaimedRewards))
 }
 
 func (rs *rewardSigner) fetchStakerInfo(ctx context.Context) (stakerInfo, error) {
@@ -479,6 +494,19 @@ func friToStrkString(fri *felt.Felt) string {
 	strk := new(big.Rat).SetFrac(truncated, pow10(strkLoggedDecimals))
 
 	return strk.FloatString(strkLoggedDecimals)
+}
+
+func friToStrkFloor(fri *felt.Felt) float64 {
+	strk := new(big.Rat).SetFrac(
+		fri.BigInt(new(big.Int)),
+		new(big.Int).Exp(big.NewInt(decimalBase), big.NewInt(strkDecimals), nil),
+	)
+	value, _ := strk.Float64()
+	if new(big.Rat).SetFloat64(value).Cmp(strk) > 0 {
+		value = math.Nextafter(value, 0)
+	}
+
+	return value
 }
 
 // Returns whether a serialised Cairo `Option` variant is `Some` (0) or `None` (1)

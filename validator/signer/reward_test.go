@@ -3,6 +3,7 @@ package signer
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -843,6 +844,7 @@ func TestClaimRewards(t *testing.T) {
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
 		expectClaimStart(t, provider, nonce)
 		sent := expectAddInvoke(t, provider, nil)
+		expectUnclaimedRefresh(t, mockSigner, &felt.Zero)
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 100, claimMaxFee)
 		rs.ClaimRewards(metrics.NewNoOpMetrics())
@@ -863,6 +865,7 @@ func TestClaimRewards(t *testing.T) {
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
 		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 		expectAddInvoke(t, provider, nil)
+		expectUnclaimedRefresh(t, mockSigner, &felt.Zero)
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 10, claimMaxFee)
 		rs.ClaimRewards(metrics.NewNoOpMetrics())
@@ -972,6 +975,7 @@ func TestClaimRewardsBounds(t *testing.T) {
 		provider.EXPECT().
 			TransactionStatus(gomock.Any(), gomock.Any()).
 			Return(&rpc.TxnStatusResult{FinalityStatus: rpc.TxnStatusAcceptedOnL2}, nil)
+		expectUnclaimedRefresh(t, mockSigner, &felt.Zero)
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
 		tracer := &claimTracer{}
@@ -1170,14 +1174,16 @@ func TestClaimRewardsTracking(t *testing.T) {
 type claimTracer struct {
 	metrics.NoOpMetrics
 
-	unclaimed      *float64
+	unclaimed      []float64
 	submitted      int
 	confirmed      int
 	failures       int
 	maxFeeExceeded int
 }
 
-func (c *claimTracer) UpdateRewardUnclaimed(amount float64) { c.unclaimed = &amount }
+func (c *claimTracer) UpdateRewardUnclaimed(amount float64) {
+	c.unclaimed = append(c.unclaimed, amount)
+}
 
 func (c *claimTracer) RecordRewardClaimSubmitted() { c.submitted++ }
 
@@ -1192,7 +1198,7 @@ func TestClaimRewardsMetrics(t *testing.T) {
 	rewardAddress, err := types.AddressFromString(testRewardAddress)
 	require.NoError(t, err)
 	unclaimed := snGoUtils.STRKToFRI(200)
-	unclaimedStrk := snGoUtils.FRIToSTRK(unclaimed)
+	unclaimedStrk := 200.0
 	const claimMaxFee = uint64(1e15)
 
 	// Mocks of a reward signer whose staker has `unclaimed` rewards
@@ -1217,7 +1223,7 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		tracer := &claimTracer{}
 		rs.ClaimRewards(tracer)
 
-		require.Equal(t, &claimTracer{unclaimed: &unclaimedStrk}, tracer)
+		require.Equal(t, &claimTracer{unclaimed: []float64{unclaimedStrk}}, tracer)
 	})
 
 	t.Run("Claim failure", func(t *testing.T) {
@@ -1231,7 +1237,7 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		tracer := &claimTracer{}
 		rs.ClaimRewards(tracer)
 
-		require.Equal(t, &claimTracer{unclaimed: &unclaimedStrk, failures: 1}, tracer)
+		require.Equal(t, &claimTracer{unclaimed: []float64{unclaimedStrk}, failures: 1}, tracer)
 	})
 
 	t.Run("Max fee exceeded", func(t *testing.T) {
@@ -1247,7 +1253,7 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		rs.ClaimRewards(tracer)
 
 		require.Equal(t,
-			&claimTracer{unclaimed: &unclaimedStrk, maxFeeExceeded: 1},
+			&claimTracer{unclaimed: []float64{unclaimedStrk}, maxFeeExceeded: 1},
 			tracer,
 		)
 	})
@@ -1258,14 +1264,63 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(newFeeEstimation(t, 1), nil)
 		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 		expectAddInvoke(t, provider, nil)
+		expectUnclaimedRefresh(t, mockSigner, snGoUtils.STRKToFRI(0.5))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
 		tracer := &claimTracer{}
 		rs.ClaimRewards(tracer)
 
-		require.Equal(
-			t, &claimTracer{unclaimed: &unclaimedStrk, submitted: 1, confirmed: 1}, tracer,
+		require.Equal(t, &claimTracer{
+			unclaimed: []float64{unclaimedStrk, 0.5},
+			submitted: 1,
+			confirmed: 1,
+		}, tracer)
+	})
+}
+
+func TestFriToStrkFloor(t *testing.T) {
+	testCases := []struct {
+		fri      string
+		expected float64
+	}{
+		{fri: "0", expected: 0},
+		{fri: "1", expected: math.Nextafter(1e-18, 0)},
+		{fri: "999999999999999999", expected: math.Nextafter(1, 0)},
+		{fri: "1000000000000000000", expected: 1},
+		{fri: "1000000000000000001", expected: 1},
+		{fri: "1500000000000000000", expected: 1.5},
+		{fri: "99999999999999999999", expected: math.Nextafter(100, 0)},
+		{fri: "123456000000000000000000", expected: 123456},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.fri+" FRI", func(t *testing.T) {
+			fri, err := felt.NewFromString[felt.Felt](tc.fri)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, friToStrkFloor(fri))
+		})
+	}
+}
+
+func TestClaimRewardsUnclaimedGauge(t *testing.T) {
+	t.Run("Just below the threshold is reported below it", func(t *testing.T) {
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().
+			Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(
+				stakerInfoResponse(t, felt.NewUnsafeFromString[felt.Felt]("0xde0b6b3a763ffff")),
+				nil,
+			)
+
+		rs := newTestRewardSigner(
+			t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, 1,
 		)
+		tracer := &claimTracer{}
+		rs.ClaimRewards(tracer)
+
+		require.Len(t, tracer.unclaimed, 1)
+		require.Less(t, tracer.unclaimed[0], 1.0)
 	})
 }
 
@@ -1422,6 +1477,14 @@ func expectClaimStart(t *testing.T, provider *mocks.MockRPCProvider, nonce *felt
 
 	provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock, nil)
 	expectBuildClaimTxn(t, provider, nonce)
+}
+
+func expectUnclaimedRefresh(t *testing.T, mockSigner *mocks.MockSigner, unclaimed *felt.Felt) {
+	t.Helper()
+
+	mockSigner.EXPECT().
+		Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+		Return(stakerInfoResponse(t, unclaimed), nil)
 }
 
 // expectAddInvoke expects a single transaction to be sent, answered with `err`.
