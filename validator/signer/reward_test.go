@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -240,6 +241,23 @@ func TestNewRewardSigner(t *testing.T) {
 
 		rs, err := newRewardSigner(t, provider, &rewardConf)
 		require.ErrorContains(t, err, "external reward signer check")
+		require.True(t, rs == nil)
+	})
+
+	t.Run("Error: external signer never answers", func(t *testing.T) {
+		SetExternalSignerTimeout(t, 100*time.Millisecond)
+
+		rewardConf := config.Reward{
+			ExternalURL:    NewHungSignerServer(t),
+			Address:        testRewardAddress,
+			ClaimThreshold: claimThreshold,
+		}
+		provider := newProvider(t, stakerInfo)
+		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs, err := newRewardSigner(t, provider, &rewardConf)
+		require.ErrorContains(t, err, "external reward signer check")
+		require.ErrorContains(t, err, "external signer did not answer within")
 		require.True(t, rs == nil)
 	})
 

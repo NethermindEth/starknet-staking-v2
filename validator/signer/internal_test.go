@@ -208,7 +208,7 @@ func TestSignInvokeTx(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		err := signer.SignInvokeTx(&invokeTx, &felt.Felt{}, mockServer.URL)
+		err := signer.SignInvokeTx(t.Context(), &invokeTx, &felt.Felt{}, mockServer.URL)
 
 		require.Equal(t, []*felt.Felt{}, invokeTx.Signature)
 		expectedErrorMsg := fmt.Sprintf(
@@ -268,7 +268,7 @@ func TestSignInvokeTx(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		err := signer.SignInvokeTx(&invokeTx, chainID, mockServer.URL)
+		err := signer.SignInvokeTx(t.Context(), &invokeTx, chainID, mockServer.URL)
 
 		expectedSignature := []*felt.Felt{sigR, sigS}
 		require.Equal(t, expectedSignature, invokeTx.Signature)

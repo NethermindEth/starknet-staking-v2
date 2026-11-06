@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -21,6 +24,28 @@ import (
 )
 
 var _ Signer = (*ExternalSigner)(nil)
+
+const (
+	externalSignerTimeout     = 15 * time.Second
+	externalSignerDialTimeout = 5 * time.Second
+)
+
+var externalSignerClient = newExternalSignerClient(externalSignerTimeout)
+
+func newExternalSignerClient(timeout time.Duration) *http.Client {
+	client := new(http.Client)
+	client.Timeout = timeout
+
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		dialer := new(net.Dialer)
+		dialer.Timeout = externalSignerDialTimeout
+		clone := transport.Clone()
+		clone.DialContext = dialer.DialContext
+		client.Transport = clone
+	}
+
+	return client
+}
 
 // Used as a wrapper around an exgernal signer implementation
 type ExternalSigner struct {
@@ -153,7 +178,7 @@ func (s *ExternalSigner) EstimateFee(
 func (s *ExternalSigner) SignTransaction(
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (*rpc.BroadcastInvokeTxnV3, error) {
-	return txn, SignInvokeTx(txn, &s.chainID, s.url)
+	return txn, SignInvokeTx(s.ctx, txn, &s.chainID, s.url)
 }
 
 func (s *ExternalSigner) InvokeTransaction(
@@ -191,11 +216,12 @@ func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
 }
 
 func SignInvokeTx(
+	ctx context.Context,
 	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 	externalSignerURL string,
 ) error {
-	signResp, err := HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
+	signResp, err := HashAndSignTx(ctx, invokeTxnV3, chainID, externalSignerURL)
 	if err != nil {
 		return err
 	}
@@ -209,6 +235,7 @@ func SignInvokeTx(
 }
 
 func HashAndSignTx(
+	ctx context.Context,
 	bTx *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 	externalSignerURL string,
@@ -221,9 +248,23 @@ func HashAndSignTx(
 	}
 
 	signEndpoint := externalSignerURL + signer.SignEndpoint
-	//nolint:gosec,noctx // Trusting the configured external signer URL // TODO: Context not configured
-	resp, err := http.Post(signEndpoint, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodPost, signEndpoint, bytes.NewBuffer(jsonData),
+	)
 	if err != nil {
+		return signer.Response{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := externalSignerClient.Do(req)
+	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() && ctx.Err() == nil {
+			return signer.Response{}, fmt.Errorf(
+				"external signer did not answer within %s: %w", externalSignerClient.Timeout, err,
+			)
+		}
+
 		return signer.Response{}, err
 	}
 	defer func() { _ = resp.Body.Close() }() // Intentionally ignoring the error, will fix in future

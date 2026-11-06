@@ -1,10 +1,12 @@
 package signer_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -358,7 +360,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, externalSignerURL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "connection refused")
@@ -386,7 +388,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		expectedErrorMsg := fmt.Sprintf(
@@ -417,10 +419,41 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
+	})
+
+	t.Run("Error: signer never answers", func(t *testing.T) {
+		signer.SetExternalSignerTimeout(t, 100*time.Millisecond)
+		signerURL := signer.NewHungSignerServer(t)
+
+		invokeTxnV3 := snUtils.BuildInvokeTxn(
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			&rpc.ResourceBoundsMapping{},
+			nil,
+		)
+		err := hashAndSignWithin(t, t.Context(), invokeTxnV3, signerURL)
+		require.ErrorContains(t, err, "external signer did not answer within")
+	})
+
+	t.Run("Error: context done while the signer doesn't answer", func(t *testing.T) {
+		signerURL := signer.NewHungSignerServer(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
+
+		invokeTxnV3 := snUtils.BuildInvokeTxn(
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			&rpc.ResourceBoundsMapping{},
+			nil,
+		)
+		err := hashAndSignWithin(t, ctx, invokeTxnV3, signerURL)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
 
 	t.Run("Successful request and response", func(t *testing.T) {
@@ -443,7 +476,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		expectedResult := s.Response{
 			Signature: [2]*felt.Felt{
@@ -454,4 +487,25 @@ func TestHashAndSignTx(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expectedResult, res)
 	})
+}
+
+func hashAndSignWithin(
+	t *testing.T, ctx context.Context, txn *rpc.BroadcastInvokeTxnV3, signerURL string,
+) error {
+	t.Helper()
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := signer.HashAndSignTx(ctx, txn, new(felt.Felt).SetUint64(1), signerURL)
+		result <- err
+	}()
+
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "HashAndSignTx did not return while the signer doesn't answer")
+
+		return nil
+	}
 }
