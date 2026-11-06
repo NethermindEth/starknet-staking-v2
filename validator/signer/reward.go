@@ -207,6 +207,14 @@ func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
 		return
 	}
 	defer rs.claiming.Store(false)
+	defer func() {
+		if r := recover(); r != nil {
+			rs.logger.Error(
+				claimLogPrefix+"claim aborted by an unexpected error", zap.Any("error", r),
+			)
+			tracer.RecordRewardClaimFailure()
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(rs.ctx, rs.claimTimeout)
 	defer cancel()

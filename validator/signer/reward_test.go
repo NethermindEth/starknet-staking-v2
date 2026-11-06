@@ -910,6 +910,31 @@ func TestClaimRewardsBounds(t *testing.T) {
 		require.Equal(t, 1, firstTracer.failures)
 	})
 
+	t.Run("A panic during the claim is recorded as a failure", func(t *testing.T) {
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil).
+			Times(2)
+		mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil)
+		mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(rpc.FeeEstimation{}, nil)
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		tracer := &claimTracer{}
+		require.NotPanics(t, func() { rs.ClaimRewards(tracer) })
+		require.Equal(t, 1, tracer.failures)
+		require.Zero(t, tracer.submitted)
+
+		mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, errors.New("sign error"))
+		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+		rs.ClaimRewards(tracer)
+		require.Equal(t, 2, tracer.failures)
+	})
+
 	t.Run("The claim deadline cancels a signer that doesn't answer", func(t *testing.T) {
 		SetExternalSignerTimeout(t, time.Minute)
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))

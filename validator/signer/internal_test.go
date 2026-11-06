@@ -277,6 +277,103 @@ func TestSignInvokeTx(t *testing.T) {
 	})
 }
 
+func TestEstimateFeeResponseValidation(t *testing.T) {
+	const validEstimate = `{"l1_gas_consumed": "0x10", "l1_gas_price": "0x20", ` +
+		`"l2_gas_consumed": "0x30", "l2_gas_price": "0x40", "l1_data_gas_consumed": "0x50", ` +
+		`"l1_data_gas_price": "0x60", "overall_fee": "0x70", "unit": "FRI"}`
+
+	newSigners := func(t *testing.T, estimateResult string) map[string]signer.Signer {
+		t.Helper()
+
+		mockRPC := validator.MockRPCServer(t, validator.MockRPC{
+			Results: map[string]string{"starknet_estimateFee": estimateResult},
+		})
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
+		require.NoError(t, err)
+
+		addresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
+		internalSigner, err := signer.NewInternalSigner(
+			t.Context(),
+			provider,
+			log.NewNopZapLogger(),
+			&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
+			addresses,
+			false,
+		)
+		require.NoError(t, err)
+		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
+			provider,
+			log.NewNopZapLogger(),
+			&config.Signer{ExternalURL: "http://127.0.0.1:1", OperationalAddress: "0x456"},
+			addresses,
+			false,
+		)
+		require.NoError(t, err)
+
+		return map[string]signer.Signer{
+			"internal signer": &internalSigner,
+			"external signer": &externalSigner,
+		}
+	}
+
+	errorCases := []struct {
+		name     string
+		result   string
+		errorMsg string
+	}{
+		{
+			name:     "empty response",
+			result:   `[]`,
+			errorMsg: "invalid fee estimate response: expected 1 estimate, got 0",
+		},
+		{
+			name:     "more estimates than transactions",
+			result:   "[" + validEstimate + ", " + validEstimate + "]",
+			errorMsg: "invalid fee estimate response: expected 1 estimate, got 2",
+		},
+		{
+			name: "null overall fee",
+			result: `[{"l1_gas_consumed": "0x10", "l1_gas_price": "0x20", ` +
+				`"l2_gas_consumed": "0x30", "l2_gas_price": "0x40", ` +
+				`"l1_data_gas_consumed": "0x50", "l1_data_gas_price": "0x60", ` +
+				`"overall_fee": null, "unit": "FRI"}]`,
+			errorMsg: "invalid fee estimate response: missing overall_fee",
+		},
+		{
+			name:     "missing gas fields",
+			result:   `[{"overall_fee": "0x70", "unit": "FRI"}]`,
+			errorMsg: "invalid fee estimate response: missing l1_gas_consumed",
+		},
+	}
+	for _, tc := range errorCases {
+		for name, s := range newSigners(t, tc.result) {
+			t.Run("Error: "+tc.name+" with the "+name, func(t *testing.T) {
+				_, err := s.EstimateFee(newEstimateTestTxn())
+				require.EqualError(t, err, tc.errorMsg)
+			})
+		}
+	}
+
+	for name, s := range newSigners(t, "["+validEstimate+"]") {
+		t.Run("Valid estimate with the "+name, func(t *testing.T) {
+			estimate, err := s.EstimateFee(newEstimateTestTxn())
+			require.NoError(t, err)
+			require.Equal(t, felt.NewFromUint64[felt.Felt](0x70), estimate.OverallFee)
+		})
+	}
+}
+
+func newEstimateTestTxn() *rpc.BroadcastInvokeTxnV3 {
+	return snGoUtils.BuildInvokeTxn(
+		felt.NewUnsafeFromString[felt.Felt]("0x456"),
+		new(felt.Felt).SetUint64(1),
+		[]*felt.Felt{},
+		&rpc.ResourceBoundsMapping{},
+		nil,
+	)
+}
+
 func TestFetchEpochInfo(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
