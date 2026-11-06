@@ -77,7 +77,7 @@ func New(
 		signer = &externalSigner
 		logger.Info(
 			"using external signer",
-			zap.String("externalSignerURL", conf.Signer.ExternalURL),
+			zap.String("externalSignerURL", redactURL(conf.Signer.ExternalURL)),
 			zap.Bool("braavosAccount", braavos),
 		)
 	} else {
@@ -195,6 +195,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		close(headersFeed)
 	}
 
+	shownWSURL := redactURL(wsProviderURL)
 	retries := maxRetries
 	failedSubscriptions := 0
 	for {
@@ -207,7 +208,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			}
 			logger.Error(
 				"cannot connect to ws provider",
-				zap.String("wsProviderURL", wsProviderURL),
+				zap.String("wsProviderURL", shownWSURL),
 				zap.Error(err),
 				zap.String("retriesLeft", retries.String()),
 			)
@@ -241,7 +242,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 
 			return nil
 		case endErr = <-clientSubscription.Err():
-			logSubscriptionError(logger, wsProviderURL, endErr)
+			logSubscriptionError(logger, shownWSURL, endErr)
 			cleanUp(wsProvider, headersFeed)
 		case reorgEvent, ok := <-clientSubscription.Reorg():
 			if ok {
@@ -253,7 +254,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				endErr = errReorg
 			} else {
 				endErr = subscriptionEndError(clientSubscription)
-				logSubscriptionError(logger, wsProviderURL, endErr)
+				logSubscriptionError(logger, shownWSURL, endErr)
 			}
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
@@ -273,7 +274,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		if retries.IsZero() {
 			return errors.Errorf(
 				"WS subscription to %s ended %d times in a row without a new block header: %w",
-				wsProviderURL, failedSubscriptions+1, endErr,
+				shownWSURL, failedSubscriptions+1, endErr,
 			)
 		}
 		failedSubscriptions++
@@ -281,7 +282,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		logger.Warn(
 			"WS subscription ended without a new block header. Resubscribing in "+
 				delay.String(),
-			zap.String("wsProviderURL", wsProviderURL),
+			zap.String("wsProviderURL", shownWSURL),
 			zap.String("retriesLeft", retries.String()),
 		)
 		retries.Sub()

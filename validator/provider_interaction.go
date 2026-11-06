@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -69,16 +70,16 @@ func NewProvider(
 	if errors.Is(err, rpc.ErrIncompatibleVersion) {
 		logger.Warn(
 			"node implements a different JSON-RPC specification than Starknet.Go targets",
-			zap.String("providerURL", providerURL),
+			zap.String("providerURL", redactURL(providerURL)),
 			zap.String("nodeSpecVersion", nodeSpecVersion),
 		)
 	} else if err != nil {
 		return nil, markIfTransient(
-			errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err),
+			errors.Errorf("cannot create RPC provider at %s: %w", redactURL(providerURL), err),
 		)
 	}
 
-	logger.Info("connected to RPC", zap.String("providerURL", providerURL))
+	logger.Info("connected to RPC", zap.String("providerURL", redactURL(providerURL)))
 
 	return provider, nil
 }
@@ -102,7 +103,8 @@ func fetchSpecVersion(ctx context.Context, providerURL string) (string, error) {
 	return nodeSpecVersion, nil
 }
 
-func providerRequestError(providerURL string, err error) error {
+func providerRequestError(rawProviderURL string, err error) error {
+	providerURL := redactURL(rawProviderURL)
 	var httpErr client.HTTPError
 	var urlErr *url.Error
 	var rpcErr client.Error
@@ -120,6 +122,8 @@ func providerRequestError(providerURL string, err error) error {
 		}
 
 		return reachErr
+	case errors.As(err, &urlErr) && urlErr.Op == "parse":
+		return errors.Errorf("invalid RPC provider URL: %s", urlErr.Err)
 	case errors.As(err, &urlErr):
 		reachErr := errors.Errorf(
 			"cannot reach RPC provider at %s: %s", providerURL, describeNetError(urlErr.Err),
@@ -166,6 +170,47 @@ func isTLSError(err error) bool {
 		errors.As(err, &invalidErr)
 }
 
+const (
+	redactedText            = "REDACTED"
+	minSecretPathSegmentLen = 16
+)
+
+func redactURL(rawURL string) string {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "<invalid URL>"
+	}
+
+	redacted := false
+	if parsedURL.User != nil {
+		parsedURL.User = url.User(redactedText)
+		redacted = true
+	}
+	if parsedURL.RawQuery != "" {
+		keys := slices.Sorted(maps.Keys(parsedURL.Query()))
+		for i, key := range keys {
+			keys[i] = key + "=" + redactedText
+		}
+		parsedURL.RawQuery = strings.Join(keys, "&")
+		redacted = true
+	}
+	segments := strings.Split(parsedURL.Path, "/")
+	for i, segment := range segments {
+		if len(segment) >= minSecretPathSegmentLen {
+			segments[i] = redactedText
+			redacted = true
+		}
+	}
+	if !redacted {
+		return rawURL
+	}
+	parsedURL.Path = strings.Join(segments, "/")
+	parsedURL.RawPath = ""
+	parsedURL.Fragment = ""
+
+	return parsedURL.String()
+}
+
 func isRetryableHTTPStatus(statusCode int) bool {
 	return statusCode >= http.StatusInternalServerError ||
 		statusCode == http.StatusRequestTimeout ||
@@ -188,7 +233,8 @@ func describeNetError(err error) string {
 	}
 }
 
-func checkSpecVersion(providerURL, nodeSpecVersion string) error {
+func checkSpecVersion(rawProviderURL, nodeSpecVersion string) error {
+	providerURL := redactURL(rawProviderURL)
 	version, err := semver.StrictNewVersion(strings.TrimPrefix(nodeSpecVersion, "v"))
 	if err == nil && version.Prerelease() == "" {
 		release := fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch())
@@ -206,11 +252,11 @@ func checkSpecVersion(providerURL, nodeSpecVersion string) error {
 func checkWSProviderURL(wsProviderURL string) error {
 	parsedURL, err := url.Parse(wsProviderURL)
 	if err != nil {
-		return errors.Errorf("invalid WS provider URL %q: %w", wsProviderURL, err)
+		return errors.New("invalid WS provider URL")
 	}
 	if parsedURL.Scheme != "ws" && parsedURL.Scheme != "wss" {
 		return errors.Errorf(
-			"WS provider URL must use ws:// or wss://, got %q", wsProviderURL,
+			"WS provider URL must use ws:// or wss://, got %q", redactURL(wsProviderURL),
 		)
 	}
 
@@ -228,11 +274,15 @@ func SubscribeToBlockHeaders(
 	*client.ClientSubscription,
 	error,
 ) {
-	logger.Debug("initialising websocket connection", zap.String("wsProviderURL", wsProviderURL))
+	logger.Debug(
+		"initialising websocket connection", zap.String("wsProviderURL", redactURL(wsProviderURL)),
+	)
 	// This needs a timeout or something
 	wsProvider, err := rpc.NewWebsocketProvider(ctx, wsProviderURL)
 	if err != nil {
-		return nil, nil, nil, errors.Errorf("dialling WS provider at %s: %w", wsProviderURL, err)
+		return nil, nil, nil, errors.Errorf(
+			"dialling WS provider at %s: %w", redactURL(wsProviderURL), err,
+		)
 	}
 
 	logger.Debug("Subscribing to new block headers...")

@@ -187,6 +187,18 @@ func TestNewProvider(t *testing.T) {
 				expectedErr: "certificate signed by unknown authority",
 			},
 			{
+				name: "API key in the URL",
+				url:  closedServer.URL + "/v3/0123456789abcdef0123456789abcdef?apikey=secret",
+				expectedErr: "cannot reach RPC provider at " + closedServer.URL +
+					"/v3/REDACTED?apikey=REDACTED: connection refused",
+				transient: true,
+			},
+			{
+				name:        "invalid URL",
+				url:         "http://127.0.0.1:port",
+				expectedErr: "invalid RPC provider URL",
+			},
+			{
 				name:        "unknown URL scheme",
 				url:         "ftp://localhost:6060",
 				expectedErr: "cannot create RPC provider at ftp://localhost:6060",
