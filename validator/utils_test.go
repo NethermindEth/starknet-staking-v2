@@ -105,3 +105,17 @@ func TestLogBlockCountsBlocks(t *testing.T) {
 		require.Equal(t, []string{tc.expected}, rec.msgs)
 	}
 }
+
+func TestLogBlockNumberField(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+
+	logBlock(1020, &types.EpochInfo{}, &types.AttestInfo{WindowStart: 1021}, logger)
+
+	require.Contains(
+		t, buf.String(), `block 1020 received, 1 block to attest	{"blockNumber": 1020}`,
+	)
+}

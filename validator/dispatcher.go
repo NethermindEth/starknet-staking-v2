@@ -260,7 +260,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			targetBlockHash = attest.BlockHash
 			logger.Debug(
 				"building attest transaction for blockhash",
-				zap.String("blockhash", targetBlockHash.String()),
+				zap.String("targetBlockHash", targetBlockHash.String()),
 			)
 			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
@@ -300,7 +300,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				targetBlockHash = attest.BlockHash
 				logger.Debug(
 					"building attest transaction (in `do` stage) for blockhash",
-					zap.String("blockhash", targetBlockHash.String()),
+					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
 				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
@@ -331,7 +331,7 @@ func (d *EventDispatcher[S]) Dispatch(
 
 			logger.Info(
 				"invoking attest",
-				zap.String("target block hash", targetBlockHash.String()),
+				zap.String("targetBlockHash", targetBlockHash.String()),
 			)
 			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
 			if err != nil {
@@ -351,7 +351,9 @@ func (d *EventDispatcher[S]) Dispatch(
 				continue
 			}
 
-			logger.Debug("attest transaction sent", zap.String("hash", resp.Hash.String()))
+			logger.Debug(
+				"attest transaction sent", zap.String("transactionHash", resp.Hash.String()),
+			)
 			d.CurrentAttest.Hash = *resp.Hash
 			d.CurrentAttest.setStatus(Ongoing)
 			// Record attestation submission in metrics

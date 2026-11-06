@@ -100,7 +100,8 @@ func New(
 
 	logger.Info(
 		"Validation contracts",
-		zap.String("validationContracts", signer.ValidationContracts().String()),
+		zap.String("stakingContractAddress", signer.ValidationContracts().Staking.String()),
+		zap.String("attestContractAddress", signer.ValidationContracts().Attest.String()),
 	)
 
 	var rewardSigner signerP.RewardSigner
@@ -380,7 +381,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Info(
 				"Target block reached",
-				zap.String("blockHash", block.Hash.String()),
+				zap.String("targetBlockHash", block.Hash.String()),
 			)
 			dispatcher.PrepareAttest <- types.PrepareAttest{
 				BlockHash: attestInfo.TargetBlockHash,
@@ -451,9 +452,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 		if maxRetries.IsZero() {
 			break
 		}
-		logEpochFetchRetry(
-			logger, failedAttempts, newEpochID, &maxRetries, err, prevEpoch, &newEpoch,
-		)
+		logEpochFetchRetry(logger, failedAttempts, &maxRetries, err, prevEpoch, &newEpoch)
 
 		Sleep(time.Second)
 
@@ -483,7 +482,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	if failedAttempts > 0 {
 		logger.Info(
 			"fetched epoch info after failed attempts. Resuming block processing",
-			zap.String("epochID", newEpochID),
+			zap.Uint64("epochID", newEpoch.EpochID),
 			zap.Int("failedAttempts", failedAttempts),
 		)
 	}
@@ -494,7 +493,6 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 func logEpochFetchRetry(
 	logger log.Logger,
 	failedAttempts int,
-	newEpochID string,
 	retriesLeft *types.Retries,
 	err error,
 	prevEpoch, newEpoch *types.EpochInfo,
@@ -505,9 +503,11 @@ func logEpochFetchRetry(
 	}
 
 	fields := []zap.Field{
-		zap.String("epochID", newEpochID),
 		zap.Int("failedAttempts", failedAttempts),
-		zap.String("retriesRemaining", retriesLeft.String()),
+		zap.String("retriesLeft", retriesLeft.String()),
+	}
+	if prevEpoch != nil {
+		fields = append(fields, zap.Uint64("epochID", prevEpoch.EpochID+1))
 	}
 	if err != nil {
 		fields = append(fields, zap.Error(err))
@@ -516,7 +516,7 @@ func logEpochFetchRetry(
 
 		return
 	}
-	fields = append(fields, zap.Any("fromEpoch", prevEpoch), zap.Any("toEpoch", newEpoch))
+	fields = append(fields, zap.Reflect("fromEpoch", prevEpoch), zap.Reflect("toEpoch", newEpoch))
 	logFn("wrong epoch switch, block headers are not processed. Retrying in 1s", fields...)
 }
 

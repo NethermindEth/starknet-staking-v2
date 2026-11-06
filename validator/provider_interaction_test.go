@@ -343,6 +343,12 @@ func TestNewLogsBraavosMode(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Contains(t, buf.String(), tc.expectedLine)
+			require.Contains(
+				t, buf.String(), `connected to RPC	{"providerURL": "`+server.URL+`"}`,
+			)
+			require.Contains(t, buf.String(), `"stakingContractAddress": "0x`)
+			require.Contains(t, buf.String(), `"attestContractAddress": "0x`)
+			require.NotContains(t, buf.String(), "validationContracts")
 			require.Contains(t, buf.String(), `"rewardAddress": "0x789", "braavosAccount": true}`)
 		})
 	}

@@ -60,7 +60,7 @@ func logBlock(
 		) + " for the next epoch"
 	}
 
-	logger.Info(base + ", " + suffix)
+	logger.Info(base+", "+suffix, zap.Uint64("blockNumber", blockNum))
 }
 
 func blockCount(blocks uint64) string {

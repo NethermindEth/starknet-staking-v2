@@ -236,7 +236,8 @@ func TestFetchEpochAndAttestInfoWithRetryReportsFailures(t *testing.T) {
 		out := buf.String()
 		require.Equal(t, 3, countLevel(out, "WARN"), out)
 		require.Contains(t, out, "injected outage")
-		require.Contains(t, out, `"retriesRemaining": "infinite"`)
+		require.Contains(t, out, `"retriesLeft": "infinite"`)
+		require.Contains(t, out, `"epochID": 100,`)
 		require.Contains(t, out, "Resuming block processing")
 	})
 
