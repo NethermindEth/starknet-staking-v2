@@ -97,9 +97,22 @@ func TestSignersUseTheCallContext(t *testing.T) {
 			_, err = testSigner.InvokeTransaction(ctx, txn)
 			require.NoError(t, err)
 
+			fee := new(felt.Felt).SetUint64(1)
+			estimate := rpc.FeeEstimation{
+				FeeEstimationCommon: rpc.FeeEstimationCommon{
+					L1GasConsumed:     fee,
+					L1GasPrice:        fee,
+					L2GasConsumed:     fee,
+					L2GasPrice:        fee,
+					L1DataGasConsumed: fee,
+					L1DataGasPrice:    fee,
+					OverallFee:        fee,
+				},
+				Unit: rpc.FriUnit,
+			}
 			provider.EXPECT().
 				EstimateFee(ctx, gomock.Any(), gomock.Any(), gomock.Any()).
-				Return([]rpc.FeeEstimation{{}}, nil)
+				Return([]rpc.FeeEstimation{estimate}, nil)
 			_, err = testSigner.EstimateFee(ctx, txn)
 			require.NoError(t, err)
 		})

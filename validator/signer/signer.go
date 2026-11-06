@@ -196,6 +196,37 @@ func BuildAttest[S Signer](
 	return txn, nil
 }
 
+func singleFeeEstimate(estimates []rpc.FeeEstimation) (rpc.FeeEstimation, error) {
+	if len(estimates) != 1 {
+		return rpc.FeeEstimation{}, fmt.Errorf(
+			"invalid fee estimate response: expected 1 estimate, got %d", len(estimates),
+		)
+	}
+
+	estimate := estimates[0]
+	fields := []struct {
+		name  string
+		value *felt.Felt
+	}{
+		{name: "l1_gas_consumed", value: estimate.L1GasConsumed},
+		{name: "l1_gas_price", value: estimate.L1GasPrice},
+		{name: "l2_gas_consumed", value: estimate.L2GasConsumed},
+		{name: "l2_gas_price", value: estimate.L2GasPrice},
+		{name: "l1_data_gas_consumed", value: estimate.L1DataGasConsumed},
+		{name: "l1_data_gas_price", value: estimate.L1DataGasPrice},
+		{name: "overall_fee", value: estimate.OverallFee},
+	}
+	for _, field := range fields {
+		if field.value == nil {
+			return rpc.FeeEstimation{}, fmt.Errorf(
+				"invalid fee estimate response: missing %s", field.name,
+			)
+		}
+	}
+
+	return estimate, nil
+}
+
 func ComputeBlockNumberToAttestTo(
 	epochInfo *types.EpochInfo,
 	attestWindow uint64,

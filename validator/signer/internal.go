@@ -161,7 +161,7 @@ func (s *InternalSigner) EstimateFee(
 		return rpc.FeeEstimation{}, err
 	}
 
-	return estimateFee[0], nil
+	return singleFeeEstimate(estimateFee)
 }
 
 func (s *InternalSigner) SignTransaction(

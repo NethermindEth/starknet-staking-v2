@@ -172,7 +172,7 @@ func (s *ExternalSigner) EstimateFee(
 		return rpc.FeeEstimation{}, err
 	}
 
-	return estimateFee[0], nil
+	return singleFeeEstimate(estimateFee)
 }
 
 func (s *ExternalSigner) SignTransaction(
