@@ -24,6 +24,12 @@ var ErrTxnHashNotFound = rpc.ErrHashNotFound
 
 type AttestStatus uint8
 
+// Consecutive blocks during which the node may report a sent attest transaction as not found,
+// or fail to return its status, before the attestation is sent again. Sending it again cannot
+// attest twice: once the first transaction is executed, the fee estimation of the new one fails
+// with "Attestation is done for this epoch", which counts as a success.
+const maxUnknownStatusPolls = 5
+
 const (
 	Iddle AttestStatus = iota
 	Ongoing
@@ -118,6 +124,8 @@ type AttestTracker struct {
 	Transaction AttestTransaction
 	Hash        felt.Felt
 	Status      AttestStatus
+	// Consecutive status polls that could not tell what happened to the sent transaction
+	unknownPolls int
 }
 
 func NewAttestTracker() AttestTracker {
@@ -132,8 +140,18 @@ func (a *AttestTracker) UpdateStatus(
 	signer signerP.Signer,
 	logger log.Logger,
 ) {
-	status := TrackAttest(signer, logger, &a.Hash)
+	status, known := trackAttest(signer, logger, &a.Hash)
+	if known {
+		a.unknownPolls = 0
+	} else {
+		a.unknownPolls++
+	}
 	a.setStatus(status)
+}
+
+// Whether a transaction was sent but the last status poll could not tell what happened to it
+func (a *AttestTracker) statusUnknown() bool {
+	return a.Status == Ongoing && a.unknownPolls > 0
 }
 
 func (a *AttestTracker) setStatus(status AttestStatus) {
@@ -142,6 +160,7 @@ func (a *AttestTracker) setStatus(status AttestStatus) {
 	case Ongoing, Successful:
 	case Failed:
 		a.Hash = felt.Zero
+		a.unknownPolls = 0
 	case Iddle:
 		panic("status cannot be change to iddle")
 	default:
@@ -213,6 +232,14 @@ func (d *EventDispatcher[S]) Dispatch(
 			// A transaction was sent: check its status and keep waiting unless it failed
 			if d.CurrentAttest.Status == Ongoing {
 				d.CurrentAttest.UpdateStatus(signer, logger)
+				if d.CurrentAttest.unknownPolls >= maxUnknownStatusPolls {
+					logger.Warn(
+						"attest transaction status still unknown. Sending the attestation again",
+						zap.String("transactionHash", d.CurrentAttest.Hash.String()),
+						zap.Int("blocksUnknown", d.CurrentAttest.unknownPolls),
+					)
+					d.CurrentAttest.setStatus(Failed)
+				}
 				if d.CurrentAttest.Status != Failed {
 					continue
 				}
@@ -292,13 +319,23 @@ func (d *EventDispatcher[S]) Dispatch(
 			if d.CurrentAttest.Status == Ongoing {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
-			if d.CurrentAttest.Status == Successful {
+			switch {
+			case d.CurrentAttest.Status == Successful:
 				logger.Info(
 					"successfully attested to target block",
 					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
 				tracer.RecordAttestationConfirmed()
-			} else {
+			case d.CurrentAttest.statusUnknown():
+				// The node cannot say what happened to the transaction, which may well have
+				// succeeded: counting a failure would raise false alarms
+				logger.Warn(
+					"end of window reached without knowing if the attestation succeeded. "+
+						"Not counted as a failure, check the transaction on a block explorer",
+					zap.String("targetBlockHash", targetBlockHash.String()),
+					zap.String("transactionHash", d.CurrentAttest.Hash.String()),
+				)
+			default:
 				logger.Warn(
 					"failed to attest to target block",
 					zap.String("targetBlockHash", targetBlockHash.String()),
@@ -319,36 +356,48 @@ func (d *EventDispatcher[S]) Dispatch(
 	}
 }
 
+// Returns the status of the attest transaction. When the node reports it as not found or fails
+// to return its status, the transaction is still considered `Ongoing`.
 func TrackAttest[S signerP.Signer](
 	signer S,
 	logger log.Logger,
 	txHash *felt.Felt,
 ) AttestStatus {
+	status, _ := trackAttest(signer, logger, txHash)
+
+	return status
+}
+
+// Same as `TrackAttest`, also returning false when the status poll could not tell what happened
+// to the transaction (not found by the node, or the status request failed)
+func trackAttest[S signerP.Signer](
+	signer S,
+	logger log.Logger,
+	txHash *felt.Felt,
+) (AttestStatus, bool) {
 	// A zero hash means no transaction was sent, so there is nothing the node could find
 	if txHash.IsZero() {
 		logger.Warn("no attest transaction to track. Will retry")
 
-		return Failed
+		return Failed, true
 	}
 
 	txStatus, err := signer.TransactionStatus(txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Info(
-				"attest transaction status was not found. Will wait.",
+				"attest transaction status was not found. Will check again on the next block",
 				zap.String("transactionHash", txHash.String()),
 			)
-
-			return Ongoing
 		} else {
-			logger.Error(
-				"attest transaction FAILED. Will retry.",
+			logger.Warn(
+				"failed to get the attest transaction status. Will check again on the next block",
 				zap.String("transactionHash", txHash.String()),
 				zap.Error(err),
 			)
-
-			return Failed
 		}
+
+		return Ongoing, false
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
@@ -358,7 +407,7 @@ func TrackAttest[S signerP.Signer](
 			zap.String("failureReason", txStatus.FailureReason),
 		)
 
-		return Failed
+		return Failed, true
 	}
 
 	switch txStatus.FinalityStatus {
@@ -369,7 +418,7 @@ func TrackAttest[S signerP.Signer](
 			zap.String("finalityStatus", string(txStatus.FinalityStatus)),
 		)
 
-		return Ongoing
+		return Ongoing, true
 	default:
 		logger.Info(
 			"attest transaction SUCCESSFUL.",
@@ -378,6 +427,6 @@ func TrackAttest[S signerP.Signer](
 			zap.String("executionStatus", string(txStatus.ExecutionStatus)),
 		)
 
-		return Successful
+		return Successful, true
 	}
 }

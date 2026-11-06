@@ -497,8 +497,9 @@ func TestTrackAttest(t *testing.T) {
 		require.Equal(t, validator.Ongoing, txStatus)
 	})
 
+	// QA report 01, finding OBS-1: a failed status request says nothing about the transaction
 	t.Run(
-		"attestation fails also if error different from transaction status not found",
+		"attestation is still ongoing if the transaction status request fails",
 		func(t *testing.T) {
 			txHash := new(felt.Felt).SetUint64(1)
 
@@ -508,7 +509,7 @@ func TestTrackAttest(t *testing.T) {
 
 			txStatus := validator.TrackAttest(mockSigner, logger, txHash)
 
-			require.Equal(t, validator.Failed, txStatus)
+			require.Equal(t, validator.Ongoing, txStatus)
 		})
 
 	t.Run("attestation fails if accepted but REVERTED", func(t *testing.T) {
@@ -911,4 +912,117 @@ func TestTrackAttestWithoutTransaction(t *testing.T) {
 	status := validator.TrackAttest(mockSigner, log.NewNopZapLogger(), &felt.Zero)
 
 	require.Equal(t, validator.Failed, status)
+}
+
+// QA report 01, finding OBS-1: the status of a sent transaction can be unknown, because the
+// node does not find it or the status request fails. The hash is kept and polled again; after
+// some blocks the attestation is sent again; at the end of the window an unknown status is not
+// counted as a failure.
+func TestDispatchUnknownAttestStatus(t *testing.T) {
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	txHash := new(felt.Felt).SetUint64(0xa77e57)
+	nodeDown := errors.New("-32603 The error is not a valid RPC error: connection refused")
+	succeeded := &rpc.TxnStatusResult{
+		FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+		ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+	}
+
+	// Expects the attest transaction to be built and sent once, at the first block
+	expectSend := func(mockSigner *mocks.MockSigner) *gomock.Call {
+		return mockSigner.EXPECT().
+			InvokeTransaction(gomock.Any()).
+			After(mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil).Times(2)).
+			After(mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(feeEstimate(), nil)).
+			After(mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil)).
+			Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
+	}
+
+	t.Run("Failed status requests keep the transaction", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().TransactionStatus(txHash).Return(nil, nodeDown).Times(2),
+			mockSigner.EXPECT().TransactionStatus(txHash).Return(succeeded, nil),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		for range 4 {
+			sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		}
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.submitted)
+		require.Equal(t, 1, tracer.confirmed)
+		require.Equal(t, 0, tracer.failures)
+	})
+
+	t.Run("Transaction not found for too long is sent again", func(t *testing.T) {
+		mockSigner, _ := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().
+				TransactionStatus(txHash).
+				Return(nil, validator.ErrTxnHashNotFound).
+				Times(5),
+			// The first transaction was executed after all: the new one is not sent
+			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().
+				EstimateFee(gomock.Any()).
+				Return(rpc.FeeEstimation{}, errors.New("Attestation is done for this epoch")),
+		)
+		dispatcher, stop := startDispatcher(t, mockSigner, new(attestTracer))
+
+		for range 7 {
+			sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		}
+		stop()
+
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttest.Status)
+	})
+
+	t.Run("Unknown status at the end of the window", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().TransactionStatus(txHash).Return(nil, validator.ErrTxnHashNotFound),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.submitted)
+		require.Equal(t, 0, tracer.confirmed)
+		require.Equal(t, 0, tracer.failures)
+	})
+
+	t.Run("Transaction still in processing at the end of the window", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().
+				TransactionStatus(txHash).
+				Return(&rpc.TxnStatusResult{FinalityStatus: rpc.TxnStatusReceived}, nil),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.failures)
+	})
 }
