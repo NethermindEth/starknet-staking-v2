@@ -154,5 +154,7 @@ func TestRunBlockHeaderWatcherResubscriptions(t *testing.T) {
 		require.Equal(t, []time.Duration{5 * time.Second}, sleeps())
 		out := buf.String()
 		require.Equal(t, 1, strings.Count(out, "epoch started"), out)
+		require.Contains(t, out, `cannot connect to ws provider	{"wsProviderURL": "`+wsURL+`"`)
+		require.Contains(t, out, "websocket: bad handshake")
 	})
 }
