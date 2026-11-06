@@ -31,6 +31,8 @@ type Validator struct {
 	wsProvider string
 }
 
+// Creates the validator. Errors that may go away when retrying later, such as an unreachable
+// RPC provider, are marked with `ErrTransient`.
 func New(
 	ctx context.Context,
 	conf *config.Config,
@@ -58,7 +60,9 @@ func New(
 			braavos,
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to connect to external signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to connect to external signer: %w", err),
+			)
 		}
 		signer = &externalSigner
 		logger.Info(
@@ -75,7 +79,9 @@ func New(
 			braavos,
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to initialise internal signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to initialise internal signer: %w", err),
+			)
 		}
 		signer = &internalSigner
 		logger.Info("using internal signer")
@@ -90,8 +96,8 @@ func New(
 	if conf.Reward.IsSet() {
 		epochInfo, err := signerP.FetchEpochInfo(signer)
 		if err != nil {
-			return Validator{}, fmt.Errorf(
-				"failed to fetch staking address from epoch info: %w", err,
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to fetch staking address from epoch info: %w", err),
 			)
 		}
 
@@ -106,7 +112,9 @@ func New(
 			conf.Reward.IsExternal(),
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to initialise reward signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to initialise reward signer: %w", err),
+			)
 		}
 
 		logger.Info(

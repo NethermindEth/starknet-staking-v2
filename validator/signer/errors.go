@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -10,7 +9,10 @@ import (
 )
 
 func entrypointInternalError(entrypointName string, err error) error {
-	return errors.New("Error when calling entrypoint `" + entrypointName + "`: " + err.Error())
+	// Wrapping keeps the RPC error inspectable, so callers can tell a node outage from a
+	// contract error
+	//nolint:staticcheck // ST1005: the existing message text is kept unchanged
+	return fmt.Errorf("Error when calling entrypoint `%s`: %w", entrypointName, err)
 }
 
 func entrypointResponseError(entrypointName string, result []*felt.Felt) error {
