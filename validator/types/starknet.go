@@ -10,8 +10,8 @@ import (
 )
 
 // Matches a 0x-prefixed hexadecimal number of at most 64 digits, the format required for
-// private keys. Without it, signs, decimal, octal and binary numbers and underscores would
-// be accepted and silently turned into a different value
+// addresses and private keys. Without it, signs, decimal, octal and binary numbers and
+// underscores would be accepted and silently turned into a different value
 var hexFeltRegexp = regexp.MustCompile(`^0[xX][0-9a-fA-F]{1,64}$`)
 
 const hexBase = 16
@@ -22,6 +22,9 @@ var starkCurveOrder, _ = new(big.Int).SetString(
 )
 
 var (
+	errNotHexFelt = errors.New(
+		"it must be a 0x-prefixed hexadecimal number of at most 64 digits",
+	)
 	// The key is never part of an error, so these messages tell how to look for the mistake
 	errPrivateKeyNotHex = errors.New(
 		"it must be a 0x-prefixed hexadecimal number of at most 64 digits " +
@@ -39,6 +42,10 @@ func (a *Address) Felt() *felt.Felt {
 }
 
 func AddressFromString(addrStr string) (Address, error) {
+	if !hexFeltRegexp.MatchString(addrStr) {
+		return Address{},
+			fmt.Errorf("cannot turn string `%s` into an address: %w", addrStr, errNotHexFelt)
+	}
 	adr, err := felt.NewFromString[felt.Felt](addrStr)
 	if err != nil {
 		return Address{}, fmt.Errorf("cannot turn string `%s` into an address: %w", addrStr, err)
