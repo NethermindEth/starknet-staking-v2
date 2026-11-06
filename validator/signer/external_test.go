@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -424,6 +425,79 @@ func TestHashAndSignTx(t *testing.T) {
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
 	})
+
+	const twoFeltsErrorMsg = "expected a signature of 2 felts"
+	invalidResponses := []struct {
+		name     string
+		body     string
+		errorMsg string
+	}{
+		{
+			name:     "empty object",
+			body:     `{}`,
+			errorMsg: `invalid external signer response "{}": expected a signature of 2 felts`,
+		},
+		{
+			name: "one felt",
+			body: `{"signature": ["0x1"]}`,
+			errorMsg: `invalid external signer response "{\"signature\": [\"0x1\"]}": ` +
+				"expected a signature of 2 felts",
+		},
+		{
+			name:     "three felts",
+			body:     `{"signature": ["0x1", "0x2", "0x3"]}`,
+			errorMsg: twoFeltsErrorMsg,
+		},
+		{
+			name:     "null felt",
+			body:     `{"signature": ["0x1", null]}`,
+			errorMsg: twoFeltsErrorMsg,
+		},
+		{
+			name:     "null signature",
+			body:     `{"signature": null}`,
+			errorMsg: twoFeltsErrorMsg,
+		},
+		{
+			name:     "not a felt",
+			body:     `{"signature": ["0x1", "not a felt"]}`,
+			errorMsg: "invalid external signer response",
+		},
+		{
+			name: "not JSON",
+			body: `hello`,
+			errorMsg: `invalid external signer response "hello": ` +
+				"invalid character 'h' looking for beginning of value",
+		},
+		{
+			name:     "long body is cut",
+			body:     strings.Repeat("x", 300),
+			errorMsg: `invalid external signer response "` + strings.Repeat("x", 200) + `"...: `,
+		},
+	}
+	for _, tc := range invalidResponses {
+		t.Run("Error: invalid response, "+tc.name, func(t *testing.T) {
+			mockServer := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					_, err := w.Write([]byte(tc.body))
+					require.NoError(t, err)
+				}))
+			defer mockServer.Close()
+
+			invokeTxnV3 := snUtils.BuildInvokeTxn(
+				felt.NewUnsafeFromString[felt.Felt]("0x123"),
+				new(felt.Felt).SetUint64(1),
+				[]*felt.Felt{},
+				&rpc.ResourceBoundsMapping{},
+				nil,
+			)
+			res, err := signer.HashAndSignTx(
+				t.Context(), invokeTxnV3, new(felt.Felt).SetUint64(1), mockServer.URL,
+			)
+			require.Zero(t, res)
+			require.ErrorContains(t, err, tc.errorMsg)
+		})
+	}
 
 	t.Run("Error: context done while the signer doesn't answer", func(t *testing.T) {
 		signerURL := newHungSignerServer(t)

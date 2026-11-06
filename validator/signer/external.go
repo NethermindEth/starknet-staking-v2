@@ -9,6 +9,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +30,7 @@ var _ Signer = (*ExternalSigner)(nil)
 const (
 	externalSignerTimeout     = 15 * time.Second
 	externalSignerDialTimeout = 5 * time.Second
+	maxSignResponseExcerpt    = 200
 )
 
 var externalSignerClient = newExternalSignerClient(externalSignerTimeout)
@@ -287,13 +290,37 @@ func HashAndSignTx(
 			fmt.Errorf("server error %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	var signResp signer.Response
-	err = json.Unmarshal(body, &signResp)
-	if err != nil {
-		return signer.Response{}, err
+	return decodeSignResponse(body)
+}
+
+func decodeSignResponse(body []byte) (signer.Response, error) {
+	var signResp struct {
+		Signature []*felt.Felt `json:"signature"`
+	}
+	if err := json.Unmarshal(body, &signResp); err != nil {
+		return signer.Response{}, fmt.Errorf(
+			"invalid external signer response %s: %w", signResponseExcerpt(body), err,
+		)
 	}
 
-	return signResp, nil
+	if len(signResp.Signature) != 2 || slices.Contains(signResp.Signature, nil) {
+		return signer.Response{}, fmt.Errorf(
+			"invalid external signer response %s: expected a signature of 2 felts",
+			signResponseExcerpt(body),
+		)
+	}
+
+	return signer.Response{
+		Signature: [2]*felt.Felt{signResp.Signature[0], signResp.Signature[1]},
+	}, nil
+}
+
+func signResponseExcerpt(body []byte) string {
+	if len(body) > maxSignResponseExcerpt {
+		return strconv.Quote(string(body[:maxSignResponseExcerpt])) + "..."
+	}
+
+	return strconv.Quote(string(body))
 }
 
 func makeDefaultResources() rpc.ResourceBoundsMapping {

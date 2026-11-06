@@ -248,6 +248,27 @@ func TestNewRewardSigner(t *testing.T) {
 		require.True(t, rs == nil)
 	})
 
+	t.Run("Error: external signer answers a short signature", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, err := w.Write([]byte(`{"signature": ["0x1"]}`))
+			require.NoError(t, err)
+		}))
+		t.Cleanup(server.Close)
+
+		rewardConf := config.Reward{
+			ExternalURL:    server.URL,
+			Address:        testRewardAddress,
+			ClaimThreshold: claimThreshold,
+		}
+		provider := newProvider(t, stakerInfo)
+		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs, err := newRewardSigner(t, provider, &rewardConf)
+		require.ErrorContains(t, err, "external reward signer check")
+		require.ErrorContains(t, err, "expected a signature of 2 felts")
+		require.True(t, rs == nil)
+	})
+
 	t.Run("Error: external signer never answers", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			rewardConf := config.Reward{
