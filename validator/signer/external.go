@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -316,11 +317,19 @@ func decodeSignResponse(body []byte) (signer.Response, error) {
 
 func signResponseExcerpt(body []byte) string {
 	excerpt := strings.Join(strings.Fields(string(body)), " ")
-	if len(excerpt) > maxSignResponseExcerpt {
-		return excerpt[:maxSignResponseExcerpt] + "..."
+	if len(excerpt) <= maxSignResponseExcerpt {
+		return excerpt
 	}
 
-	return excerpt
+	cut := excerpt[:maxSignResponseExcerpt]
+	for range utf8.UTFMax - 1 {
+		if r, size := utf8.DecodeLastRuneInString(cut); r != utf8.RuneError || size != 1 {
+			break
+		}
+		cut = cut[:len(cut)-1]
+	}
+
+	return cut + "..."
 }
 
 func makeDefaultResources() rpc.ResourceBoundsMapping {
