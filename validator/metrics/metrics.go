@@ -230,7 +230,7 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
-			m.logger.Errorf("Failed to write health check response: %v", err)
+			m.logger.Error("failed to write health check response", zap.Error(err))
 		}
 	})
 	//nolint:exhaustruct_v5 // Using default values
