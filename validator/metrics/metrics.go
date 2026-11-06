@@ -15,7 +15,10 @@ import (
 var _ Tracer = (*Metrics)(nil)
 
 // Metrics represents the metrics server for the validator
-const networkLabel = "network"
+const (
+	networkLabel = "network"
+	accountLabel = "account"
+)
 
 type Metrics struct {
 	server                          *http.Server
@@ -33,6 +36,7 @@ type Metrics struct {
 	attestationConfirmedCount       *prometheus.CounterVec
 	signerBalance                   *prometheus.GaugeVec
 	signerBalanceBelowThreshold     *prometheus.GaugeVec
+	balanceCheckFailureCount        *prometheus.CounterVec
 	rewardBalance                   *prometheus.GaugeVec
 	rewardBalanceBelowThreshold     *prometheus.GaugeVec
 	rewardUnclaimed                 *prometheus.GaugeVec
@@ -131,6 +135,13 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			},
 			[]string{networkLabel},
 		),
+		balanceCheckFailureCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_balance_check_failure_count",
+				Help: "The total number of balance checks that could not read the account balance since startup, by account (signer or reward)",
+			},
+			[]string{networkLabel, accountLabel},
+		),
 		rewardBalance: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_reward_balance",
@@ -202,6 +213,7 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		m.attestationConfirmedCount,
 		m.signerBalance,
 		m.signerBalanceBelowThreshold,
+		m.balanceCheckFailureCount,
 		m.rewardBalance,
 		m.rewardBalanceBelowThreshold,
 		m.rewardUnclaimed,
@@ -306,6 +318,11 @@ func (m *Metrics) RecordSignerBalanceAboveThreshold() {
 func (m *Metrics) RecordSignerBalanceBelowThreshold() {
 	m.logger.Debug("RecordSignerBalanceBelowThreshold")
 	m.signerBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
+}
+
+func (m *Metrics) RecordBalanceCheckFailure(account string) {
+	m.logger.Debug("RecordBalanceCheckFailure", zap.String("account", account))
+	m.balanceCheckFailureCount.WithLabelValues(m.network, account).Inc()
 }
 
 // UpdateRewardBalance sets the reward account balance

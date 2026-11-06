@@ -13,6 +13,7 @@ type Tracer interface {
 	RecordAttestationConfirmed()
 	RecordSignerBalanceAboveThreshold()
 	RecordSignerBalanceBelowThreshold()
+	RecordBalanceCheckFailure(account string)
 	UpdateRewardBalance(balance float64)
 	RecordRewardBalanceAboveThreshold()
 	RecordRewardBalanceBelowThreshold()

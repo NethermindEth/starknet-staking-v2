@@ -25,6 +25,11 @@ type balanceTracer struct {
 	signerBelow   *bool
 	rewardBalance *float64
 	rewardBelow   *bool
+	failures      []string
+}
+
+func (b *balanceTracer) RecordBalanceCheckFailure(account string) {
+	b.failures = append(b.failures, account)
 }
 
 func (b *balanceTracer) UpdateSignerBalance(balance float64) { b.signerBalance = &balance }
@@ -167,6 +172,7 @@ func TestCheckBalance(t *testing.T) {
 		require.Nil(t, tracer.signerBelow)
 		require.Equal(t, 150.0, *tracer.rewardBalance)
 		require.False(t, *tracer.rewardBelow)
+		require.Equal(t, []string{"signer"}, tracer.failures)
 	})
 
 	t.Run("Signer balance is recorded even if reward balance fetch fails", func(t *testing.T) {
@@ -186,5 +192,6 @@ func TestCheckBalance(t *testing.T) {
 		require.False(t, *tracer.signerBelow)
 		require.Nil(t, tracer.rewardBalance)
 		require.Nil(t, tracer.rewardBelow)
+		require.Equal(t, []string{"reward"}, tracer.failures)
 	})
 }
