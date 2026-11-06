@@ -435,12 +435,12 @@ func TestHashAndSignTx(t *testing.T) {
 		{
 			name:     "empty object",
 			body:     `{}`,
-			errorMsg: `invalid external signer response "{}": expected a signature of 2 felts`,
+			errorMsg: "invalid external signer response `{}`: expected a signature of 2 felts",
 		},
 		{
 			name: "one felt",
 			body: `{"signature": ["0x1"]}`,
-			errorMsg: `invalid external signer response "{\"signature\": [\"0x1\"]}": ` +
+			errorMsg: "invalid external signer response `{\"signature\": [\"0x1\"]}`: " +
 				"expected a signature of 2 felts",
 		},
 		{
@@ -466,13 +466,18 @@ func TestHashAndSignTx(t *testing.T) {
 		{
 			name: "not JSON",
 			body: `hello`,
-			errorMsg: `invalid external signer response "hello": ` +
+			errorMsg: "invalid external signer response `hello`: " +
 				"invalid character 'h' looking for beginning of value",
 		},
 		{
 			name:     "long body is cut",
 			body:     strings.Repeat("x", 300),
-			errorMsg: `invalid external signer response "` + strings.Repeat("x", 200) + `"...: `,
+			errorMsg: "invalid external signer response `" + strings.Repeat("x", 200) + "...`: ",
+		},
+		{
+			name:     "whitespace is collapsed",
+			body:     "{\n  \"signature\": []\n}\n",
+			errorMsg: "invalid external signer response `{ \"signature\": [] }`: ",
 		},
 	}
 	for _, tc := range invalidResponses {

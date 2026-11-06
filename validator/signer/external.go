@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -299,13 +298,13 @@ func decodeSignResponse(body []byte) (signer.Response, error) {
 	}
 	if err := json.Unmarshal(body, &signResp); err != nil {
 		return signer.Response{}, fmt.Errorf(
-			"invalid external signer response %s: %w", signResponseExcerpt(body), err,
+			"invalid external signer response `%s`: %w", signResponseExcerpt(body), err,
 		)
 	}
 
 	if len(signResp.Signature) != 2 || slices.Contains(signResp.Signature, nil) {
 		return signer.Response{}, fmt.Errorf(
-			"invalid external signer response %s: expected a signature of 2 felts",
+			"invalid external signer response `%s`: expected a signature of 2 felts",
 			signResponseExcerpt(body),
 		)
 	}
@@ -316,11 +315,12 @@ func decodeSignResponse(body []byte) (signer.Response, error) {
 }
 
 func signResponseExcerpt(body []byte) string {
-	if len(body) > maxSignResponseExcerpt {
-		return strconv.Quote(string(body[:maxSignResponseExcerpt])) + "..."
+	excerpt := strings.Join(strings.Fields(string(body)), " ")
+	if len(excerpt) > maxSignResponseExcerpt {
+		return excerpt[:maxSignResponseExcerpt] + "..."
 	}
 
-	return strconv.Quote(string(body))
+	return excerpt
 }
 
 func makeDefaultResources() rpc.ResourceBoundsMapping {
