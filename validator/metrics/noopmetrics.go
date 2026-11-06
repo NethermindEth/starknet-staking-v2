@@ -26,6 +26,8 @@ func (m *NoOpMetrics) RecordSignerBalanceAboveThreshold() {}
 
 func (m *NoOpMetrics) RecordSignerBalanceBelowThreshold() {}
 
+func (m *NoOpMetrics) RecordBalanceCheckFailure(account string) {}
+
 func (m *NoOpMetrics) UpdateRewardBalance(balance float64) {}
 
 func (m *NoOpMetrics) RecordRewardBalanceAboveThreshold() {}

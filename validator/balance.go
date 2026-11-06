@@ -35,6 +35,8 @@ func CheckBalance[S signerP.Signer](
 		} else {
 			tracer.RecordSignerBalanceAboveThreshold()
 		}
+	} else {
+		tracer.RecordBalanceCheckFailure(signerAccount)
 	}
 
 	// If the reward address is the signer one, its balance was already checked
@@ -49,6 +51,8 @@ func CheckBalance[S signerP.Signer](
 		} else {
 			tracer.RecordRewardBalanceAboveThreshold()
 		}
+	} else {
+		tracer.RecordBalanceCheckFailure(rewardAccount)
 	}
 }
 
