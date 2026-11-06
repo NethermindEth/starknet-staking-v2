@@ -121,7 +121,8 @@ type AttestTracker struct {
 	Hash        felt.Felt
 	Status      AttestStatus
 
-	unknownPolls int
+	unknownPolls   int
+	unresolvedHash felt.Felt
 }
 
 func NewAttestTracker() AttestTracker {
@@ -145,8 +146,17 @@ func (a *AttestTracker) UpdateStatus(
 	a.setStatus(status)
 }
 
-func (a *AttestTracker) statusUnknown() bool {
-	return a.Status == Ongoing && a.unknownPolls > 0
+func (a *AttestTracker) unresolvedTransaction() (*felt.Felt, bool) {
+	switch {
+	case a.Status == Successful:
+		return nil, false
+	case a.Status == Ongoing && a.unknownPolls > 0:
+		return &a.Hash, true
+	case !a.unresolvedHash.IsZero():
+		return &a.unresolvedHash, true
+	default:
+		return nil, false
+	}
 }
 
 func (a *AttestTracker) setStatus(status AttestStatus) {
@@ -254,6 +264,7 @@ func (d *EventDispatcher[S]) Dispatch(
 						zap.String("transactionHash", d.CurrentAttest.Hash.String()),
 						zap.Int("blocksUnknown", d.CurrentAttest.unknownPolls),
 					)
+					d.CurrentAttest.unresolvedHash = d.CurrentAttest.Hash
 					d.CurrentAttest.setStatus(Failed)
 				}
 				if d.CurrentAttest.Status != Failed {
@@ -329,6 +340,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			if d.CurrentAttest.Status == Ongoing {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
+			unresolvedHash, unresolved := d.CurrentAttest.unresolvedTransaction()
 			switch {
 			case d.CurrentAttest.Status == Successful:
 				logger.Info(
@@ -336,12 +348,12 @@ func (d *EventDispatcher[S]) Dispatch(
 					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
 				tracer.RecordAttestationConfirmed()
-			case d.CurrentAttest.statusUnknown():
+			case unresolved:
 				logger.Warn(
 					"end of window reached without knowing if the attestation succeeded. "+
 						"Not counted as a failure, check the transaction on a block explorer",
 					zap.String("targetBlockHash", targetBlockHash.String()),
-					zap.String("transactionHash", d.CurrentAttest.Hash.String()),
+					zap.String("transactionHash", unresolvedHash.String()),
 				)
 			default:
 				logger.Warn(

@@ -974,6 +974,32 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 		require.Equal(t, 0, tracer.failures)
 	})
 
+	t.Run("Node down from the send to the end of the window", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().TransactionStatus(txHash).Return(nil, nodeDown).Times(5),
+			mockSigner.EXPECT().
+				BuildAttestTransaction(&blockHash).
+				Return(rpc.BroadcastInvokeTxnV3{}, nodeDown).
+				Times(4),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		for range 9 {
+			sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		}
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.submitted)
+		require.Equal(t, 0, tracer.confirmed)
+		require.Equal(t, 0, tracer.failures)
+	})
+
 	t.Run("Transaction still in processing at the end of the window", func(t *testing.T) {
 		mockSigner, balanceChecked := newAttestSigner(t)
 		sent := expectSend(mockSigner)
