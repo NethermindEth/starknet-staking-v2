@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -245,6 +246,77 @@ func TestNewCommand(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestMetricsFlags(t *testing.T) {
+	// Returns the flags of a valid configuration for the given test node, with `extraFlags`
+	commandFlags := func(httpURL, wsURL string, extraFlags ...string) []string {
+		return append([]string{
+			"--provider-http", httpURL,
+			"--provider-ws", wsURL,
+			"--signer-op-address", "0x456",
+			"--signer-url", "http://localhost:5555",
+		}, extraFlags...)
+	}
+
+	t.Run("Invalid metrics port is rejected at startup", func(t *testing.T) {
+		for _, port := range []string{"abc", "99999", "0", "-1", ""} {
+			t.Run(port, func(t *testing.T) {
+				command := newTestCommandWithArgs(
+					t,
+					commandFlags(testProviderHTTP, "ws://localhost:1235",
+						"--metrics", "--metrics-port", port)...,
+				)
+				err := command.ExecuteContext(t.Context())
+				require.ErrorContains(t, err, fmt.Sprintf("invalid --metrics-port %q", port))
+			})
+		}
+	})
+
+	t.Run("Metrics port already in use is rejected at startup", func(t *testing.T) {
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+		_, port, err := net.SplitHostPort(listener.Addr().String())
+		require.NoError(t, err)
+
+		command := newTestCommandWithArgs(
+			t,
+			commandFlags(testProviderHTTP, "ws://localhost:1235",
+				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...,
+		)
+		err = command.ExecuteContext(t.Context())
+		require.ErrorContains(t, err, "cannot listen on 127.0.0.1:"+port)
+		require.ErrorContains(t, err, "address already in use")
+	})
+
+	t.Run("Metrics port is not checked without --metrics", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		command := newTestCommandWithArgs(
+			t, commandFlags(httpURL, wsURL, "--metrics-port", "abc")...,
+		)
+		require.NoError(t, command.ExecuteContext(ctx))
+	})
+
+	t.Run("Metrics server on a free port starts", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		_, port, err := net.SplitHostPort(listener.Addr().String())
+		require.NoError(t, err)
+		require.NoError(t, listener.Close())
+
+		command := newTestCommandWithArgs(
+			t,
+			commandFlags(httpURL, wsURL,
+				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...,
+		)
+		require.NoError(t, command.ExecuteContext(ctx))
 	})
 }
 

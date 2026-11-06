@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -77,6 +81,12 @@ func NewCommand() cobra.Command {
 		}
 		maxRetries = parsedRetries
 
+		if metricsF {
+			if err = checkMetricsAddress(cmd.Context(), metricsHostF, metricsPortF); err != nil {
+				return fmt.Errorf("metrics: %w", err)
+			}
+		}
+
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
@@ -114,28 +124,18 @@ func NewCommand() cobra.Command {
 		}
 
 		var tracer metrics.Tracer = metrics.NewNoOpMetrics()
+		// Receives if the metrics server fails, which stops the validator. It stays nil,
+		// and so never receives, while metrics are disabled
+		var metricsErrCh <-chan error
 		if metricsF {
-			// Create metrics server
-			address := fmt.Sprintf("%s:%s", metricsHostF, metricsPortF)
-			metrics := metrics.NewMetrics(address, v.ChainID(cmd.Context()), logger)
-			tracer = metrics
-
-			// Start metrics server in a goroutine
-			go func() {
-				if err := metrics.Start(); err != nil && err.Error() != "http: Server closed" {
-					logger.Error("failed to start metrics server", zap.Error(err))
-				}
-			}()
+			address := net.JoinHostPort(metricsHostF, metricsPortF)
+			metricsServer, errCh, stopMetrics := startMetricsServer(
+				cmd.Context(), address, v.ChainID(cmd.Context()), logger,
+			)
+			tracer = metricsServer
+			metricsErrCh = errCh
 			// Graceful shutdown at the end
-			defer func() {
-				shutdownCtx, shutdownCancel := context.WithTimeout(
-					cmd.Context(), 5*time.Second, //nolint:mnd // Timeout time
-				)
-				defer shutdownCancel()
-				if err := metrics.Stop(shutdownCtx); err != nil {
-					logger.Error("failed to stop metrics server", zap.Error(err))
-				}
-			}()
+			defer stopMetrics()
 		}
 
 		signalCh := make(chan os.Signal, 1)
@@ -165,6 +165,10 @@ func NewCommand() cobra.Command {
 			return nil
 		case err := <-errCh:
 			logger.Error("validator stopped with error", zap.Error(err))
+
+			return err
+		case err := <-metricsErrCh:
+			logger.Error("metrics server failed, stopping the validator", zap.Error(err))
 
 			return err
 		}
@@ -297,6 +301,51 @@ func NewCommand() cobra.Command {
 	)
 
 	return cmd
+}
+
+// Verifies the metrics server can listen on the given host and port, so that a typo in
+// the port or a port already in use stops the validator at startup
+func checkMetricsAddress(ctx context.Context, host, port string) error {
+	portNumber, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNumber == 0 {
+		return fmt.Errorf("invalid --metrics-port %q, it must be a number from 1 to 65535", port)
+	}
+
+	address := net.JoinHostPort(host, port)
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(ctx, "tcp", address)
+	if err != nil {
+		return fmt.Errorf("cannot listen on %s (--metrics-host, --metrics-port): %w", address, err)
+	}
+
+	return listener.Close()
+}
+
+// Starts the metrics server in a goroutine. The returned channel receives the error that
+// stopped the server, if any, and the returned function shuts the server down
+func startMetricsServer(
+	ctx context.Context, address, chainID string, logger *log.ZapLogger,
+) (server *metrics.Metrics, failed <-chan error, stop func()) {
+	server = metrics.NewMetrics(address, chainID, logger)
+
+	errCh := make(chan error, 1)
+	go func() {
+		if err := server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+
+	stop = func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(
+			ctx, 5*time.Second, //nolint:mnd // Timeout time
+		)
+		defer shutdownCancel()
+		if err := server.Stop(shutdownCtx); err != nil {
+			logger.Error("failed to stop metrics server", zap.Error(err))
+		}
+	}
+
+	return server, errCh, stop
 }
 
 // Completes the config, which already holds the values from flags, with the
