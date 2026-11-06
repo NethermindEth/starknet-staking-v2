@@ -59,6 +59,25 @@ func newWSNode(
 	return "ws" + strings.TrimPrefix(server.URL, "http"), subscriptions
 }
 
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.String()
+}
+
 func sendHeader(conn *websocket.Conn, subscriptionID int32, blockNumber uint64) {
 	notification := fmt.Sprintf(
 		`{"jsonrpc": "2.0", "method": "starknet_subscriptionNewHeads", "params": `+
@@ -141,9 +160,9 @@ func TestRunBlockHeaderWatcherResubscriptions(t *testing.T) {
 			sendHeader(conn, n, testEpochStart+uint64(n))
 			time.Sleep(50 * time.Millisecond)
 		})
-		var buf bytes.Buffer
+		buf := new(syncBuffer)
 		logger, err := log.NewZapLogger(
-			log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+			log.NewLevel(log.INFO), log.WithWriter(buf), log.WithColour(false),
 		)
 		require.NoError(t, err)
 
