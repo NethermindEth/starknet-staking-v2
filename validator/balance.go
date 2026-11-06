@@ -82,13 +82,7 @@ func fetchStrkBalance[S signerP.Signer](
 		zap.String("FRI", balanceFri.Text(10)), //nolint:mnd // Decimal base
 	)
 
-	if math.IsInf(balance, 1) {
-		logger.Debug(
-			"STRK balance value cannot be represented as a float64, using +Inf",
-			zap.String("account", account),
-			zap.Float64("balance", balance),
-		)
-	} else if math.IsInf(balance, -1) || math.IsNaN(balance) {
+	if math.IsInf(balance, -1) || math.IsNaN(balance) {
 		logger.Error(
 			"Unexpected balance conversion value from FRI to STRK",
 			zap.String("account", account),
