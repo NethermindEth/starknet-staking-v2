@@ -427,7 +427,7 @@ func startMetricsServer(
 		)
 		defer shutdownCancel()
 		if err := server.Stop(shutdownCtx); err != nil {
-			logger.Error("failed to stop metrics server", zap.Error(err))
+			logger.Error("failed to stop metrics server", errorField(err))
 		}
 	}
 
