@@ -283,10 +283,24 @@ func TestNewRewardSigner(t *testing.T) {
 		provider := newProvider(t, stakerInfo)
 		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
 
-		rs, err := newRewardSigner(t, provider, &rewardConf)
-		require.ErrorContains(t, err, "external reward signer check")
-		require.ErrorContains(t, err, "external signer did not answer within")
-		require.True(t, rs == nil)
+		type result struct {
+			rs  RewardSigner
+			err error
+		}
+		done := make(chan result, 1)
+		go func() {
+			rs, err := newRewardSigner(t, provider, &rewardConf)
+			done <- result{rs: rs, err: err}
+		}()
+
+		select {
+		case res := <-done:
+			require.ErrorContains(t, res.err, "external reward signer check")
+			require.ErrorContains(t, res.err, "external signer did not answer within")
+			require.True(t, res.rs == nil)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "NewRewardSigner did not return while the signer doesn't answer")
+		}
 	})
 
 	t.Run("Error: invalid private key", func(t *testing.T) {
