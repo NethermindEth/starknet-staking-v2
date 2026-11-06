@@ -213,7 +213,9 @@ func TestNewRewardSigner(t *testing.T) {
 		}
 
 		rs, err := newRewardSigner(t, newProvider(t, stakerInfo), &rewardConf)
-		require.ErrorContains(t, err, "is not the real reward address nor the staker address")
+		require.EqualError(t, err, "reward address check: the configured reward account 0x999 "+
+			"is neither the staker address "+stakerAddress.String()+
+			" nor its reward address "+rewardAddress.String())
 		require.Nil(t, rs)
 	})
 
