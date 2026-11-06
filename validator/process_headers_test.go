@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -34,20 +35,35 @@ const (
 func newEpochSigner(t *testing.T, epochOffsets ...uint64) *mocks.MockSigner {
 	t.Helper()
 
+	return newFailingEpochSigner(t, 0, epochOffsets...)
+}
+
+// Same as `newEpochSigner`, the first `failures` epoch info calls failing
+func newFailingEpochSigner(
+	t *testing.T, failures int, epochOffsets ...uint64,
+) *mocks.MockSigner {
+	t.Helper()
+
 	var epochCalls sync.Mutex
-	epochOffset := func() uint64 {
+	// Returns the epoch offset to answer, false if the call must fail
+	epochOffset := func() (uint64, bool) {
 		epochCalls.Lock()
 		defer epochCalls.Unlock()
 
+		if failures > 0 {
+			failures--
+
+			return 0, false
+		}
 		if len(epochOffsets) == 0 {
-			return 0
+			return 0, true
 		}
 		offset := epochOffsets[0]
 		if len(epochOffsets) > 1 {
 			epochOffsets = epochOffsets[1:]
 		}
 
-		return offset
+		return offset, true
 	}
 
 	operationalAddress, err := types.AddressFromString("0x123")
@@ -68,7 +84,10 @@ func newEpochSigner(t *testing.T, epochOffsets ...uint64) *mocks.MockSigner {
 				return []*felt.Felt{new(felt.Felt).SetUint64(testWindowLen)}, nil
 			}
 
-			offset := epochOffset()
+			offset, ok := epochOffset()
+			if !ok {
+				return nil, errors.New("503 Service Unavailable: injected outage")
+			}
 
 			return []*felt.Felt{
 				new(felt.Felt).SetUint64(0x456), // staker address
@@ -196,4 +215,65 @@ func TestProcessBlockHeadersLogsBlockAfterEpochSwitch(t *testing.T) {
 	newEpochLine := fmt.Sprintf(`"epochID": %d,`, testEpochID+1)
 	require.Contains(t, out, newEpochLine)
 	require.Less(t, strings.Index(out, newEpochLine), strings.Index(out, blockLine))
+}
+
+// Counts the epoch info fetch failures, ignoring the rest
+type epochFetchTracer struct {
+	metrics.NoOpMetrics
+
+	fetchFailures int
+}
+
+func (e *epochFetchTracer) RecordEpochInfoFetchFailure() { e.fetchFailures++ }
+
+// While the epoch info cannot be fetched no block header is processed, so the failures must be
+// visible to the operator: WARN logs and a metric (QA report 05, finding BM-2)
+func TestFetchEpochAndAttestInfoWithRetryReportsFailures(t *testing.T) {
+	sleep := validator.Sleep
+	validator.Sleep = func(time.Duration) {}
+	t.Cleanup(func() { validator.Sleep = sleep })
+
+	countLevel := func(out, level string) int {
+		return strings.Count(out, "\t"+level+"\t")
+	}
+
+	t.Run("Outage that ends", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger, err := log.NewZapLogger(
+			log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+		)
+		require.NoError(t, err)
+		tracer := new(epochFetchTracer)
+
+		epochInfo, _, err := validator.FetchEpochAndAttestInfoWithRetry(
+			newFailingEpochSigner(t, 21), logger, nil,
+			func(*types.EpochInfo, *types.EpochInfo) bool { return true },
+			types.NewRetries(), "100", tracer,
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(testEpochID), epochInfo.EpochID)
+		require.Equal(t, 21, tracer.fetchFailures)
+		out := buf.String()
+		// The 1st, 11th and 21st failures
+		require.Equal(t, 3, countLevel(out, "WARN"), out)
+		require.Contains(t, out, "injected outage")
+		require.Contains(t, out, `"retriesRemaining": "infinite"`)
+		require.Contains(t, out, "Resuming block processing")
+	})
+
+	t.Run("Outage outlasting the retries", func(t *testing.T) {
+		tracer := new(epochFetchTracer)
+		retries, err := types.RetriesFromString("2")
+		require.NoError(t, err)
+
+		_, _, err = validator.FetchEpochAndAttestInfoWithRetry(
+			newFailingEpochSigner(t, 3), log.NewNopZapLogger(), nil,
+			func(*types.EpochInfo, *types.EpochInfo) bool { return true },
+			retries, "100", tracer,
+		)
+
+		require.ErrorContains(t, err, "failed to fetch epoch info after 2 retries")
+		require.Equal(t, 3, tracer.fetchFailures)
+	})
 }

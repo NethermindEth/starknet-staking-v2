@@ -254,7 +254,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 ) error {
 	noEpochSwitch := func(*types.EpochInfo, *types.EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(
-		account, logger, nil, noEpochSwitch, maxRetries, "at app startup",
+		account, logger, nil, noEpochSwitch, maxRetries, "at app startup", tracer,
 	)
 	if err != nil {
 		return err
@@ -287,6 +287,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 				CorrectEpochSwitch,
 				maxRetries,
 				strconv.FormatUint(prevEpochInfo.EpochID+1, 10),
+				tracer,
 			)
 			if err != nil {
 				return err
@@ -351,6 +352,13 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 	}
 }
 
+// Failed epoch info fetches are logged at WARN on the first failure and then every this many
+// failures, at DEBUG otherwise
+const epochFetchWarnEvery = 10
+
+// Fetches the epoch and attestation info, retrying every second on errors and on an unexpected
+// epoch switch. Block headers are not processed meanwhile, so every failed attempt is recorded
+// in the metrics and regularly logged at WARN.
 func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	signer Signer,
 	logger log.Logger,
@@ -358,28 +366,21 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	isEpochSwitchCorrect func(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool,
 	maxRetries types.Retries,
 	newEpochID string,
+	tracer metrics.Tracer,
 ) (types.EpochInfo, types.AttestInfo, error) {
 	// storing the initial value for error reporting
 	totalRetryAmount := maxRetries.String()
+	failedAttempts := 0
 
 	newEpoch, newAttestInfo, err := signerP.FetchEpochAndAttestInfo(signer, logger)
-
-	for (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && !maxRetries.IsZero() {
-		if err != nil {
-			logger.Debug("failed to fetch epoch info",
-				zap.String("epochID", newEpochID),
-				zap.Error(err),
-			)
-		} else {
-			logger.Debug(
-				"wrong epoch switch",
-				zap.Any("fromEpoch", prevEpoch),
-				zap.Any("toEpoch", &newEpoch),
-			)
+	for err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
+		failedAttempts++
+		tracer.RecordEpochInfoFetchFailure()
+		if maxRetries.IsZero() {
+			break
 		}
-		logger.Debug(
-			"retrying to fetch epoch info",
-			zap.String("retriesRemaining", maxRetries.String()),
+		logEpochFetchRetry(
+			logger, failedAttempts, newEpochID, &maxRetries, err, prevEpoch, &newEpoch,
 		)
 
 		Sleep(time.Second)
@@ -407,8 +408,44 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 				newEpoch.String(),
 			)
 	}
+	if failedAttempts > 0 {
+		logger.Info(
+			"fetched epoch info after failed attempts. Resuming block processing",
+			zap.String("epochID", newEpochID),
+			zap.Int("failedAttempts", failedAttempts),
+		)
+	}
 
 	return newEpoch, newAttestInfo, nil
+}
+
+func logEpochFetchRetry(
+	logger log.Logger,
+	failedAttempts int,
+	newEpochID string,
+	retriesLeft *types.Retries,
+	err error,
+	prevEpoch, newEpoch *types.EpochInfo,
+) {
+	logFn := logger.Debug
+	if failedAttempts%epochFetchWarnEvery == 1 {
+		logFn = logger.Warn
+	}
+
+	fields := []zap.Field{
+		zap.String("epochID", newEpochID),
+		zap.Int("failedAttempts", failedAttempts),
+		zap.String("retriesRemaining", retriesLeft.String()),
+	}
+	if err != nil {
+		fields = append(fields, zap.Error(err))
+		logFn("failed to fetch epoch info, block headers are not processed. Retrying in 1s",
+			fields...)
+
+		return
+	}
+	fields = append(fields, zap.Any("fromEpoch", prevEpoch), zap.Any("toEpoch", newEpoch))
+	logFn("wrong epoch switch, block headers are not processed. Retrying in 1s", fields...)
 }
 
 func CorrectEpochSwitch(prevEpoch, newEpoch *types.EpochInfo) bool {
