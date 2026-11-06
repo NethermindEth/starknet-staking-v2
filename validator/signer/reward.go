@@ -173,13 +173,11 @@ func (rs *rewardSigner) checkRewardAddress(ctx context.Context) error {
 	address := rs.Address().Felt()
 	if !address.Equal(rs.stakerAddress.Felt()) && !address.Equal(&info.rewardAddress) {
 		return fmt.Errorf(
-			"the configured reward account is not the real reward address nor the staker address:\n"+
-				"configured reward account: %s\n"+
-				"real reward address: %s\n"+
-				"staker address: %s",
+			"the configured reward account %s is neither the staker address %s "+
+				"nor its reward address %s",
 			address.String(),
-			&info.rewardAddress,
 			rs.stakerAddress,
+			&info.rewardAddress,
 		)
 	}
 
