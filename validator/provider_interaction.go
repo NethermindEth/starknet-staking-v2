@@ -2,11 +2,19 @@ package validator
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"net/url"
 	"slices"
 	"strings"
+	"syscall"
+	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet.go/client"
+	"github.com/NethermindEth/starknet.go/client/rpcerr"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
 	"go.uber.org/zap"
@@ -14,38 +22,194 @@ import (
 
 var supportedSpecVersions = []string{"0.10.2", "0.10.3", "0.10.4"}
 
+// How long the node has to answer the spec version request made at startup
+const specVersionTimeout = 30 * time.Second
+
+// ErrTransient marks an error that may go away when the operation is retried later: the RPC
+// provider could not be reached, timed out, or answered with a server error (HTTP 5xx, 408, 429,
+// or a JSON-RPC internal error)
+var ErrTransient = errors.New("transient error")
+
+type transientError struct {
+	err error
+}
+
+func (e transientError) Error() string { return e.err.Error() }
+
+func (e transientError) Unwrap() error { return e.err }
+
+func (e transientError) Is(target error) bool { return target == ErrTransient }
+
+// Marks the error with `ErrTransient`, keeping its message
+func transient(err error) error {
+	return transientError{err: err}
+}
+
+// Marks the error with `ErrTransient` if it is a JSON-RPC internal error, which is also the
+// error starknet.go returns when the provider cannot be reached
+func markIfTransient(err error) error {
+	var rpcErr *rpcerr.RPCError
+	if errors.As(err, &rpcErr) && rpcErr.Code == rpcerr.InternalError {
+		return transient(err)
+	}
+
+	return err
+}
+
 // Returns a new Starknet.Go RPC Provider
 func NewProvider(
 	ctx context.Context,
 	providerURL string,
 	logger log.Logger,
 ) (*rpc.Provider, error) {
+	nodeSpecVersion, err := fetchSpecVersion(ctx, providerURL)
+	if err != nil {
+		return nil, err
+	}
+	if versionErr := checkSpecVersion(providerURL, nodeSpecVersion); versionErr != nil {
+		return nil, versionErr
+	}
+
+	// The node version was checked above, so the incompatibility starknet.go reports only
+	// means the node does not implement the exact version starknet.go targets
 	provider, err := rpc.NewProvider(ctx, providerURL)
 	if errors.Is(err, rpc.ErrIncompatibleVersion) {
-		nodeSpecVersion, specErr := provider.SpecVersion(ctx)
-		if specErr != nil {
-			return nil, errors.Errorf(
-				"cannot read spec version of node at %s: %w", providerURL, specErr,
-			)
-		}
-		if !slices.Contains(supportedSpecVersions, strings.TrimPrefix(nodeSpecVersion, "v")) {
-			return nil, errors.Errorf(
-				"node at %s implements JSON-RPC specification %s, this tool requires %s",
-				providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
-			)
-		}
 		logger.Warn(
 			"node implements a different JSON-RPC specification than Starknet.Go targets",
 			zap.String("providerUrl", providerURL),
 			zap.String("nodeSpecVersion", nodeSpecVersion),
 		)
 	} else if err != nil {
-		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err)
+		return nil, markIfTransient(
+			errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err),
+		)
 	}
 
 	logger.Info("connected to RPC", zap.String("providerURL", providerURL))
 
 	return provider, nil
+}
+
+// Requests the JSON-RPC specification version implemented by the node. It uses the plain
+// JSON-RPC client so that transport failures keep their type: starknet.go reports all of them
+// as `-32603 Internal Error`, which reads like a fault of the node.
+func fetchSpecVersion(ctx context.Context, providerURL string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, specVersionTimeout)
+	defer cancel()
+
+	rpcClient, err := client.DialOptions(ctx, providerURL)
+	if err != nil {
+		return "", providerRequestError(providerURL, err)
+	}
+	defer rpcClient.Close()
+
+	var nodeSpecVersion string
+	err = rpcClient.CallContextWithSliceArgs(ctx, &nodeSpecVersion, "starknet_specVersion")
+	if err != nil {
+		return "", providerRequestError(providerURL, err)
+	}
+
+	return nodeSpecVersion, nil
+}
+
+// Turns the error of a request to the RPC provider into a message saying what happened,
+// marked with `ErrTransient` when retrying later may succeed
+func providerRequestError(providerURL string, err error) error {
+	var httpErr client.HTTPError
+	var urlErr *url.Error
+	var rpcErr client.Error
+
+	switch {
+	case errors.As(err, &httpErr):
+		reachErr := errors.Errorf(
+			"cannot reach RPC provider at %s: HTTP %s", providerURL, httpErr.Status,
+		)
+		if httpErr.StatusCode == http.StatusNotFound {
+			reachErr = errors.Errorf("%w (check the URL path)", reachErr)
+		}
+		if isRetryableHTTPStatus(httpErr.StatusCode) {
+			return transient(reachErr)
+		}
+
+		return reachErr
+	case errors.As(err, &urlErr):
+		return transient(errors.Errorf(
+			"cannot reach RPC provider at %s: %s", providerURL, describeNetError(urlErr.Err),
+		))
+	case errors.Is(err, context.DeadlineExceeded):
+		return transient(errors.Errorf(
+			"cannot reach RPC provider at %s: no answer after %s", providerURL, specVersionTimeout,
+		))
+	case errors.As(err, &rpcErr):
+		answerErr := errors.Errorf(
+			"RPC provider at %s answered the spec version request with error %d: %s",
+			providerURL, rpcErr.ErrorCode(), rpcErr.Error(),
+		)
+		if rpcErr.ErrorCode() == rpcerr.InternalError {
+			return transient(answerErr)
+		}
+
+		return answerErr
+	default:
+		return errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err)
+	}
+}
+
+func isRetryableHTTPStatus(statusCode int) bool {
+	return statusCode >= http.StatusInternalServerError ||
+		statusCode == http.StatusRequestTimeout ||
+		statusCode == http.StatusTooManyRequests
+}
+
+// Short description of a network error, without the request details already in the message
+func describeNetError(err error) string {
+	var dnsErr *net.DNSError
+	var netErr net.Error
+
+	switch {
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "connection refused"
+	case errors.As(err, &dnsErr):
+		return fmt.Sprintf("cannot resolve host %s (%s)", dnsErr.Name, dnsErr.Err)
+	case errors.As(err, &netErr) && netErr.Timeout():
+		return "connection timed out"
+	default:
+		return err.Error()
+	}
+}
+
+// Checks the JSON-RPC specification version implemented by the node. It must be a semantic
+// version, ignoring a leading "v" and any build metadata, whose major, minor and patch parts
+// are one of the supported versions. Pre-releases are not supported.
+func checkSpecVersion(providerURL, nodeSpecVersion string) error {
+	version, err := semver.StrictNewVersion(strings.TrimPrefix(nodeSpecVersion, "v"))
+	if err == nil && version.Prerelease() == "" {
+		release := fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch())
+		if slices.Contains(supportedSpecVersions, release) {
+			return nil
+		}
+	}
+
+	return errors.Errorf(
+		"node at %s implements JSON-RPC specification %s, this tool requires %s",
+		providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
+	)
+}
+
+// Checks that the WS provider URL uses a websocket scheme. With an http(s) URL the connection
+// works but the subscription fails later with an unrelated error on every retry.
+func checkWSProviderURL(wsProviderURL string) error {
+	parsedURL, err := url.Parse(wsProviderURL)
+	if err != nil {
+		return errors.Errorf("invalid WS provider URL %q: %w", wsProviderURL, err)
+	}
+	if parsedURL.Scheme != "ws" && parsedURL.Scheme != "wss" {
+		return errors.Errorf(
+			"WS provider URL must use ws:// or wss://, got %q", wsProviderURL,
+		)
+	}
+
+	return nil
 }
 
 // Returns a Go channel where BlockHeaders are received

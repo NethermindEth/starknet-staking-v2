@@ -1,12 +1,15 @@
 package validator_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
+	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -28,6 +31,27 @@ func mockNodeWithSpecVersion(t *testing.T, specVersion string) *httptest.Server 
 	return server
 }
 
+func mockNodeWithStatus(t *testing.T, status int, body string) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, err := w.Write([]byte(body))
+			require.NoError(t, err)
+		}),
+	)
+	t.Cleanup(server.Close)
+
+	return server
+}
+
+func mockNodeWithBody(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+
+	return mockNodeWithStatus(t, http.StatusOK, body)
+}
+
 func TestNewProvider(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
@@ -45,7 +69,11 @@ func TestNewProvider(t *testing.T) {
 	})
 
 	t.Run("Supported spec version", func(t *testing.T) {
-		for _, specVersion := range []string{"0.10.3", "v0.10.3", "0.10.4"} {
+		for _, specVersion := range []string{
+			"0.10.2", "0.10.3", "v0.10.3", "0.10.4",
+			// Build metadata is ignored, QA report 01 finding P3
+			"0.10.2+juno", "0.10.3+juno", "v0.10.4+build.1",
+		} {
 			t.Run(specVersion, func(t *testing.T) {
 				server := mockNodeWithSpecVersion(t, specVersion)
 
@@ -58,7 +86,11 @@ func TestNewProvider(t *testing.T) {
 	})
 
 	t.Run("Unsupported spec version", func(t *testing.T) {
-		for _, specVersion := range []string{"0.9.0", "0.10.1", "0.10.5", "0.11.0"} {
+		for _, specVersion := range []string{
+			"0.9.0", "0.10.1", "0.10.5", "0.11.0", "1.10.3",
+			// Pre-releases and strings that are not semantic versions, QA report 01 finding P3
+			"0.10.3-rc1", "0.10.2-rc1", "0.10.03", "0.10", "V0.10.3", " 0.10.3", "garbage", "",
+		} {
 			t.Run(specVersion, func(t *testing.T) {
 				server := mockNodeWithSpecVersion(t, specVersion)
 
@@ -66,6 +98,80 @@ func TestNewProvider(t *testing.T) {
 
 				require.Nil(t, provider)
 				require.ErrorContains(t, err, "implements JSON-RPC specification "+specVersion)
+				require.ErrorContains(t, err, "this tool requires 0.10.2 or 0.10.3 or 0.10.4")
+				require.NotErrorIs(t, err, validator.ErrTransient)
+			})
+		}
+	})
+
+	// QA report 01 finding P4: transport failures are reported as such, not as a JSON-RPC
+	// `-32603 Internal Error`, and the ones that may go away are marked as transient
+	t.Run("Transport failures", func(t *testing.T) {
+		closedServer := httptest.NewServer(http.NotFoundHandler())
+		closedServer.Close()
+
+		testCases := []struct {
+			name        string
+			url         string
+			expectedErr string
+			transient   bool
+		}{
+			{
+				name:        "connection refused",
+				url:         closedServer.URL,
+				expectedErr: "cannot reach RPC provider at " + closedServer.URL + ": connection refused",
+				transient:   true,
+			},
+			{
+				name: "HTTP 404",
+				url:  mockNodeWithStatus(t, http.StatusNotFound, "404 page not found").URL,
+				expectedErr: "cannot reach RPC provider at %s: HTTP 404 Not Found " +
+					"(check the URL path)",
+			},
+			{
+				name:        "HTTP 503",
+				url:         mockNodeWithStatus(t, http.StatusServiceUnavailable, "").URL,
+				expectedErr: "cannot reach RPC provider at %s: HTTP 503 Service Unavailable",
+				transient:   true,
+			},
+			{
+				name: "JSON-RPC internal error",
+				url: mockNodeWithBody(
+					t, `{"jsonrpc": "2.0", "error": {"code": -32603, "message": "busy"}, "id": 1}`,
+				).URL,
+				expectedErr: "answered the spec version request with error -32603: busy",
+				transient:   true,
+			},
+			{
+				name: "JSON-RPC method not found",
+				url: mockNodeWithBody(
+					t, `{"jsonrpc": "2.0", "error": {"code": -32601, "message": "nope"}, "id": 1}`,
+				).URL,
+				expectedErr: "answered the spec version request with error -32601: nope",
+			},
+			{
+				name:        "unknown URL scheme",
+				url:         "ftp://localhost:6060",
+				expectedErr: "cannot create RPC provider at ftp://localhost:6060",
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				provider, err := validator.NewProvider(t.Context(), tc.url, logger)
+
+				require.Nil(t, provider)
+				expectedErr := tc.expectedErr
+				if strings.Contains(expectedErr, "%s") {
+					expectedErr = fmt.Sprintf(expectedErr, tc.url)
+				}
+				require.ErrorContains(t, err, expectedErr)
+				require.NotContains(t, err.Error(), "-32603 Internal Error")
+				if tc.transient {
+					require.ErrorIs(t, err, validator.ErrTransient)
+				} else {
+					require.NotErrorIs(t, err, validator.ErrTransient)
+				}
 			})
 		}
 	})
@@ -128,5 +234,22 @@ func TestBlockHeaderSubscription(t *testing.T) {
 		})
 	} else {
 		t.Logf("Ignoring tests that require env variables: %s", err)
+	}
+}
+
+// QA report 02 finding F-09: an http(s) URL given as the WS provider URL is rejected at startup,
+// before any connection attempt
+func TestNewRejectsNonWebsocketURL(t *testing.T) {
+	for _, wsURL := range []string{"http://localhost:6061", "https://localhost:6061", "localhost"} {
+		t.Run(wsURL, func(t *testing.T) {
+			conf := config.Config{Provider: config.Provider{HTTP: "http://localhost:1", WS: wsURL}}
+
+			_, err := validator.New(
+				t.Context(), &conf, new(config.StarknetConfig), log.NewNopZapLogger(), false,
+			)
+
+			require.ErrorContains(t, err, "WS provider URL must use ws:// or wss://")
+			require.NotErrorIs(t, err, validator.ErrTransient)
+		})
 	}
 }
