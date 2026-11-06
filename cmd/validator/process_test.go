@@ -73,6 +73,7 @@ func TestFatalErrorIsLoggedWithoutStackTrace(t *testing.T) {
 	require.Equal(t, 1, exitCode(t, cmd.Run()), output.String())
 	require.Contains(t, output.String(), "validator stopped with error")
 	require.NotContains(t, output.String(), "errorVerbose")
+	require.NotContains(t, output.String(), "\n\t")
 }
 
 func TestShutdownSignalDuringStartup(t *testing.T) {

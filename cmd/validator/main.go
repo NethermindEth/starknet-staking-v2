@@ -104,7 +104,7 @@ func NewCommand() cobra.Command {
 			return err
 		}
 
-		logger = loadedLogger
+		logger = loadedLogger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 		return nil
 	}
