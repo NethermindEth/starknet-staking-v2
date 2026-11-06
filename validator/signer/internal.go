@@ -191,6 +191,13 @@ func (s *InternalSigner) ValidationContracts() *types.ValidationContracts {
 	return &s.validationContracts
 }
 
+func (s *InternalSigner) withContext(ctx context.Context) Signer {
+	bound := *s
+	bound.ctx = ctx
+
+	return &bound
+}
+
 func (s *InternalSigner) Nonce() (*felt.Felt, error) {
 	return s.Account.Nonce(s.ctx)
 }

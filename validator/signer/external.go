@@ -211,6 +211,13 @@ func (s *ExternalSigner) ValidationContracts() *types.ValidationContracts {
 	return &s.validationContracts
 }
 
+func (s *ExternalSigner) withContext(ctx context.Context) Signer {
+	bound := *s
+	bound.ctx = ctx
+
+	return &bound
+}
+
 func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
 	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 }

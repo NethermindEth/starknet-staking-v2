@@ -459,7 +459,7 @@ func TestFetchStakerInfo(t *testing.T) {
 			1,
 			1,
 		)
-		result, err := rs.fetchStakerInfo()
+		result, err := rs.fetchStakerInfo(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, *unclaimed, result.unclaimedRewards)
 		require.Equal(
@@ -485,7 +485,7 @@ func TestFetchStakerInfo(t *testing.T) {
 			1,
 			1,
 		)
-		_, err := rs.fetchStakerInfo()
+		_, err := rs.fetchStakerInfo(t.Context())
 		require.ErrorIs(t, err, callErr)
 	})
 }
@@ -511,7 +511,7 @@ func TestBuildClaimRewardTransaction(t *testing.T) {
 		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, 1)
-		txn, err := rs.buildClaimRewardTransaction()
+		txn, err := rs.buildClaimRewardTransaction(t.Context())
 		require.NoError(t, err)
 
 		// Sanity check: the hardcoded selector is the `claim_rewards` one
@@ -540,7 +540,7 @@ func TestBuildClaimRewardTransaction(t *testing.T) {
 		expectBuildClaimTxn(t, provider, nonce)
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, 1)
-		txn, err := rs.buildClaimRewardTransaction()
+		txn, err := rs.buildClaimRewardTransaction(t.Context())
 		require.NoError(t, err)
 
 		require.Equal(t, rpc.TransactionTypeInvoke, txn.Type)
@@ -559,7 +559,7 @@ func TestBuildClaimRewardTransaction(t *testing.T) {
 		provider.EXPECT().Nonce(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nonceErr)
 
 		rs := newTestRewardSigner(t, newMockSigner(t), provider, 1, 1)
-		_, err := rs.buildClaimRewardTransaction()
+		_, err := rs.buildClaimRewardTransaction(t.Context())
 		require.ErrorIs(t, err, nonceErr)
 	})
 
@@ -574,7 +574,7 @@ func TestBuildClaimRewardTransaction(t *testing.T) {
 			Return(nil, blockErr)
 
 		rs := newTestRewardSigner(t, newMockSigner(t), provider, 1, 1)
-		_, err := rs.buildClaimRewardTransaction()
+		_, err := rs.buildClaimRewardTransaction(t.Context())
 		require.ErrorIs(t, err, blockErr)
 	})
 
@@ -586,7 +586,7 @@ func TestBuildClaimRewardTransaction(t *testing.T) {
 		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, 1)
-		_, err := rs.buildClaimRewardTransaction()
+		_, err := rs.buildClaimRewardTransaction(t.Context())
 		require.ErrorIs(t, err, signErr)
 	})
 }
@@ -611,7 +611,7 @@ func TestPopulateFees(t *testing.T) {
 		defaultResources := makeDefaultResources()
 		txn := rpc.BroadcastInvokeTxnV3{ResourceBounds: &defaultResources}
 
-		overallFee, err := rs.populateFees(&txn)
+		overallFee, err := rs.populateFees(t.Context(), &txn)
 		require.NoError(t, err)
 		require.Equal(t, *estimate.OverallFee, overallFee)
 	})
@@ -632,7 +632,7 @@ func TestPopulateFees(t *testing.T) {
 		)
 		txn := rpc.BroadcastInvokeTxnV3{}
 
-		overallFee, err := rs.populateFees(&txn)
+		overallFee, err := rs.populateFees(t.Context(), &txn)
 		require.NoError(t, err)
 		require.Equal(t, *estimate.OverallFee, overallFee)
 	})
@@ -656,7 +656,7 @@ func TestPopulateFees(t *testing.T) {
 		defaultResources := makeDefaultResources()
 		txn := rpc.BroadcastInvokeTxnV3{ResourceBounds: &defaultResources}
 
-		overallFee, err := rs.populateFees(&txn)
+		overallFee, err := rs.populateFees(t.Context(), &txn)
 		require.ErrorIs(t, err, errFeeExceedsClaimMaxFee)
 		require.Equal(t, *estimate.OverallFee, overallFee)
 		// The transaction is left untouched
@@ -678,7 +678,7 @@ func TestPopulateFees(t *testing.T) {
 		)
 		txn := rpc.BroadcastInvokeTxnV3{}
 
-		_, err := rs.populateFees(&txn)
+		_, err := rs.populateFees(t.Context(), &txn)
 		require.ErrorIs(t, err, estimateErr)
 		require.NotErrorIs(t, err, errFeeExceedsClaimMaxFee)
 	})
@@ -699,7 +699,7 @@ func TestPopulateFees(t *testing.T) {
 		)
 		txn := rpc.BroadcastInvokeTxnV3{}
 
-		_, err := rs.populateFees(&txn)
+		_, err := rs.populateFees(t.Context(), &txn)
 		require.ErrorIs(t, err, signErr)
 	})
 }
@@ -866,6 +866,87 @@ func TestClaimRewards(t *testing.T) {
 	})
 }
 
+func TestClaimRewardsBounds(t *testing.T) {
+	rewardAddress, err := types.AddressFromString(testRewardAddress)
+	require.NoError(t, err)
+	const claimMaxFee = uint64(1e15)
+
+	t.Run("A claim still running makes the next one skip", func(t *testing.T) {
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil)
+
+		signing := make(chan struct{})
+		release := make(chan struct{})
+		mockSigner.EXPECT().
+			SignTransaction(gomock.Any()).
+			DoAndReturn(func(*rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error) {
+				close(signing)
+				<-release
+
+				return nil, errors.New("sign error")
+			})
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		firstTracer := &claimTracer{}
+		firstDone := make(chan struct{})
+		go func() {
+			rs.ClaimRewards(firstTracer)
+			close(firstDone)
+		}()
+		<-signing
+
+		secondTracer := &claimTracer{}
+		rs.ClaimRewards(secondTracer)
+		require.Equal(t, &claimTracer{}, secondTracer)
+
+		close(release)
+		<-firstDone
+		require.Equal(t, 1, firstTracer.failures)
+	})
+
+	t.Run("The claim deadline cancels a signer that doesn't answer", func(t *testing.T) {
+		SetExternalSignerTimeout(t, time.Minute)
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil)
+		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		externalSigner := &ExternalSigner{
+			ctx:                 t.Context(),
+			Provider:            provider,
+			operationalAddress:  rewardAddress,
+			chainID:             *new(felt.Felt).SetBytes([]byte("SN_SEPOLIA")),
+			url:                 NewHungSignerServer(t),
+			validationContracts: *sepoliaContracts(t),
+			braavos:             false,
+		}
+		rs := newTestRewardSigner(t, externalSigner, provider, 1, claimMaxFee)
+		rs.claimTimeout = 100 * time.Millisecond
+
+		tracer := &claimTracer{}
+		done := make(chan struct{})
+		go func() {
+			rs.ClaimRewards(tracer)
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "the claim did not stop at its deadline")
+		}
+		require.Equal(t, 1, tracer.failures)
+		require.Zero(t, tracer.submitted)
+	})
+}
+
 // Records the reward claim related calls, ignoring the rest
 type claimTracer struct {
 	metrics.NoOpMetrics
@@ -1008,6 +1089,7 @@ func newTestRewardSigner(
 		stakerAddress:  &stakerAddress,
 		claimMaxFee:    felt.FromUint64[felt.Felt](claimMaxFeeFri),
 		claimThreshold: claimThresholdStrk,
+		claimTimeout:   claimTimeout,
 	}
 }
 
