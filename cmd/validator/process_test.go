@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -13,7 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const runMainEnvVar = "VALIDATOR_TEST_RUN_MAIN"
+const (
+	runMainEnvVar  = "VALIDATOR_TEST_RUN_MAIN"
+	processTimeout = 30 * time.Second
+)
 
 // When started by `newMainProcess`, the test binary runs the validator's main function
 // instead of the tests, so the tests can check its output, exit code and signal handling
@@ -33,7 +37,10 @@ func TestMain(m *testing.M) {
 func newMainProcess(t *testing.T, args ...string) (cmd *exec.Cmd, output *bytes.Buffer) {
 	t.Helper()
 
-	cmd = exec.CommandContext(t.Context(), os.Args[0], args...)
+	// Killed after a while, so a validator that keeps running can't hang the tests
+	ctx, cancel := context.WithTimeout(t.Context(), processTimeout)
+	t.Cleanup(cancel)
+	cmd = exec.CommandContext(ctx, os.Args[0], args...)
 	// Only the variable running main, so no config comes from the test environment
 	cmd.Env = []string{runMainEnvVar + "=1"}
 	output = new(bytes.Buffer)

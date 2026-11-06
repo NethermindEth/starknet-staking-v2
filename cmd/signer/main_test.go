@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -15,7 +18,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const runMainEnvVar = "SIGNER_TEST_RUN_MAIN"
+const (
+	runMainEnvVar  = "SIGNER_TEST_RUN_MAIN"
+	processTimeout = 30 * time.Second
+)
 
 // When started by `runMain`, the test binary runs the signer's main function instead of
 // the tests, so the tests can check its output and exit code
@@ -35,10 +41,20 @@ func newMainProcess(
 ) (cmd *exec.Cmd, output *syncBuffer) {
 	t.Helper()
 
-	cmd = exec.CommandContext(t.Context(), os.Args[0], args...)
-	// Only the variables running main and setting the key, so the test environment
-	// can't change the result
-	cmd.Env = []string{runMainEnvVar + "=1", "SIGNER_PRIVATE_KEY=" + privKey}
+	// Killed after a while, so a signer that keeps running can't hang the tests
+	ctx, cancel := context.WithTimeout(t.Context(), processTimeout)
+	t.Cleanup(cancel)
+	// Never the default address, so the tests can't take a port in use elsewhere
+	if !slices.Contains(args, "--address") {
+		args = append(args, "--address", "127.0.0.1:0")
+	}
+	cmd = exec.CommandContext(ctx, os.Args[0], args...)
+	// Only the variables running main and setting the key, if any, so the test
+	// environment can't change the result
+	cmd.Env = []string{runMainEnvVar + "=1"}
+	if privKey != "" {
+		cmd.Env = append(cmd.Env, "SIGNER_PRIVATE_KEY="+privKey)
+	}
 	output = new(syncBuffer)
 	cmd.Stdout = output
 	cmd.Stderr = output
@@ -51,12 +67,23 @@ func newMainProcess(
 func runMain(t *testing.T, privKey string, args ...string) (output string, exitCode int) {
 	t.Helper()
 
-	// A missing env file, so only the env var sets the private key
-	envFile := filepath.Join(t.TempDir(), "missing.env")
-	cmd, outputBuffer := newMainProcess(t, privKey, append([]string{"--env", envFile}, args...)...)
+	// An empty env file, so only the env var sets the private key
+	cmd, outputBuffer := newMainProcess(
+		t, privKey, append([]string{"--env", writeEnvFile(t, "")}, args...)...,
+	)
 	exitCode = processExitCode(t, cmd.Run())
 
 	return outputBuffer.String(), exitCode
+}
+
+// Writes `content` to an env file in a temporary directory and returns its path
+func writeEnvFile(t *testing.T, content string) string {
+	t.Helper()
+
+	envFile := filepath.Join(t.TempDir(), "signer.env")
+	require.NoError(t, os.WriteFile(envFile, []byte(content), 0o600))
+
+	return envFile
 }
 
 // Returns the exit code of a process that ended with `err`
@@ -106,9 +133,8 @@ func TestMalformedPrivateKey(t *testing.T) {
 func TestShutdownSignals(t *testing.T) {
 	for _, signal := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
-			envFile := filepath.Join(t.TempDir(), "missing.env")
 			cmd, output := newMainProcess(
-				t, "0x123", "--env", envFile, "--address", "127.0.0.1:0",
+				t, "0x123", "--env", writeEnvFile(t, ""), "--address", "127.0.0.1:0",
 			)
 			require.NoError(t, cmd.Start())
 
@@ -128,4 +154,58 @@ func TestVersionFlag(t *testing.T) {
 
 	require.Equal(t, 0, exitCode)
 	require.Equal(t, "signer version dev\n", output)
+}
+
+func TestEnvFile(t *testing.T) {
+	t.Run("Env file sets the private key", func(t *testing.T) {
+		// The signer gets past reading the key and fails to listen on a port in use
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+
+		envFile := writeEnvFile(t, "SIGNER_PRIVATE_KEY=0x123\n")
+		cmd, output := newMainProcess(
+			t, "", "--env", envFile, "--address", listener.Addr().String(),
+		)
+
+		require.Equal(t, 1, processExitCode(t, cmd.Run()))
+		require.Contains(t, output.String(), "address already in use")
+	})
+
+	t.Run("Env file passed explicitly must exist", func(t *testing.T) {
+		missingFile := filepath.Join(t.TempDir(), "missing.env")
+		cmd, output := newMainProcess(t, "0x123", "--env", missingFile)
+
+		require.Equal(t, 1, processExitCode(t, cmd.Run()))
+		require.Contains(
+			t, output.String(), "Error: cannot read the env var file: open "+missingFile,
+		)
+	})
+
+	t.Run("Env file that isn't a dotenv file is an error without its content", func(t *testing.T) {
+		const secret = "0xSECRETdummy"
+		envFile := writeEnvFile(t, `{"SIGNER_PRIVATE_KEY": "`+secret+`"}`)
+		cmd, output := newMainProcess(t, "", "--env", envFile)
+
+		require.Equal(t, 1, processExitCode(t, cmd.Run()))
+		require.Contains(
+			t,
+			output.String(),
+			"Error: cannot parse the env var file "+envFile+": it must be a dotenv file",
+		)
+		require.NotContains(t, output.String(), secret)
+	})
+
+	t.Run("Missing private key", func(t *testing.T) {
+		output, exitCode := runMain(t, "")
+
+		require.Equal(t, 1, exitCode)
+		require.Equal(
+			t,
+			"Error: SIGNER_PRIVATE_KEY env var is not set. Set it in the environment or in the "+
+				"env var file (--env)\n",
+			output,
+		)
+	})
 }
