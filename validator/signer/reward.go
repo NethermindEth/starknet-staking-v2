@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync/atomic"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -32,6 +34,11 @@ const (
 	strkDecimals = 18
 	// Decimals used when logging STRK amounts
 	strkLoggedDecimals = 2
+)
+
+const (
+	claimLogPrefix = "Auto-Claiming Rewards: "
+	claimTimeout   = 30 * time.Second
 )
 
 var (
@@ -62,6 +69,8 @@ type rewardSigner struct {
 	claimMaxFee felt.Felt
 	// Amount of unclaimed rewards, in STRK, that triggers a claim
 	claimThreshold uint64
+	claimTimeout   time.Duration
+	claiming       atomic.Bool
 }
 
 var _ RewardSigner = (*rewardSigner)(nil)
@@ -114,6 +123,8 @@ func NewRewardSigner(
 		stakerAddress:  stakerAddress,
 		claimMaxFee:    felt.FromUint64[felt.Felt](rewardConfig.ClaimMaxFee),
 		claimThreshold: rewardConfig.ClaimThreshold,
+		claimTimeout:   claimTimeout,
+		claiming:       atomic.Bool{},
 	}
 
 	if err := rs.checkRewardAddress(ctx); err != nil {
@@ -176,7 +187,21 @@ func (rs *rewardSigner) checkExternalSigner(ctx context.Context) error {
 // All errors and state changes are logged and recorded in the tracer, the feature does not
 // stop the flow.
 func (rs *rewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer) {
-	pref := "Auto-Claiming Rewards: "
+	if !rs.claiming.CompareAndSwap(false, true) {
+		rs.logger.Warn(claimLogPrefix + "the previous claim is still running; skipping claim...")
+
+		return
+	}
+	defer rs.claiming.Store(false)
+
+	claimCtx, cancel := context.WithTimeout(ctx, rs.claimTimeout)
+	defer cancel()
+
+	rs.claimRewards(claimCtx, tracer)
+}
+
+func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer) {
+	pref := claimLogPrefix
 	rs.logger.Debug(pref + "starting claim rewards")
 
 	info, err := rs.fetchStakerInfo(ctx)
