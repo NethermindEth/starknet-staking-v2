@@ -50,6 +50,18 @@ func New(
 	logger log.Logger,
 	braavos bool,
 ) (Validator, error) {
+	v, err := newValidator(ctx, conf, snConfig, logger, braavos)
+
+	return v, redactErrorURLs(err)
+}
+
+func newValidator(
+	ctx context.Context,
+	conf *config.Config,
+	snConfig *config.StarknetConfig,
+	logger log.Logger,
+	braavos bool,
+) (Validator, error) {
 	if err := checkWSProviderURL(conf.Provider.WS); err != nil {
 		return Validator{}, err
 	}
@@ -175,9 +187,9 @@ func (v *Validator) Attest(
 	defer wg.Wait()
 	defer close(dispatcher.PrepareAttest)
 
-	return RunBlockHeaderWatcher(
+	return redactErrorURLs(RunBlockHeaderWatcher(
 		ctx, v.wsProvider, v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
-	)
+	))
 }
 
 func RunBlockHeaderWatcher[S signerP.Signer](
@@ -209,7 +221,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			logger.Error(
 				"cannot connect to ws provider",
 				zap.String("wsProviderURL", shownWSURL),
-				zap.Error(err),
+				zap.Error(redactErrorURLs(err)),
 				zap.String("retriesLeft", retries.String()),
 			)
 			retries.Sub()
@@ -258,7 +270,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			}
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
-			logger.Error("processing block headers", zap.Error(err))
+			logger.Error("processing block headers", zap.Error(redactErrorURLs(err)))
 			cleanUp(wsProvider, headersFeed)
 
 			return err
@@ -294,7 +306,7 @@ func logSubscriptionError(logger log.Logger, wsProviderURL string, err error) {
 	logger.Error(
 		"client subscription error",
 		zap.String("wsProviderURL", wsProviderURL),
-		zap.Error(err),
+		zap.Error(redactErrorURLs(err)),
 	)
 }
 
@@ -511,7 +523,7 @@ func logEpochFetchRetry(
 		fields = append(fields, zap.Uint64("epochID", prevEpoch.EpochID+1))
 	}
 	if err != nil {
-		fields = append(fields, zap.Error(err))
+		fields = append(fields, zap.Error(redactErrorURLs(err)))
 		logFn("failed to fetch epoch info, block headers are not processed. Retrying in 1s",
 			fields...)
 

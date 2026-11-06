@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -209,6 +210,35 @@ func redactURL(rawURL string) string {
 	parsedURL.Fragment = ""
 
 	return parsedURL.String()
+}
+
+var urlInText = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"'\\]+`)
+
+func redactURLsIn(text string) string {
+	return urlInText.ReplaceAllStringFunc(text, func(match string) string {
+		trimmed := strings.TrimRight(match, ":,.;)]")
+		if _, err := url.Parse(trimmed); err != nil {
+			return match
+		}
+
+		return redactURL(trimmed) + match[len(trimmed):]
+	})
+}
+
+type redactedURLsError struct {
+	err error
+}
+
+func (e redactedURLsError) Error() string { return redactURLsIn(e.err.Error()) }
+
+func (e redactedURLsError) Unwrap() error { return e.err }
+
+func redactErrorURLs(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	return redactedURLsError{err: err}
 }
 
 func isRetryableHTTPStatus(statusCode int) bool {

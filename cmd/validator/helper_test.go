@@ -73,6 +73,11 @@ func newFaultyNode(t *testing.T, specVersion string, fault nodeFault) string {
 		}
 
 		if status, faultBody, ok := fault(req.Method, entryPoint); ok {
+			if status == dropConnection {
+				hijackAndClose(w)
+
+				return
+			}
 			w.WriteHeader(status)
 			_, _ = w.Write([]byte(faultBody))
 
@@ -101,6 +106,19 @@ func failFirst(times int, method, entryPoint string, status int, body string) no
 		hits++
 
 		return status, body, true
+	}
+}
+
+const dropConnection = -1
+
+func hijackAndClose(w http.ResponseWriter) {
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		return
+	}
+	conn, _, err := hijacker.Hijack()
+	if err == nil {
+		_ = conn.Close()
 	}
 }
 
@@ -211,6 +229,31 @@ func TestTryNewValidator(t *testing.T) {
 				require.Equal(t, 1, *retries)
 			})
 		}
+	})
+
+	t.Run("Provider URL credentials stay out of the logs", func(t *testing.T) {
+		const apiKey = "0123456789abcdef0123456789abcdef"
+		retries := countRetries(t)
+		nodeURL := newFaultyNode(t, supportedSpecVersion, failFirst(
+			1, "starknet_chainId", "", dropConnection, "",
+		))
+		var buf bytes.Buffer
+		bufLogger, err := log.NewZapLogger(
+			log.NewLevel(log.DEBUG), log.WithWriter(&buf), log.WithColour(false),
+		)
+		require.NoError(t, err)
+
+		_, err = tryNewValidator(
+			t.Context(), newConfig(nodeURL+"/v3/"+apiKey+"?apikey=topsecret", false),
+			new(config.StarknetConfig), types.NewRetries(), bufLogger, false,
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, 1, *retries)
+		require.Contains(t, buf.String(), "cannot start validator. Retrying in 3s")
+		require.Contains(t, buf.String(), "/v3/REDACTED?apikey=REDACTED")
+		require.NotContains(t, buf.String(), apiKey)
+		require.NotContains(t, buf.String(), "topsecret")
 	})
 
 	t.Run("Errors that are not transient are not retried", func(t *testing.T) {

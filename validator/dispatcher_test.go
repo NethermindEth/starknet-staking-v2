@@ -1079,3 +1079,32 @@ func TestDispatchAttestLogKeys(t *testing.T) {
 	require.Contains(t, out, `attest transaction sent	{"transactionHash": "0xa77e57"}`)
 	require.Contains(t, out, `for blockhash	{"targetBlockHash": "0xb10c"}`)
 }
+
+func TestDispatchRedactsProviderURLsInErrors(t *testing.T) {
+	const apiKey = "0123456789abcdef0123456789abcdef"
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil)
+	mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil)
+	mockSigner.EXPECT().Nonce().Return(nil, errors.New(
+		`-32603 The error is not a valid RPC error: Post "http://node/v3/`+apiKey+`": EOF`,
+	))
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	require.Contains(t, buf.String(), `Post \"http://node/v3/REDACTED\": EOF`)
+	require.NotContains(t, buf.String(), apiKey)
+}

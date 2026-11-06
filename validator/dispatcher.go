@@ -264,7 +264,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			)
 			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 			if err != nil {
-				logger.Error("failed to build attest transaction", zap.Error(err))
+				logger.Error("failed to build attest transaction", zap.Error(redactErrorURLs(err)))
 
 				continue
 			}
@@ -306,7 +306,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				if err != nil {
 					logger.Error(
 						"failed to build attest transaction. Will retry on the next block",
-						zap.Error(err),
+						zap.Error(redactErrorURLs(err)),
 					)
 					d.CurrentAttest.setStatus(Failed)
 
@@ -321,7 +321,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				if err != nil {
 					logger.Error(
 						"failed to update transaction nonce. Will retry on the next block",
-						zap.Error(err),
+						zap.Error(redactErrorURLs(err)),
 					)
 					d.CurrentAttest.setStatus(Failed)
 
@@ -344,7 +344,7 @@ func (d *EventDispatcher[S]) Dispatch(
 
 				logger.Error(
 					"failed to attest. Will retry on the next block",
-					zap.Error(err),
+					zap.Error(redactErrorURLs(err)),
 				)
 				d.CurrentAttest.setStatus(Failed)
 
@@ -432,7 +432,7 @@ func trackAttest[S signerP.Signer](
 			logger.Warn(
 				"failed to get the attest transaction status. Will check again on the next block",
 				zap.String("transactionHash", txHash.String()),
-				zap.Error(err),
+				zap.Error(redactErrorURLs(err)),
 			)
 		}
 
