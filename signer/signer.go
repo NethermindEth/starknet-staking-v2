@@ -62,19 +62,24 @@ func New(privateKey string, logger log.Logger) (Signer, error) {
 	}, nil
 }
 
+// Routes `POST` requests at `/sign` to the handler. Other methods get a 405 response
+func (s *Signer) router() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(http.MethodPost+" "+SignEndpoint, s.handler)
+
+	return mux
+}
+
 // Listen for requests of the type `POST` at `<address>/sign`. The request
 // should include the hash of the transaction being signed.
 func (s *Signer) Listen(address string) error {
-	mux := http.NewServeMux()
-	mux.HandleFunc(SignEndpoint, s.handler)
-
 	//nolint:exhaustruct_v5 // Only specifying used fields
 	server := &http.Server{
 		Addr:         address,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
-		Handler:      mux,
+		Handler:      s.router(),
 	}
 
 	s.logger.Info(
@@ -87,7 +92,13 @@ func (s *Signer) Listen(address string) error {
 
 // Decodes the request and returns ECDSA `r` and `s` signature values via http
 func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
-	s.logger.Debug("receiving http request", zap.Any("request", r))
+	s.logger.Debug(
+		"receiving http request",
+		zap.String("method", r.Method),
+		zap.String("path", r.URL.Path),
+		zap.String("remoteAddress", r.RemoteAddr),
+		zap.Int64("contentLength", r.ContentLength),
+	)
 
 	defer func() { _ = r.Body.Close() }()
 
@@ -102,6 +113,15 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(body, &req)
 	if err != nil {
 		http.Error(w, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
+
+		return
+	}
+	if req.BroadcastInvokeTxnV3 == nil || req.ChainID == nil {
+		http.Error(
+			w,
+			"invalid request body: both `transaction` and `chain_id` are required",
+			http.StatusBadRequest,
+		)
 
 		return
 	}
