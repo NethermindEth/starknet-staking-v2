@@ -2,11 +2,11 @@
 
 validator:
 	mkdir -p build
-	go build -ldflags "-X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(shell git describe --tags | sed 's/^v//')" -o "./build/validator" "./cmd/validator/."
+	go build -trimpath -ldflags "-X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(shell git describe --tags | sed 's/^v//')" -o "./build/validator" "./cmd/validator/."
 
 signer:
 	mkdir -p build
-	go build -ldflags "-X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(shell git describe --tags | sed 's/^v//')" -o "./build/signer" "./cmd/signer/."
+	go build -trimpath -ldflags "-X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(shell git describe --tags | sed 's/^v//')" -o "./build/signer" "./cmd/signer/."
 
 clean-testcache: ## Clean Go test cache
 	go clean -testcache
