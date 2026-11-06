@@ -223,10 +223,9 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			)
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
-			logger.Error("processing block headers", zap.String("error", err.Error()))
 			cleanUp(wsProvider, headersFeed)
 
-			return err
+			return fmt.Errorf("processing block headers: %w", err)
 		}
 	}
 }
