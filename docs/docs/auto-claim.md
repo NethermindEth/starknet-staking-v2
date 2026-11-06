@@ -14,7 +14,7 @@ The feature is disabled by default. It is enabled as soon as any reward option i
 2. **After every attestation window ends**, the validator reads the staker's unclaimed rewards from the staking contract and logs them at `info` level when they are below the claim threshold. If they reach the claim threshold, it:
    1. builds a `claim_rewards` transaction signed by the reward account,
    2. estimates its fee and skips the claim with a warning if the fee is higher than the configured max fee,
-   3. sends the transaction, unless more than 5 blocks have passed since the claim started: a later claim could take the nonce of the next attestation, so it is skipped and retried after the next window,
+   3. sends the transaction, unless more than 8 blocks have passed since the claim started: a later claim could take the nonce of the next attestation, so it is skipped with a warning and retried after the next window. With an external signer, the whole claim, including two signing requests (three for a Braavos reward account), must fit in those 8 blocks, so a signer that takes several seconds per request makes every claim skipped,
    4. follows the transaction until it is accepted on L2 (for up to 2 minutes), and logs whether it was accepted or reverted.
 
    Only one claim runs at a time, and a claim is abandoned after 30 seconds if the node or the signer doesn't answer.
