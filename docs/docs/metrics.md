@@ -14,6 +14,8 @@ By default, metrics are disabled. You can enable metrics tracking and customize 
 ./build/validator --metrics --metrics-host "0.0.0.0" --metrics-port "9090"  # Listen on all interfaces, port 9090
 ```
 
+If the metrics server can't listen on that host and port (an invalid port, a port already in use), the validator exits with an error at startup.
+
 ## Endpoints
 
 The metrics server exposes two endpoints:
