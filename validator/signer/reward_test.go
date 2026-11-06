@@ -20,6 +20,8 @@ import (
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 const (
@@ -1345,6 +1347,33 @@ func TestClaimRewardsUnclaimedGauge(t *testing.T) {
 		require.Len(t, tracer.unclaimed, 1)
 		require.Less(t, tracer.unclaimed[0], 1.0)
 	})
+}
+
+func TestClaimRewardsBelowThresholdLog(t *testing.T) {
+	mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+	mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+	mockSigner.EXPECT().
+		Call(stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+		Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(1.5)), nil)
+
+	core, logs := observer.New(zapcore.InfoLevel)
+	rs := newTestRewardSigner(
+		t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 2, 1,
+	)
+	rs.logger = log.NewZapLoggerWithCore(core)
+	rs.ClaimRewards(metrics.NewNoOpMetrics())
+
+	entries := logs.All()
+	require.Len(t, entries, 1)
+	require.Equal(t, zapcore.InfoLevel, entries[0].Level)
+	require.Equal(t,
+		claimLogPrefix+"unclaimed rewards amount is below claim threshold; skipping claim...",
+		entries[0].Message,
+	)
+	require.Equal(t, map[string]any{
+		"unclaimed rewards (STRK)": "1.50",
+		"claim threshold (STRK)":   uint64(2),
+	}, entries[0].ContextMap())
 }
 
 func TestFriToStrkString(t *testing.T) {

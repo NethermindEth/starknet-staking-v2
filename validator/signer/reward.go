@@ -249,7 +249,7 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 	// The contract returns the unclaimed rewards in FRI
 	unclaimedRewardsStrk := friToStrkString(&info.unclaimedRewards)
 	if utils.STRKToFRI(float64(rs.claimThreshold)).Cmp(&info.unclaimedRewards) > 0 {
-		rs.logger.Debug(
+		rs.logger.Info(
 			pref+"unclaimed rewards amount is below claim threshold; skipping claim...",
 			zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
 			zap.Uint64("claim threshold (STRK)", rs.claimThreshold),
