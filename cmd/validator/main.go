@@ -118,7 +118,7 @@ func NewCommand() cobra.Command {
 			braavosAccount,
 		)
 		if err != nil {
-			logger.Error("couldn't start validator", zap.Error(err))
+			logger.Error("couldn't start validator", errorField(err))
 
 			return err
 		}
@@ -164,11 +164,11 @@ func NewCommand() cobra.Command {
 
 			return nil
 		case err := <-errCh:
-			logger.Error("validator stopped with error", zap.Error(err))
+			logger.Error("validator stopped with error", errorField(err))
 
 			return err
 		case err := <-metricsErrCh:
-			logger.Error("metrics server failed, stopping the validator", zap.Error(err))
+			logger.Error("metrics server failed, stopping the validator", errorField(err))
 
 			return err
 		}
@@ -310,6 +310,12 @@ func NewCommand() cobra.Command {
 	)
 
 	return cmd
+}
+
+// Logs only the error message. `zap.Error` adds an "errorVerbose" field holding the whole
+// stack trace for errors that implement `fmt.Formatter`, like the cockroachdb ones
+func errorField(err error) zap.Field {
+	return zap.String("error", err.Error())
 }
 
 // Verifies the metrics server can listen on the given host and port, so that a typo in
