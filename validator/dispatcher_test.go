@@ -1,6 +1,7 @@
 package validator_test
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
@@ -1019,4 +1020,31 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 
 		require.Equal(t, 1, tracer.failures)
 	})
+}
+
+func TestDispatchPrepareWhileAttestingIsNotAnError(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(&blockHash).
+		Return(rpc.BroadcastInvokeTxnV3{}, errors.New("node down")).
+		Times(2)
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	require.Equal(t, validator.Failed, dispatcher.CurrentAttest.Status)
+	require.NotContains(t, buf.String(), "prepare attest")
 }
