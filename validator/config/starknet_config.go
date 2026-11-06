@@ -1,13 +1,19 @@
 package config
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 )
 
 type chainID int
+
+// Chain ids, as returned by `starknet_chainId`, of the networks with default addresses
+const (
+	mainnetChainID = "SN_MAIN"
+	sepoliaChainID = "SN_SEPOLIA"
+)
 
 const (
 	mainnet chainID = iota
@@ -21,19 +27,21 @@ var defaults = [2]ContractAddresses{
 	{
 		Staking: constants.MainnetStakingContractAddress,
 		Attest:  constants.MainnetAttestContractAddress,
+		chainID: mainnetChainID,
 	},
 	// Sepolia default values
 	{
 		Staking: constants.SepoliaStakingContractAddress,
 		Attest:  constants.SepoliaAttestContractAddress,
+		chainID: sepoliaChainID,
 	},
 }
 
 func chainIDFromStr(s string) chainID {
 	switch s {
-	case "SN_MAIN":
+	case mainnetChainID:
 		return mainnet
-	case "SN_SEPOLIA":
+	case sepoliaChainID:
 		return sepolia
 	default:
 		return unknown
@@ -43,9 +51,12 @@ func chainIDFromStr(s string) chainID {
 type ContractAddresses struct {
 	Staking string
 	Attest  string
+	// Chain id the defaults were looked up for, so `Check` can name it
+	chainID string
 }
 
 func (ca *ContractAddresses) SetDefaults(chainIDStr string) *ContractAddresses {
+	ca.chainID = chainIDStr
 	chainID := chainIDFromStr(chainIDStr)
 	if chainID == unknown {
 		return ca
@@ -62,15 +73,28 @@ func (ca *ContractAddresses) SetDefaults(chainIDStr string) *ContractAddresses {
 	return ca
 }
 
+// Verifies both addresses are set. They are only missing on a network without default
+// values, so the error names the chain id and the flags that must be passed
 func (ca *ContractAddresses) Check() error {
+	var missingFlags []string
 	if isZero(ca.Staking) {
-		return errors.New("staking contract address is not set")
+		missingFlags = append(missingFlags, "--staking-contract-address")
 	}
 	if isZero(ca.Attest) {
-		return errors.New("attest contract address is not set")
+		missingFlags = append(missingFlags, "--attest-contract-address")
+	}
+	if len(missingFlags) == 0 {
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf(
+		"no default contract addresses for chain id %q (defaults exist only for %s and %s): "+
+			"set %s",
+		ca.chainID,
+		mainnetChainID,
+		sepoliaChainID,
+		strings.Join(missingFlags, " and "),
+	)
 }
 
 func (ca *ContractAddresses) String() string {
