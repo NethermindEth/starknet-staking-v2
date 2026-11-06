@@ -475,6 +475,11 @@ func TestHashAndSignTx(t *testing.T) {
 			errorMsg: "invalid external signer response `" + strings.Repeat("x", 200) + "...`: ",
 		},
 		{
+			name:     "long body is cut on a character boundary",
+			body:     strings.Repeat("x", 199) + "é" + strings.Repeat("y", 100),
+			errorMsg: "invalid external signer response `" + strings.Repeat("x", 199) + "...`: ",
+		},
+		{
 			name:     "whitespace is collapsed",
 			body:     "{\n  \"signature\": []\n}\n",
 			errorMsg: "invalid external signer response `{ \"signature\": [] }`: ",
