@@ -271,10 +271,9 @@ func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64
 	m.currentEpochAssignedBlockNumber.WithLabelValues(m.network).Set(float64(targetBlock))
 }
 
-// UpdateSignerBalance set's the signer account balance. If it is too big a default max value is set
-// instead
+// UpdateSignerBalance sets the signer account balance
 func (m *Metrics) UpdateSignerBalance(balance float64) {
-	m.logger.Debug("UpdateSignerBalancer", zap.Float64("balance", balance))
+	m.logger.Debug("UpdateSignerBalance", zap.Float64("balance", balance))
 	m.signerBalance.WithLabelValues(m.network).Set(balance)
 }
 
@@ -309,8 +308,7 @@ func (m *Metrics) RecordSignerBalanceBelowThreshold() {
 	m.signerBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
 }
 
-// UpdateRewardBalance set's the reward account balance. If it is too big a default max value is set
-// instead
+// UpdateRewardBalance sets the reward account balance
 func (m *Metrics) UpdateRewardBalance(balance float64) {
 	m.logger.Debug("UpdateRewardBalance", zap.Float64("balance", balance))
 	m.rewardBalance.WithLabelValues(m.network).Set(balance)
