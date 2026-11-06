@@ -99,6 +99,9 @@ func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
 		t.txn.Nonce = newNonce
 		_, err := signer.SignTransaction(&t.txn)
 		if err != nil {
+			// The signature no longer matches the nonce, so the transaction must be rebuilt
+			t.valid = false
+
 			return fmt.Errorf("signer failed to sign the transaction: %w", err)
 		}
 	}
@@ -204,18 +207,19 @@ func (d *EventDispatcher[S]) Dispatch(
 				return
 			}
 
-			// if the attest event is already being tracked by the tool
-			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
-				// If  status is still not successful, check for it
-				if d.CurrentAttest.Status != Successful {
-					d.CurrentAttest.UpdateStatus(signer, logger)
-				}
-				// If status is status is already successful or ongoing, do nothing.
-				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
+			if d.CurrentAttest.Status == Successful {
+				continue
+			}
+			// A transaction was sent: check its status and keep waiting unless it failed
+			if d.CurrentAttest.Status == Ongoing {
+				d.CurrentAttest.UpdateStatus(signer, logger)
+				if d.CurrentAttest.Status != Failed {
 					continue
 				}
 			}
-			d.CurrentAttest.setStatus(Ongoing)
+
+			// Nothing was sent yet or the last attempt failed: (re)send the attest transaction.
+			// Any failure below marks the attempt as failed, so it is retried on the next block
 
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
@@ -227,7 +231,11 @@ func (d *EventDispatcher[S]) Dispatch(
 				)
 				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
 				if err != nil {
-					logger.Error("failed to build attest transaction", zap.Error(err))
+					logger.Error(
+						"failed to build attest transaction. Will retry on the next block",
+						zap.Error(err),
+					)
+					d.CurrentAttest.setStatus(Failed)
 
 					continue
 				}
@@ -238,7 +246,11 @@ func (d *EventDispatcher[S]) Dispatch(
 				logger.Debug("updating attest transaction nonce")
 				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
 				if err != nil {
-					logger.Error("failed to update transaction nonce", zap.Error(err))
+					logger.Error(
+						"failed to update transaction nonce. Will retry on the next block",
+						zap.Error(err),
+					)
+					d.CurrentAttest.setStatus(Failed)
 
 					continue
 				}
@@ -258,7 +270,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				}
 
 				logger.Error(
-					"failed to attest",
+					"failed to attest. Will retry on the next block",
 					zap.Error(err),
 				)
 				d.CurrentAttest.setStatus(Failed)
@@ -267,13 +279,17 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			logger.Debug("attest transaction sent", zap.String("hash", resp.Hash.String()))
+			// Only a sent transaction is tracked, so `Ongoing` always comes with its hash
 			d.CurrentAttest.Hash = *resp.Hash
+			d.CurrentAttest.setStatus(Ongoing)
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
 		case <-d.EndOfWindow:
 			logger.Info("end of window reached")
-			if d.CurrentAttest.Status != Successful {
+			// Only a sent transaction has a status to check. When nothing was sent or the
+			// last attempt failed there is no transaction hash to look for
+			if d.CurrentAttest.Status == Ongoing {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
 			if d.CurrentAttest.Status == Successful {
@@ -308,6 +324,13 @@ func TrackAttest[S signerP.Signer](
 	logger log.Logger,
 	txHash *felt.Felt,
 ) AttestStatus {
+	// A zero hash means no transaction was sent, so there is nothing the node could find
+	if txHash.IsZero() {
+		logger.Warn("no attest transaction to track. Will retry")
+
+		return Failed
+	}
+
 	txStatus, err := signer.TransactionStatus(txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
