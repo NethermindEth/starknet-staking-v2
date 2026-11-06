@@ -7,6 +7,8 @@ import (
 
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestStartMetricsServer(t *testing.T) {
@@ -16,10 +18,10 @@ func TestStartMetricsServer(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { require.NoError(t, listener.Close()) }()
 
+		core, logs := observer.New(zapcore.InfoLevel)
 		_, failed, stop := startMetricsServer(
-			t.Context(), listener.Addr().String(), "SN_SEPOLIA", log.NewNopZapLogger(),
+			t.Context(), listener.Addr().String(), "SN_SEPOLIA", log.NewZapLoggerWithCore(core),
 		)
-		defer stop()
 
 		select {
 		case err := <-failed:
@@ -27,11 +29,15 @@ func TestStartMetricsServer(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			require.FailNow(t, "the metrics server failure was not reported")
 		}
+
+		stop()
+		require.Zero(t, logs.FilterMessage("Stopping metrics server").Len())
 	})
 
 	t.Run("Stopping a running server reports no error", func(t *testing.T) {
+		core, logs := observer.New(zapcore.InfoLevel)
 		_, failed, stop := startMetricsServer(
-			t.Context(), "127.0.0.1:0", "SN_SEPOLIA", log.NewNopZapLogger(),
+			t.Context(), "127.0.0.1:0", "SN_SEPOLIA", log.NewZapLoggerWithCore(core),
 		)
 		time.Sleep(50 * time.Millisecond)
 		stop()
@@ -41,5 +47,6 @@ func TestStartMetricsServer(t *testing.T) {
 			require.FailNow(t, "unexpected metrics server error", err)
 		case <-time.After(100 * time.Millisecond):
 		}
+		require.Equal(t, 1, logs.FilterMessage("Stopping metrics server").Len())
 	})
 }

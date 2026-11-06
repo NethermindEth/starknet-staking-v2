@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -415,13 +416,18 @@ func startMetricsServer(
 	server = metrics.NewMetrics(address, chainID, logger)
 
 	errCh := make(chan error, 1)
+	var startFailed atomic.Bool
 	go func() {
 		if err := server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			startFailed.Store(true)
 			errCh <- err
 		}
 	}()
 
 	stop = func() {
+		if startFailed.Load() {
+			return
+		}
 		shutdownCtx, shutdownCancel := context.WithTimeout(
 			ctx, 5*time.Second, //nolint:mnd // Timeout time
 		)
