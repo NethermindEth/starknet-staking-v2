@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/NethermindEth/juno/utils/log"
+	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -62,4 +63,24 @@ func counterValue(t *testing.T, m *Metrics, name string, labels map[string]strin
 	require.FailNow(t, "metric not found", "%s %v", name, labels)
 
 	return 0
+}
+
+func TestUpdateEpochInfoDebugLog(t *testing.T) {
+	core, logs := observer.New(zapcore.DebugLevel)
+	m := NewMetrics("127.0.0.1:0", "SN_SEPOLIA", log.NewZapLoggerWithCore(core))
+
+	m.UpdateEpochInfo(&types.EpochInfo{
+		EpochLen:      231,
+		EpochID:       79314,
+		StartingBlock: types.BlockNumber(17749000),
+	}, 17749100)
+
+	entries := logs.All()
+	require.Len(t, entries, 1)
+	require.Equal(t, map[string]any{
+		"epochID":            uint64(79314),
+		"epochLength":        uint64(231),
+		"epochStartingBlock": uint64(17749000),
+		"targetBlock":        uint64(17749100),
+	}, entries[0].ContextMap())
 }

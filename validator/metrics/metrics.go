@@ -272,7 +272,9 @@ func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
 	m.logger.Debug(
 		"UpdateEpochInfo",
-		zap.Any("epochInfo", epochInfo),
+		zap.Uint64("epochID", epochInfo.EpochID),
+		zap.Uint64("epochLength", epochInfo.EpochLen),
+		zap.Uint64("epochStartingBlock", epochInfo.StartingBlock.Uint64()),
 		zap.Uint64("targetBlock", targetBlock),
 	)
 	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochID))
