@@ -13,12 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// Delay between two attempts to start the validator
 const startupRetryDelay = 3 * time.Second
 
-// Creates the validator. Transient errors, such as an unreachable RPC provider, are retried
-// up to `maxRetries` times; any other error, such as an unsupported node version or a wrong
-// configuration, is returned at once.
 func tryNewValidator(
 	ctx context.Context,
 	conf *config.Config,

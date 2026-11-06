@@ -25,10 +25,6 @@ var ErrTxnHashNotFound = rpc.ErrHashNotFound
 
 type AttestStatus uint8
 
-// Consecutive blocks during which the node may report a sent attest transaction as not found,
-// or fail to return its status, before the attestation is sent again. Sending it again cannot
-// attest twice: once the first transaction is executed, the fee estimation of the new one fails
-// with "Attestation is done for this epoch", which counts as a success.
 const maxUnknownStatusPolls = 5
 
 const (
@@ -106,7 +102,6 @@ func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
 		t.txn.Nonce = newNonce
 		_, err := signer.SignTransaction(&t.txn)
 		if err != nil {
-			// The signature no longer matches the nonce, so the transaction must be rebuilt
 			t.valid = false
 
 			return fmt.Errorf("signer failed to sign the transaction: %w", err)
@@ -125,7 +120,7 @@ type AttestTracker struct {
 	Transaction AttestTransaction
 	Hash        felt.Felt
 	Status      AttestStatus
-	// Consecutive status polls that could not tell what happened to the sent transaction
+
 	unknownPolls int
 }
 
@@ -150,7 +145,6 @@ func (a *AttestTracker) UpdateStatus(
 	a.setStatus(status)
 }
 
-// Whether a transaction was sent but the last status poll could not tell what happened to it
 func (a *AttestTracker) statusUnknown() bool {
 	return a.Status == Ongoing && a.unknownPolls > 0
 }
@@ -176,7 +170,7 @@ type EventDispatcher[S signerP.Signer] struct {
 	EndOfWindow   chan struct{}
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
-	// Blocks whose events were already sent, so they are never sent twice
+
 	processedBlocks *processedBlocks
 }
 
@@ -190,18 +184,12 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	}
 }
 
-// Highest block number processed. The node replays its latest block header on every new
-// subscription, so a header received again after a resubscription is recognised as processed.
-// It is shared by the `ProcessBlockHeaders` routines of successive subscriptions, which may
-// briefly overlap.
 type processedBlocks struct {
 	mu        sync.Mutex
 	processed bool
 	highest   uint64
 }
 
-// Records the block number, returning false if it is not higher than every block recorded
-// before
 func (p *processedBlocks) add(blockNumber uint64) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -258,7 +246,6 @@ func (d *EventDispatcher[S]) Dispatch(
 			if d.CurrentAttest.Status == Successful {
 				continue
 			}
-			// A transaction was sent: check its status and keep waiting unless it failed
 			if d.CurrentAttest.Status == Ongoing {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 				if d.CurrentAttest.unknownPolls >= maxUnknownStatusPolls {
@@ -273,9 +260,6 @@ func (d *EventDispatcher[S]) Dispatch(
 					continue
 				}
 			}
-
-			// Nothing was sent yet or the last attempt failed: (re)send the attest transaction.
-			// Any failure below marks the attempt as failed, so it is retried on the next block
 
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
@@ -335,7 +319,6 @@ func (d *EventDispatcher[S]) Dispatch(
 			}
 
 			logger.Debug("attest transaction sent", zap.String("hash", resp.Hash.String()))
-			// Only a sent transaction is tracked, so `Ongoing` always comes with its hash
 			d.CurrentAttest.Hash = *resp.Hash
 			d.CurrentAttest.setStatus(Ongoing)
 			// Record attestation submission in metrics
@@ -343,8 +326,6 @@ func (d *EventDispatcher[S]) Dispatch(
 
 		case <-d.EndOfWindow:
 			logger.Info("end of window reached")
-			// Only a sent transaction has a status to check. When nothing was sent or the
-			// last attempt failed there is no transaction hash to look for
 			if d.CurrentAttest.Status == Ongoing {
 				d.CurrentAttest.UpdateStatus(signer, logger)
 			}
@@ -356,8 +337,6 @@ func (d *EventDispatcher[S]) Dispatch(
 				)
 				tracer.RecordAttestationConfirmed()
 			case d.CurrentAttest.statusUnknown():
-				// The node cannot say what happened to the transaction, which may well have
-				// succeeded: counting a failure would raise false alarms
 				logger.Warn(
 					"end of window reached without knowing if the attestation succeeded. "+
 						"Not counted as a failure, check the transaction on a block explorer",
@@ -385,8 +364,6 @@ func (d *EventDispatcher[S]) Dispatch(
 	}
 }
 
-// Returns the status of the attest transaction. When the node reports it as not found or fails
-// to return its status, the transaction is still considered `Ongoing`.
 func TrackAttest[S signerP.Signer](
 	signer S,
 	logger log.Logger,
@@ -397,14 +374,11 @@ func TrackAttest[S signerP.Signer](
 	return status
 }
 
-// Same as `TrackAttest`, also returning false when the status poll could not tell what happened
-// to the transaction (not found by the node, or the status request failed)
 func trackAttest[S signerP.Signer](
 	signer S,
 	logger log.Logger,
 	txHash *felt.Felt,
 ) (AttestStatus, bool) {
-	// A zero hash means no transaction was sent, so there is nothing the node could find
 	if txHash.IsZero() {
 		logger.Warn("no attest transaction to track. Will retry")
 

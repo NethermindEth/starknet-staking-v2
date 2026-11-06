@@ -72,7 +72,6 @@ func TestNewProvider(t *testing.T) {
 	t.Run("Supported spec version", func(t *testing.T) {
 		for _, specVersion := range []string{
 			"0.10.2", "0.10.3", "v0.10.3", "0.10.4",
-			// Build metadata is ignored, QA report 01 finding P3
 			"0.10.2+juno", "0.10.3+juno", "v0.10.4+build.1",
 		} {
 			t.Run(specVersion, func(t *testing.T) {
@@ -89,7 +88,6 @@ func TestNewProvider(t *testing.T) {
 	t.Run("Unsupported spec version", func(t *testing.T) {
 		for _, specVersion := range []string{
 			"0.9.0", "0.10.1", "0.10.5", "0.11.0", "1.10.3",
-			// Pre-releases and strings that are not semantic versions, QA report 01 finding P3
 			"0.10.3-rc1", "0.10.2-rc1", "0.10.03", "0.10", "V0.10.3", " 0.10.3", "garbage", "",
 		} {
 			t.Run(specVersion, func(t *testing.T) {
@@ -105,8 +103,6 @@ func TestNewProvider(t *testing.T) {
 		}
 	})
 
-	// QA report 01 finding P4: transport failures are reported as such, not as a JSON-RPC
-	// `-32603 Internal Error`, and the ones that may go away are marked as transient
 	t.Run("Transport failures", func(t *testing.T) {
 		closedServer := httptest.NewServer(http.NotFoundHandler())
 		closedServer.Close()
@@ -238,8 +234,6 @@ func TestBlockHeaderSubscription(t *testing.T) {
 	}
 }
 
-// QA report 02 finding F-09: an http(s) URL given as the WS provider URL is rejected at startup,
-// before any connection attempt
 func TestNewRejectsNonWebsocketURL(t *testing.T) {
 	for _, wsURL := range []string{"http://localhost:6061", "https://localhost:6061", "localhost"} {
 		t.Run(wsURL, func(t *testing.T) {
@@ -255,17 +249,12 @@ func TestNewRejectsNonWebsocketURL(t *testing.T) {
 	}
 }
 
-// The startup lines naming the signers say whether the Braavos transaction version is used
-// (QA report 01, finding OBS-4)
 func TestNewLogsBraavosMode(t *testing.T) {
 	server := validator.MockRPCServer(t, validator.MockRPC{
 		Results: nil,
 		CallResults: map[string]string{
-			// staker address, stake, epoch length, epoch id and starting block
 			"get_attestation_info_by_operational_address": `["0x789", "0x1", "0xa", "0x1", "0x1"]`,
-			// Some(staker info) with the reward address, the operational address,
-			// None unstake time, own amount and unclaimed rewards
-			"get_staker_info_v1": `["0x0", "0x789", "0x456", "0x1", "0x0", "0x0"]`,
+			"get_staker_info_v1":                          `["0x0", "0x789", "0x456", "0x1", "0x0", "0x0"]`,
 		},
 		OnWSUpgrade: nil,
 	})

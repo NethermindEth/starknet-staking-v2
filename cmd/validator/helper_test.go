@@ -28,23 +28,15 @@ const (
 	supportedSpecVersion = "0.10.2"
 )
 
-// Decides how the node answers a request: ok is false to let the request through, otherwise
-// the node answers with the given HTTP status and body
 type nodeFault func(method, entryPoint string) (status int, body string, ok bool)
 
-// Starts a node answering the calls the validator makes on startup, the reward account "0x789"
-// being the staker account, behind a proxy that applies `fault` to every request. The spec
-// version answered is `specVersion`.
 func newFaultyNode(t *testing.T, specVersion string, fault nodeFault) string {
 	t.Helper()
 
 	backend := validator.MockRPCServer(t, validator.MockRPC{
 		Results: map[string]string{"starknet_specVersion": `"` + specVersion + `"`},
 		CallResults: map[string]string{
-			// staker address, stake, epoch length, epoch id and starting block
-			epochInfoEntryPoint: `["0x789", "0x1", "0xa", "0x1", "0x1"]`,
-			// Some(staker info) with the reward address, the operational address,
-			// None unstake time, own amount and unclaimed rewards
+			epochInfoEntryPoint:  `["0x789", "0x1", "0xa", "0x1", "0x1"]`,
 			stakerInfoEntryPoint: `["0x0", "0x789", "0x456", "0x1", "0x0", "0x0"]`,
 		},
 		OnWSUpgrade: nil,
@@ -94,8 +86,6 @@ func newFaultyNode(t *testing.T, specVersion string, fault nodeFault) string {
 	return front.URL
 }
 
-// Fault hitting the first `times` requests matching the method and entry point (any entry
-// point if empty)
 func failFirst(times int, method, entryPoint string, status int, body string) nodeFault {
 	var mu sync.Mutex
 	hits := 0
@@ -119,7 +109,6 @@ func noFault(string, string) (status int, body string, ok bool) { return 0, "", 
 const internalErrorBody = `{"jsonrpc": "2.0", "id": 1, ` +
 	`"error": {"code": -32603, "message": "Internal error"}}`
 
-// Replaces the delay between retries, returning the number of retries done
 func countRetries(t *testing.T) *int {
 	t.Helper()
 
@@ -152,8 +141,6 @@ func newConfig(httpURL string, withReward bool) *config.Config {
 	return &conf
 }
 
-// Transient errors at startup are retried up to `--max-retries` times, any other error stops
-// the validator at once (QA report 01 finding P2, report 03 finding AC-3, report 02 O-8, O-9)
 func TestTryNewValidator(t *testing.T) {
 	logger := log.NewNopZapLogger()
 
@@ -207,7 +194,6 @@ func TestTryNewValidator(t *testing.T) {
 		}
 	})
 
-	// With the auto-claim feature, the startup calls it adds are retried like any other
 	t.Run("Reward startup calls failing temporarily", func(t *testing.T) {
 		for _, entryPoint := range []string{epochInfoEntryPoint, stakerInfoEntryPoint} {
 			t.Run(entryPoint, func(t *testing.T) {

@@ -22,12 +22,8 @@ import (
 
 var supportedSpecVersions = []string{"0.10.2", "0.10.3", "0.10.4"}
 
-// How long the node has to answer the spec version request made at startup
 const specVersionTimeout = 30 * time.Second
 
-// ErrTransient marks an error that may go away when the operation is retried later: the RPC
-// provider could not be reached, timed out, or answered with a server error (HTTP 5xx, 408, 429,
-// or a JSON-RPC internal error)
 var ErrTransient = errors.New("transient error")
 
 type transientError struct {
@@ -40,13 +36,10 @@ func (e transientError) Unwrap() error { return e.err }
 
 func (e transientError) Is(target error) bool { return target == ErrTransient }
 
-// Marks the error with `ErrTransient`, keeping its message
 func transient(err error) error {
 	return transientError{err: err}
 }
 
-// Marks the error with `ErrTransient` if it is a JSON-RPC internal error, which is also the
-// error starknet.go returns when the provider cannot be reached
 func markIfTransient(err error) error {
 	var rpcErr *rpcerr.RPCError
 	if errors.As(err, &rpcErr) && rpcErr.Code == rpcerr.InternalError {
@@ -70,8 +63,6 @@ func NewProvider(
 		return nil, versionErr
 	}
 
-	// The node version was checked above, so the incompatibility starknet.go reports only
-	// means the node does not implement the exact version starknet.go targets
 	provider, err := rpc.NewProvider(ctx, providerURL)
 	if errors.Is(err, rpc.ErrIncompatibleVersion) {
 		logger.Warn(
@@ -90,9 +81,6 @@ func NewProvider(
 	return provider, nil
 }
 
-// Requests the JSON-RPC specification version implemented by the node. It uses the plain
-// JSON-RPC client so that transport failures keep their type: starknet.go reports all of them
-// as `-32603 Internal Error`, which reads like a fault of the node.
 func fetchSpecVersion(ctx context.Context, providerURL string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, specVersionTimeout)
 	defer cancel()
@@ -112,8 +100,6 @@ func fetchSpecVersion(ctx context.Context, providerURL string) (string, error) {
 	return nodeSpecVersion, nil
 }
 
-// Turns the error of a request to the RPC provider into a message saying what happened,
-// marked with `ErrTransient` when retrying later may succeed
 func providerRequestError(providerURL string, err error) error {
 	var httpErr client.HTTPError
 	var urlErr *url.Error
@@ -161,7 +147,6 @@ func isRetryableHTTPStatus(statusCode int) bool {
 		statusCode == http.StatusTooManyRequests
 }
 
-// Short description of a network error, without the request details already in the message
 func describeNetError(err error) string {
 	var dnsErr *net.DNSError
 	var netErr net.Error
@@ -178,9 +163,6 @@ func describeNetError(err error) string {
 	}
 }
 
-// Checks the JSON-RPC specification version implemented by the node. It must be a semantic
-// version, ignoring a leading "v" and any build metadata, whose major, minor and patch parts
-// are one of the supported versions. Pre-releases are not supported.
 func checkSpecVersion(providerURL, nodeSpecVersion string) error {
 	version, err := semver.StrictNewVersion(strings.TrimPrefix(nodeSpecVersion, "v"))
 	if err == nil && version.Prerelease() == "" {
@@ -196,8 +178,6 @@ func checkSpecVersion(providerURL, nodeSpecVersion string) error {
 	)
 }
 
-// Checks that the WS provider URL uses a websocket scheme. With an http(s) URL the connection
-// works but the subscription fails later with an unrelated error on every retry.
 func checkWSProviderURL(wsProviderURL string) error {
 	parsedURL, err := url.Parse(wsProviderURL)
 	if err != nil {

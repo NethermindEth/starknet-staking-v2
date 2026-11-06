@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// QA report 05, finding BM-2: failed epoch info fetches stall the block processing, so they
-// are exported for alerting
 func TestRecordEpochInfoFetchFailure(t *testing.T) {
 	m := NewMetrics("localhost:0", "SN_SEPOLIA", log.NewNopZapLogger())
 	m.RecordEpochInfoFetchFailure()

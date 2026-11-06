@@ -29,23 +29,18 @@ const (
 	testWindowLen  = 40
 )
 
-// Signer mock answering the epoch and attestation window calls. The n-th epoch info call
-// answers the epoch `testEpochID + epochOffsets[n]` (the last offset once they are used up, 0 if
-// there are none), epochs being contiguous.
 func newEpochSigner(t *testing.T, epochOffsets ...uint64) *mocks.MockSigner {
 	t.Helper()
 
 	return newFailingEpochSigner(t, 0, epochOffsets...)
 }
 
-// Same as `newEpochSigner`, the first `failures` epoch info calls failing
 func newFailingEpochSigner(
 	t *testing.T, failures int, epochOffsets ...uint64,
 ) *mocks.MockSigner {
 	t.Helper()
 
 	var epochCalls sync.Mutex
-	// Returns the epoch offset to answer, false if the call must fail
 	epochOffset := func() (uint64, bool) {
 		epochCalls.Lock()
 		defer epochCalls.Unlock()
@@ -90,15 +85,14 @@ func newFailingEpochSigner(
 			}
 
 			return []*felt.Felt{
-				new(felt.Felt).SetUint64(0x456), // staker address
-				new(felt.Felt).SetUint64(1),     // stake
+				new(felt.Felt).SetUint64(0x456),
+				new(felt.Felt).SetUint64(1),
 				new(felt.Felt).SetUint64(testEpochLen),
 				new(felt.Felt).SetUint64(testEpochID + offset),
 				new(felt.Felt).SetUint64(testEpochStart + offset*testEpochLen),
 			}, nil
 		}).
 		AnyTimes()
-	// The target block is not known yet
 	mockSigner.EXPECT().
 		BlockWithTxHashes(gomock.Any()).
 		Return(nil, errors.New("block not found")).
@@ -107,7 +101,6 @@ func newFailingEpochSigner(
 	return mockSigner
 }
 
-// Counts the events sent to the dispatcher, until its channels are closed
 type eventCounter struct {
 	wg          sync.WaitGroup
 	doAttest    int
@@ -127,7 +120,6 @@ func countEvents(dispatcher *validator.EventDispatcher[*mocks.MockSigner]) *even
 		}
 	})
 	counter.wg.Go(func() {
-		// Only draining the channel
 		for range dispatcher.PrepareAttest {
 		}
 	})
@@ -135,7 +127,6 @@ func countEvents(dispatcher *validator.EventDispatcher[*mocks.MockSigner]) *even
 	return counter
 }
 
-// Returns a closed feed with the headers of the given blocks
 func headersFeed(blockNumbers ...uint64) chan *rpc.BlockHeader {
 	feed := make(chan *rpc.BlockHeader, len(blockNumbers))
 	for _, number := range blockNumbers {
@@ -146,10 +137,6 @@ func headersFeed(blockNumbers ...uint64) chan *rpc.BlockHeader {
 	return feed
 }
 
-// The node replays its latest header on every new subscription. A header already processed by
-// the routine of a previous subscription must not dispatch its events again: a second
-// EndOfWindow gave a false attestation failure and a second reward claim (QA report 03,
-// finding AC-2).
 func TestProcessBlockHeadersSkipsReplayedHeaders(t *testing.T) {
 	mockSigner := newEpochSigner(t)
 	logger := log.NewNopZapLogger()
@@ -162,13 +149,11 @@ func TestProcessBlockHeadersSkipsReplayedHeaders(t *testing.T) {
 	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 	counter := countEvents(&dispatcher)
 
-	// 1st subscription: the last block of the window and the window end
 	err = validator.ProcessBlockHeaders(
 		t.Context(), headersFeed(windowEnd-1, windowEnd), mockSigner, logger, &dispatcher,
 		types.Retries{}, metrics.NewNoOpMetrics(),
 	)
 	require.NoError(t, err)
-	// 2nd subscription: the window end is replayed, older headers are skipped as well
 	err = validator.ProcessBlockHeaders(
 		t.Context(), headersFeed(windowEnd, windowEnd-1, windowEnd+1), mockSigner, logger,
 		&dispatcher, types.Retries{}, metrics.NewNoOpMetrics(),
@@ -184,15 +169,12 @@ func TestProcessBlockHeadersSkipsReplayedHeaders(t *testing.T) {
 	require.Equal(t, 1, counter.endOfWindow)
 }
 
-// The first block of an epoch is logged relative to that epoch, after its "epoch started" line,
-// and not as "0 blocks for the next epoch" of the previous one (QA report 01, H4)
 func TestProcessBlockHeadersLogsBlockAfterEpochSwitch(t *testing.T) {
 	var buf bytes.Buffer
 	logger, err := log.NewZapLogger(
 		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
 	)
 	require.NoError(t, err)
-	// The first epoch at startup, the next one at the switch
 	mockSigner := newEpochSigner(t, 0, 1)
 	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 	counter := countEvents(&dispatcher)
@@ -217,7 +199,6 @@ func TestProcessBlockHeadersLogsBlockAfterEpochSwitch(t *testing.T) {
 	require.Less(t, strings.Index(out, newEpochLine), strings.Index(out, blockLine))
 }
 
-// Counts the epoch info fetch failures, ignoring the rest
 type epochFetchTracer struct {
 	metrics.NoOpMetrics
 
@@ -226,8 +207,6 @@ type epochFetchTracer struct {
 
 func (e *epochFetchTracer) RecordEpochInfoFetchFailure() { e.fetchFailures++ }
 
-// While the epoch info cannot be fetched no block header is processed, so the failures must be
-// visible to the operator: WARN logs and a metric (QA report 05, finding BM-2)
 func TestFetchEpochAndAttestInfoWithRetryReportsFailures(t *testing.T) {
 	sleep := validator.Sleep
 	validator.Sleep = func(time.Duration) {}
@@ -255,7 +234,6 @@ func TestFetchEpochAndAttestInfoWithRetryReportsFailures(t *testing.T) {
 		require.Equal(t, uint64(testEpochID), epochInfo.EpochID)
 		require.Equal(t, 21, tracer.fetchFailures)
 		out := buf.String()
-		// The 1st, 11th and 21st failures
 		require.Equal(t, 3, countLevel(out, "WARN"), out)
 		require.Contains(t, out, "injected outage")
 		require.Contains(t, out, `"retriesRemaining": "infinite"`)

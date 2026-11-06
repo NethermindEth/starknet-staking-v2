@@ -31,8 +31,6 @@ type Validator struct {
 	wsProvider string
 }
 
-// Creates the validator. Errors that may go away when retrying later, such as an unreachable
-// RPC provider, are marked with `ErrTransient`.
 func New(
 	ctx context.Context,
 	conf *config.Config,
@@ -268,8 +266,6 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	for block := range headersFeed {
-		// The node replays its latest header when resubscribing: dispatching its events again
-		// would end the same window twice (a false attestation failure and a second claim)
 		if !dispatcher.processedBlocks.add(block.Number) {
 			logger.Debug("block header already processed, skipping it",
 				zap.Uint64("blockNumber", block.Number),
@@ -298,8 +294,6 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			// Update epoch info metrics
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 		}
-		// Logged once the epoch is up to date, so the first block of an epoch is described
-		// relative to that epoch
 		logBlock(block.Number, &epochInfo, &attestInfo, logger)
 		if uint64(attestInfo.TargetBlock) == block.Number {
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
@@ -354,13 +348,8 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 	}
 }
 
-// Failed epoch info fetches are logged at WARN on the first failure and then every this many
-// failures, at DEBUG otherwise
 const epochFetchWarnEvery = 10
 
-// Fetches the epoch and attestation info, retrying every second on errors and on an unexpected
-// epoch switch. Block headers are not processed meanwhile, so every failed attempt is recorded
-// in the metrics and regularly logged at WARN.
 func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	signer Signer,
 	logger log.Logger,

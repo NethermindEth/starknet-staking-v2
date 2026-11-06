@@ -297,7 +297,6 @@ func (m *Metrics) RecordAttestationConfirmed() {
 	m.attestationConfirmedCount.WithLabelValues(m.network).Inc()
 }
 
-// RecordEpochInfoFetchFailure increments the epoch info fetch failure counter
 func (m *Metrics) RecordEpochInfoFetchFailure() {
 	m.logger.Debug("RecordEpochInfoFetchFailure")
 	m.epochInfoFetchFailureCount.WithLabelValues(m.network).Inc()

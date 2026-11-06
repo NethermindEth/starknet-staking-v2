@@ -30,7 +30,6 @@ func logNewEpoch(
 		zap.Uint64("epochID", epochInfo.EpochID),
 		zap.Uint64("epochLength", epochInfo.EpochLen),
 		zap.Uint64("startBlock", epochInfo.StartingBlock.Uint64()),
-		// Last block of the epoch, the next one starts the next epoch
 		zap.Uint64("endBlock", epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen-1),
 	)
 	logger.Info(

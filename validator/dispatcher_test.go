@@ -497,7 +497,6 @@ func TestTrackAttest(t *testing.T) {
 		require.Equal(t, validator.Ongoing, txStatus)
 	})
 
-	// QA report 01, finding OBS-1: a failed status request says nothing about the transaction
 	t.Run(
 		"attestation is still ongoing if the transaction status request fails",
 		func(t *testing.T) {
@@ -672,7 +671,6 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 	}
 }
 
-// Records the attestation outcome metrics, ignoring the rest
 type attestTracer struct {
 	metrics.NoOpMetrics
 
@@ -687,9 +685,6 @@ func (a *attestTracer) RecordAttestationConfirmed() { a.confirmed++ }
 
 func (a *attestTracer) RecordAttestationFailure() { a.failures++ }
 
-// Signer mock for the attest path. Only the calls made by the balance check launched at the
-// end of a window are set up: every test sets the attest calls it expects. A value is sent on
-// the returned channel by every balance check.
 func newAttestSigner(t *testing.T) (mockSigner *mocks.MockSigner, balanceChecked chan struct{}) {
 	t.Helper()
 
@@ -715,8 +710,6 @@ func newAttestSigner(t *testing.T) (mockSigner *mocks.MockSigner, balanceChecked
 	return mockSigner, balanceChecked
 }
 
-// Waits for the balance check launched at the end of a window, so no mock call happens after
-// the test ends
 func waitBalanceCheck(t *testing.T, balanceChecked chan struct{}) {
 	t.Helper()
 
@@ -727,8 +720,6 @@ func waitBalanceCheck(t *testing.T, balanceChecked chan struct{}) {
 	}
 }
 
-// Starts the dispatcher routine. The returned function stops it and waits for it to end, at
-// which point every event sent before was fully processed.
 func startDispatcher(
 	t *testing.T, signer *mocks.MockSigner, tracer metrics.Tracer,
 ) (dispatcher *validator.EventDispatcher[*mocks.MockSigner], stop func()) {
@@ -747,8 +738,6 @@ func startDispatcher(
 	}
 }
 
-// Sends an event to the dispatcher, failing the test if the dispatcher routine does not take
-// it (for example because an unexpected mock call ended it)
 func sendEvent[E any](t *testing.T, ch chan<- E, event E) {
 	t.Helper()
 
@@ -779,9 +768,6 @@ func feeEstimate() rpc.FeeEstimation {
 	}
 }
 
-// A failure while (re)building the attest transaction or refreshing its nonce must not leave
-// the tracker waiting for a transaction that was never sent (QA report 01, finding P1): the
-// attempt is marked as failed and retried on the next block of the window.
 func TestDispatchRetriesFailedAttempts(t *testing.T) {
 	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
 	txHash := new(felt.Felt).SetUint64(0xa77e57)
@@ -790,12 +776,9 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 	t.Run("Nonce refresh fails at window start", func(t *testing.T) {
 		mockSigner, _ := newAttestSigner(t)
 		gomock.InOrder(
-			// Prepared in advance
 			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
-			// 1st block of the window
 			mockSigner.EXPECT().Nonce().Return(nil, errors.New("-32603 Internal Error")),
-			// 2nd block of the window
 			mockSigner.EXPECT().Nonce().Return(new(felt.Felt).SetUint64(1), nil),
 			mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(feeEstimate(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
@@ -819,17 +802,13 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 	t.Run("Signer down across the window start", func(t *testing.T) {
 		mockSigner, _ := newAttestSigner(t)
 		gomock.InOrder(
-			// Prepared in advance
 			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
-			// 1st block of the window: signing the final transaction fails
 			mockSigner.EXPECT().Nonce().Return(new(felt.Felt).SetUint64(1), nil),
 			mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(feeEstimate(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, signerDown),
-			// 2nd block of the window: the rebuild fails
 			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, signerDown),
-			// 3rd block of the window: the signer is back
 			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(feeEstimate(), nil),
@@ -855,14 +834,10 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 	t.Run("Re-signing after a nonce change fails", func(t *testing.T) {
 		mockSigner, _ := newAttestSigner(t)
 		gomock.InOrder(
-			// Prepared in advance
 			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
-			// 1st block of the window: the nonce changed, but re-signing fails
 			mockSigner.EXPECT().Nonce().Return(new(felt.Felt).SetUint64(2), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, signerDown),
-			// 2nd block of the window: the transaction is rebuilt, since its signature no
-			// longer matches its nonce
 			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().EstimateFee(gomock.Any()).Return(feeEstimate(), nil),
@@ -882,7 +857,6 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 		require.Equal(t, *txHash, dispatcher.CurrentAttest.Hash)
 	})
 
-	// QA report 01, finding OBS-5: with nothing sent there is no transaction status to poll
 	t.Run("Window ends after failed attempts only", func(t *testing.T) {
 		mockSigner, balanceChecked := newAttestSigner(t)
 		mockSigner.EXPECT().
@@ -914,10 +888,6 @@ func TestTrackAttestWithoutTransaction(t *testing.T) {
 	require.Equal(t, validator.Failed, status)
 }
 
-// QA report 01, finding OBS-1: the status of a sent transaction can be unknown, because the
-// node does not find it or the status request fails. The hash is kept and polled again; after
-// some blocks the attestation is sent again; at the end of the window an unknown status is not
-// counted as a failure.
 func TestDispatchUnknownAttestStatus(t *testing.T) {
 	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
 	txHash := new(felt.Felt).SetUint64(0xa77e57)
@@ -927,7 +897,6 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 		ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
 	}
 
-	// Expects the attest transaction to be built and sent once, at the first block
 	expectSend := func(mockSigner *mocks.MockSigner) *gomock.Call {
 		return mockSigner.EXPECT().
 			InvokeTransaction(gomock.Any()).
@@ -969,7 +938,6 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 				TransactionStatus(txHash).
 				Return(nil, validator.ErrTxnHashNotFound).
 				Times(5),
-			// The first transaction was executed after all: the new one is not sent
 			mockSigner.EXPECT().BuildAttestTransaction(&blockHash).Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().

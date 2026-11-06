@@ -67,8 +67,6 @@ func TestLogHelpersNonZapLoggerFallback(t *testing.T) {
 	require.Contains(t, rec.msgs[2], "block 0 received")
 }
 
-// The epoch id logged is the one of the staking contract and of the metrics, and the end block
-// is the last block of the epoch (QA report 05, finding BM-1)
 func TestLogNewEpochFields(t *testing.T) {
 	var buf bytes.Buffer
 	logger, err := log.NewZapLogger(
