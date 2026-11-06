@@ -39,6 +39,7 @@ const (
 const (
 	claimLogPrefix = "Auto-Claiming Rewards: "
 	claimTimeout   = 30 * time.Second
+	claimMaxBlocks = constants.MinAttestationWindow / 2
 )
 
 var (
@@ -252,6 +253,20 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 		zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
 	)
 
+	rs.sendClaim(ctx, tracer)
+}
+
+func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) {
+	pref := claimLogPrefix
+
+	startBlock, err := rs.provider.BlockNumber(ctx)
+	if err != nil {
+		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
+
+		return
+	}
+
 	txn, err := rs.buildClaimRewardTransaction(ctx)
 	if err != nil {
 		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
@@ -273,6 +288,26 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 			return
 		}
 		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
+
+		return
+	}
+
+	latestBlock, err := rs.provider.BlockNumber(ctx)
+	if err != nil {
+		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
+
+		return
+	}
+	if latestBlock > startBlock+claimMaxBlocks {
+		rs.logger.Warn(
+			pref+"claim not ready within the block limit; skipping claim so it can't take "+
+				"the nonce of the next attestation...",
+			zap.Uint64("claim start block", startBlock),
+			zap.Uint64("latest block", latestBlock),
+			zap.Uint64("block limit", claimMaxBlocks),
+		)
 		tracer.RecordRewardClaimFailure()
 
 		return
