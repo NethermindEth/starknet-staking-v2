@@ -154,7 +154,7 @@ func TestTryNewValidator(t *testing.T) {
 			retriesOf(t, "2"), logger, false,
 		)
 
-		require.ErrorContains(t, err, "cannot start validator after 2 retries")
+		require.ErrorContains(t, err, "cannot start validator, no retries left (--max-retries 2)")
 		require.ErrorContains(t, err, "cannot reach RPC provider at "+closed.URL+
 			": connection refused")
 		require.Equal(t, 2, *retries)

@@ -34,7 +34,8 @@ func tryNewValidator(
 		}
 		if retries.IsZero() {
 			return validator.Validator{}, fmt.Errorf(
-				"cannot start validator after %s retries: %w", maxRetries.String(), err,
+				"cannot start validator, no retries left (--max-retries %s): %w",
+				maxRetries.String(), err,
 			)
 		}
 
