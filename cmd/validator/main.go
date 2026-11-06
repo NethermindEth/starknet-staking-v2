@@ -37,12 +37,12 @@ Configuration can be provided through flags, environment variables or a JSON
 config file, in that order of priority.
 
 Auto-claim reward feature (optional):
-  Automatically claims the staker rewards once the unclaimed amount 
+  Automatically claims the staker rewards once the unclaimed amount
   reaches --reward-claim-threshold. If any reward option is set, --reward-address,
   --reward-claim-threshold and exactly one of --reward-priv-key or
   --reward-signer-url are required.
-	
-Full documentation: https://nethermindeth.github.io/starknet-staking-v2/	
+
+Full documentation: https://nethermindeth.github.io/starknet-staking-v2/
 `
 
 //nolint:funlen // It's the main function, so it's normal to be long
@@ -197,10 +197,13 @@ func NewCommand() cobra.Command {
 		&config.Signer.ExternalURL,
 		"signer-url",
 		"",
-		"Signer url address, required if using an external signer",
+		"Signer url address, required if using an external signer. Exclusive with --signer-priv-key",
 	)
 	cmd.Flags().StringVar(
-		&config.Signer.PrivKey, "signer-priv-key", "", "Signer private key, required for signing",
+		&config.Signer.PrivKey,
+		"signer-priv-key",
+		"",
+		"Signer private key, required if using internal signing. Exclusive with --signer-url",
 	)
 	cmd.Flags().StringVar(
 		&config.Signer.OperationalAddress,
@@ -214,35 +217,35 @@ func NewCommand() cobra.Command {
 		&config.Reward.Address,
 		"reward-address",
 		"",
-		"(Optional) Reward account address. \n"+
+		"(Optional) Reward account address.\n"+
 			"Required for the auto-claim reward feature.",
 	)
 	cmd.Flags().Uint64Var(
 		&config.Reward.ClaimMaxFee,
 		"reward-claim-max-fee",
 		0,
-		"(Optional) Max fee, in FRI, to pay for the claim transaction. \n"+
-			" Defaults to 'unlimited' if not specified (max uint64, which is ~18.4 STRK)",
+		"(Optional) Max fee, in FRI, to pay for the claim transaction.\n"+
+			"Defaults to 'unlimited' if not specified (max uint64, which is ~18.4 STRK)",
 	)
 	cmd.Flags().Uint64Var(
 		&config.Reward.ClaimThreshold,
 		"reward-claim-threshold",
 		0,
-		"(Optional) Amount of unclaimed rewards, in STRK, that triggers an automatic claim. \n"+
-			" Required for the auto-claim reward feature.",
+		"(Optional) Amount of unclaimed rewards, in STRK, that triggers an automatic claim.\n"+
+			"Required for the auto-claim reward feature.",
 	)
 	cmd.Flags().StringVar(
 		&config.Reward.PrivKey,
 		"reward-priv-key",
 		"",
-		"(Optional) Reward account private key, used for internal signing of the reward account. \n"+
+		"(Optional) Reward account private key, used for internal signing of the reward account.\n"+
 			"Required for the auto-claim reward feature. Can be replaced by the 'reward-signer-url' flag.",
 	)
 	cmd.Flags().StringVar(
 		&config.Reward.ExternalURL,
 		"reward-signer-url",
 		"",
-		"(Optional) Reward signer url address, used for external signing of the reward account. \n"+
+		"(Optional) Reward signer url address, used for external signing of the reward account.\n"+
 			"Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag.",
 	)
 	cmd.Flags().BoolVar(
@@ -258,18 +261,23 @@ func NewCommand() cobra.Command {
 		&snConfig.ContractAddresses.Attest,
 		"attest-contract-address",
 		"",
-		"Attestation contract address. Defaults values are provided for Sepolia and Mainnet",
+		"Attestation contract address. Default values are provided for Sepolia and Mainnet",
 	)
 	cmd.Flags().StringVar(
 		&snConfig.ContractAddresses.Staking,
 		"staking-contract-address",
 		"",
-		"Staking contract address. Defaults values are provided for Sepolia and Mainnet",
+		"Staking contract address. Default values are provided for Sepolia and Mainnet",
 	)
 
 	// Metric tracking flags
 	cmd.Flags().BoolVar(&metricsF, "metrics", false, "Enable metric tracking via Prometheus")
-	cmd.Flags().StringVar(&metricsHostF, "metrics-host", "localhost", "Host for the metric server")
+	cmd.Flags().StringVar(
+		&metricsHostF,
+		"metrics-host",
+		"localhost",
+		"Host for the metric server. An empty value listens on all interfaces",
+	)
 	cmd.Flags().StringVar(&metricsPortF, "metrics-port", "9090", "Port for the metric server")
 
 	// Other flags
@@ -278,7 +286,7 @@ func NewCommand() cobra.Command {
 		"max-retries",
 		"infinite",
 		"How many times to retry to get information required for attestation.\n"+
-			" It can be either a positive integer or the key word 'infinite'",
+			"It can be either a positive integer or the key word 'infinite'",
 	)
 	cmd.Flags().Float64Var(
 		&balanceThreshold,
@@ -287,14 +295,15 @@ func NewCommand() cobra.Command {
 		"Triggers a warning if it detects the signer account (i.e. operational address)\n"+
 			"stark balance below the specified threshold. If the auto-claim reward feature\n"+
 			"is configured, the reward account balance is checked as well.\n"+
-			"One stark equals 1 << 1e18.",
+			"The threshold is in STRK (1 STRK = 1e18 FRI).",
 	)
 	cmd.Flags().BoolVar(
 		&braavosAccount,
 		"braavos-account",
 		false,
-		"Changes the the transaction version format from 0x3 to 1<<128 + 0x3, required by\n"+
-			"Braavos accounts. Only applies for internal signing.",
+		"Set it if the operational account is a Braavos account. Fee estimation then uses the\n"+
+			"query-bit transaction version (1<<128 + 0x3) that Braavos accounts require.\n"+
+			"Applies to both internal and external signing.",
 	)
 	cmd.Flags().StringVar(
 		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error.",
