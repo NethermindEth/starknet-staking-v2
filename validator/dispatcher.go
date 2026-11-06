@@ -181,26 +181,28 @@ type EventDispatcher[S signerP.Signer] struct {
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
 
-	processedBlocks *processedBlocks
+	progress *headerProgress
 }
 
 func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	return EventDispatcher[S]{
-		CurrentAttest:   NewAttestTracker(),
-		DoAttest:        make(chan types.DoAttest),
-		PrepareAttest:   make(chan types.PrepareAttest),
-		EndOfWindow:     make(chan struct{}),
-		processedBlocks: new(processedBlocks),
+		CurrentAttest: NewAttestTracker(),
+		DoAttest:      make(chan types.DoAttest),
+		PrepareAttest: make(chan types.PrepareAttest),
+		EndOfWindow:   make(chan struct{}),
+		progress:      new(headerProgress),
 	}
 }
 
-type processedBlocks struct {
-	mu        sync.Mutex
-	processed bool
-	highest   uint64
+type headerProgress struct {
+	mu            sync.Mutex
+	processed     bool
+	highest       uint64
+	epochLogged   bool
+	loggedEpochID uint64
 }
 
-func (p *processedBlocks) add(blockNumber uint64) bool {
+func (p *headerProgress) addBlock(blockNumber uint64) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -209,6 +211,26 @@ func (p *processedBlocks) add(blockNumber uint64) bool {
 	}
 	p.processed = true
 	p.highest = blockNumber
+
+	return true
+}
+
+func (p *headerProgress) highestBlock() (uint64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.highest, p.processed
+}
+
+func (p *headerProgress) newEpoch(epochID uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.epochLogged && p.loggedEpochID == epochID {
+		return false
+	}
+	p.epochLogged = true
+	p.loggedEpochID = epochID
 
 	return true
 }
