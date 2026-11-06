@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -72,6 +73,10 @@ func NewCommand() cobra.Command {
 		// Only set when passed, so an unset flag doesn't override the other config sources
 		if cmd.Flags().Changed("reward-braavos-account") {
 			config.Reward.Braavos = &rewardBraavosF
+		}
+		// Before loading the other sources, which replace a zero claim threshold
+		if err := checkThresholdFlags(cmd, &config, balanceThreshold); err != nil {
+			return err
 		}
 		if err := loadConfig(&config, configPath); err != nil {
 			return err
@@ -387,6 +392,22 @@ func startValidator(
 // stack trace for errors that implement `fmt.Formatter`, like the cockroachdb ones
 func errorField(err error) zap.Field {
 	return zap.String("error", err.Error())
+}
+
+// Verifies the threshold flags. A zero claim threshold means "not set", so an explicit
+// `--reward-claim-threshold 0` would be silently replaced by the value of a lower priority
+// source, and a non-finite balance threshold (NaN, infinite) makes the balance check meaningless
+func checkThresholdFlags(
+	cmd *cobra.Command, config *configP.Config, balanceThreshold float64,
+) error {
+	if cmd.Flags().Changed("reward-claim-threshold") && config.Reward.ClaimThreshold == 0 {
+		return errors.New("--reward-claim-threshold must be a positive number of STRK")
+	}
+	if math.IsNaN(balanceThreshold) || math.IsInf(balanceThreshold, 0) {
+		return fmt.Errorf("--balance-threshold must be a finite number, got %v", balanceThreshold)
+	}
+
+	return nil
 }
 
 // Verifies the metrics server can listen on the given host and port, so that a typo in

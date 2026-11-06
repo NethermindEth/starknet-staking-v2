@@ -323,6 +323,44 @@ func TestHelpText(t *testing.T) {
 	require.Contains(t, help, "Exclusive with --signer-priv-key")
 }
 
+func TestThresholdFlags(t *testing.T) {
+	t.Run("Explicit zero claim threshold is rejected", func(t *testing.T) {
+		// Without the check, the env var value would silently replace the flag value
+		t.Setenv("REWARD_CLAIM_THRESHOLD", "5")
+
+		for _, flag := range []string{"--reward-claim-threshold=0", "--reward-claim-threshold=00"} {
+			command := newTestCommandWithArgs(
+				t,
+				validFlags(testProviderHTTP, testProviderWS,
+					"--reward-address", "0x789", "--reward-priv-key", "0xabc", flag)...,
+			)
+			err := command.ExecuteContext(t.Context())
+			require.EqualError(t, err, "--reward-claim-threshold must be a positive number of STRK")
+		}
+	})
+
+	t.Run("Non-finite balance threshold is rejected", func(t *testing.T) {
+		for _, value := range []string{"nan", "NaN", "inf", "+Inf", "-inf"} {
+			command := newTestCommandWithArgs(
+				t, validFlags(testProviderHTTP, testProviderWS, "--balance-threshold", value)...,
+			)
+			err := command.ExecuteContext(t.Context())
+			require.ErrorContains(t, err, "--balance-threshold must be a finite number", value)
+		}
+	})
+
+	t.Run("Zero and negative balance thresholds are accepted", func(t *testing.T) {
+		for _, value := range []string{"0", "-1"} {
+			ctx, httpURL, wsURL := newTestNode(t)
+
+			command := newTestCommandWithArgs(
+				t, validFlags(httpURL, wsURL, "--balance-threshold", value)...,
+			)
+			require.NoError(t, command.ExecuteContext(ctx), value)
+		}
+	})
+}
+
 // Returns the flags of a valid configuration for the given node URLs, with `extraFlags`
 func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
 	return append([]string{
