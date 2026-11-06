@@ -2,6 +2,8 @@ package validator
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -119,9 +121,14 @@ func providerRequestError(providerURL string, err error) error {
 
 		return reachErr
 	case errors.As(err, &urlErr):
-		return transient(errors.Errorf(
+		reachErr := errors.Errorf(
 			"cannot reach RPC provider at %s: %s", providerURL, describeNetError(urlErr.Err),
-		))
+		)
+		if isTLSError(urlErr.Err) {
+			return reachErr
+		}
+
+		return transient(reachErr)
 	case errors.Is(err, context.DeadlineExceeded):
 		return transient(errors.Errorf(
 			"cannot reach RPC provider at %s: no answer after %s", providerURL, specVersionTimeout,
@@ -139,6 +146,24 @@ func providerRequestError(providerURL string, err error) error {
 	default:
 		return errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err)
 	}
+}
+
+func isTLSError(err error) bool {
+	if errors.Is(err, http.ErrSchemeMismatch) {
+		return true
+	}
+
+	var recordErr tls.RecordHeaderError
+	var verificationErr *tls.CertificateVerificationError
+	var authorityErr x509.UnknownAuthorityError
+	var hostnameErr x509.HostnameError
+	var invalidErr x509.CertificateInvalidError
+
+	return errors.As(err, &recordErr) ||
+		errors.As(err, &verificationErr) ||
+		errors.As(err, &authorityErr) ||
+		errors.As(err, &hostnameErr) ||
+		errors.As(err, &invalidErr)
 }
 
 func isRetryableHTTPStatus(statusCode int) bool {

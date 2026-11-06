@@ -3,6 +3,7 @@ package validator_test
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -45,6 +46,26 @@ func mockNodeWithStatus(t *testing.T, status int, body string) *httptest.Server 
 	t.Cleanup(server.Close)
 
 	return server
+}
+
+func notTLSServer(t *testing.T) string {
+	t.Helper()
+
+	listener, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			_, _ = conn.Write([]byte("not a TLS server\n"))
+			_ = conn.Close()
+		}
+	}()
+
+	return listener.Addr().String()
 }
 
 func mockNodeWithBody(t *testing.T, body string) *httptest.Server {
@@ -106,6 +127,10 @@ func TestNewProvider(t *testing.T) {
 	t.Run("Transport failures", func(t *testing.T) {
 		closedServer := httptest.NewServer(http.NotFoundHandler())
 		closedServer.Close()
+		plainServer := mockNodeWithSpecVersion(t, "0.10.3")
+		tlsServer := httptest.NewTLSServer(http.NotFoundHandler())
+		t.Cleanup(tlsServer.Close)
+		notTLSAddress := notTLSServer(t)
 
 		testCases := []struct {
 			name        string
@@ -145,6 +170,21 @@ func TestNewProvider(t *testing.T) {
 					t, `{"jsonrpc": "2.0", "error": {"code": -32601, "message": "nope"}, "id": 1}`,
 				).URL,
 				expectedErr: "answered the spec version request with error -32601: nope",
+			},
+			{
+				name:        "TLS to a plain HTTP server",
+				url:         "https" + strings.TrimPrefix(plainServer.URL, "http"),
+				expectedErr: "server gave HTTP response to HTTPS client",
+			},
+			{
+				name:        "TLS to a server that does not speak TLS",
+				url:         "https://" + notTLSAddress,
+				expectedErr: "first record does not look like a TLS handshake",
+			},
+			{
+				name:        "untrusted certificate",
+				url:         tlsServer.URL,
+				expectedErr: "certificate signed by unknown authority",
 			},
 			{
 				name:        "unknown URL scheme",
