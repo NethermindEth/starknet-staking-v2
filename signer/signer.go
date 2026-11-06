@@ -12,11 +12,11 @@ import (
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
+	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
-	"github.com/cockroachdb/errors"
 	"go.uber.org/zap"
 )
 
@@ -46,9 +46,9 @@ type Signer struct {
 }
 
 func New(privateKey string, logger log.Logger) (Signer, error) {
-	privKey, ok := new(big.Int).SetString(privateKey, 0)
-	if !ok {
-		return Signer{}, errors.Errorf("cannot turn private key %s into a big int", privateKey)
+	privKey, err := types.PrivateKeyFromString(privateKey)
+	if err != nil {
+		return Signer{}, fmt.Errorf("invalid private key: %w", err)
 	}
 
 	publicKey, _ := curve.PrivateKeyToPoint(privKey)

@@ -39,27 +39,27 @@ func TestNewInternalSigner(t *testing.T) {
 	braavosAccount := false
 
 	t.Run("Error: private key conversion", func(t *testing.T) {
-		if !loadedEnvVars {
-			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
+		// The key is parsed before the provider is used, so no provider is needed. The
+		// error never includes the key
+		for _, privKey := range []string{
+			"", "0x", "0x0", "zzz-dummy", "0xZZdummy", " 0x123abc", "0x123abc\n", "-0x123abc",
+			"123456", "0x800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",
+		} {
+			validatorAccount, err := signer.NewInternalSigner(
+				t.Context(),
+				nil,
+				logger,
+				&config.Signer{PrivKey: privKey, OperationalAddress: "0x456"},
+				contractAddresses,
+				braavosAccount,
+			)
+
+			require.Equal(t, signer.InternalSigner{}, validatorAccount)
+			require.ErrorContains(t, err, "invalid private key: it must be")
+			if len(privKey) > len("0x0") {
+				require.NotContains(t, err.Error(), privKey)
+			}
 		}
-
-		provider, providerErr := validator.NewProvider(t.Context(), envVars.HTTPProviderURL, logger)
-		require.NoError(t, providerErr)
-
-		validatorAccount, err := signer.NewInternalSigner(
-			t.Context(),
-			provider,
-			logger,
-			&config.Signer{},
-			contractAddresses,
-			braavosAccount,
-		)
-
-		require.Equal(t, signer.InternalSigner{}, validatorAccount)
-		expectedErrorMsg := fmt.Sprintf(
-			"cannot turn private key %s into a big int", (*big.Int)(nil),
-		)
-		require.Equal(t, expectedErrorMsg, err.Error())
 	})
 	t.Run("Error: malformed operational address", func(t *testing.T) {
 		const malformedAddress = "0xZZZ"
