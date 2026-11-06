@@ -94,42 +94,115 @@ func TestNeedsUpdate(t *testing.T) {
 }
 
 func TestTrackRelease(t *testing.T) {
-	const failedChecks = 3
+	const newerRelease = "v99.0.0"
+	errUnreachable := errors.New("github unreachable")
 
-	core, logs := observer.New(zapcore.DebugLevel)
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+	type check struct {
+		release string
+		err     error
+	}
 
-	var calls atomic.Int32
-	latestRelease := func(context.Context) (string, error) {
-		if calls.Add(1) <= failedChecks {
-			return "", errors.New("github unreachable")
+	startTracker := func(
+		t *testing.T,
+		interval time.Duration,
+		latestRelease func(context.Context) (string, error),
+	) (*observer.ObservedLogs, context.CancelFunc, <-chan struct{}) {
+		t.Helper()
+
+		core, logs := observer.New(zapcore.DebugLevel)
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		done := make(chan struct{})
+		go func() {
+			trackRelease(ctx, log.NewZapLoggerWithCore(core), latestRelease, interval)
+			close(done)
+		}()
+
+		return logs, cancel, done
+	}
+
+	t.Run("Checks go on after failures and successes", func(t *testing.T) {
+		checks := []check{
+			{err: errUnreachable},
+			{err: errUnreachable},
+			{release: newerRelease},
+			{err: errUnreachable},
 		}
+		const minCalls = 6
 
-		return "v99.0.0", nil
-	}
+		var calls atomic.Int32
+		latestRelease := func(context.Context) (string, error) {
+			call := int(calls.Add(1))
+			if call <= len(checks) {
+				return checks[call-1].release, checks[call-1].err
+			}
 
-	done := make(chan struct{})
-	go func() {
-		trackRelease(ctx, log.NewZapLoggerWithCore(core), latestRelease, time.Millisecond)
-		close(done)
-	}()
+			return newerRelease, nil
+		}
+		logs, cancel, done := startTracker(t, time.Millisecond, latestRelease)
 
-	require.Eventually(t, func() bool {
-		return logs.FilterMessage("new release available. Update your tool to the latest version").
-			Len() > 0
-	}, 5*time.Second, time.Millisecond)
-	cancel()
-	<-done
+		require.Eventually(t, func() bool {
+			return calls.Load() >= minCalls
+		}, 5*time.Second, time.Millisecond)
+		cancel()
+		<-done
 
-	require.Greater(t, calls.Load(), int32(failedChecks))
-	failures := logs.FilterMessage("cannot check for a new release").AllUntimed()
-	require.Len(t, failures, failedChecks)
-	require.Equal(t, zapcore.WarnLevel, failures[0].Level)
-	for _, failure := range failures[1:] {
-		require.Equal(t, zapcore.DebugLevel, failure.Level)
-	}
-	require.Equal(
-		t, "cannot get latest release: github unreachable", failures[0].ContextMap()["error"],
-	)
+		failures := logs.FilterMessage("cannot check for a new release").AllUntimed()
+		require.Len(t, failures, 3)
+		require.Equal(t, zapcore.WarnLevel, failures[0].Level)
+		require.Equal(t, zapcore.DebugLevel, failures[1].Level)
+		require.Equal(t, zapcore.WarnLevel, failures[2].Level)
+		require.Equal(
+			t, "cannot get latest release: github unreachable", failures[0].ContextMap()["error"],
+		)
+		require.Equal(t, "1ms", failures[0].ContextMap()["nextCheckIn"])
+		require.NotZero(
+			t,
+			logs.FilterMessage("new release available. Update your tool to the latest version").
+				Len(),
+		)
+	})
+
+	t.Run("A check cancelled by the shutdown is not a failure", func(t *testing.T) {
+		started := make(chan struct{})
+		latestRelease := func(ctx context.Context) (string, error) {
+			close(started)
+			<-ctx.Done()
+
+			return "", ctx.Err()
+		}
+		logs, cancel, done := startTracker(t, time.Hour, latestRelease)
+
+		<-started
+		cancel()
+		<-done
+
+		require.Zero(t, logs.FilterMessage("cannot check for a new release").Len())
+	})
+
+	t.Run("A check without an answer times out and is retried", func(t *testing.T) {
+		var calls atomic.Int32
+		latestRelease := func(ctx context.Context) (string, error) {
+			calls.Add(1)
+			<-ctx.Done()
+
+			return "", ctx.Err()
+		}
+		logs, cancel, done := startTracker(t, 10*time.Millisecond, latestRelease)
+
+		require.Eventually(t, func() bool {
+			return calls.Load() >= 2
+		}, 5*time.Second, time.Millisecond)
+		cancel()
+		<-done
+
+		failures := logs.FilterMessage("cannot check for a new release").AllUntimed()
+		require.NotEmpty(t, failures)
+		require.Equal(
+			t,
+			"cannot get latest release: context deadline exceeded",
+			failures[0].ContextMap()["error"],
+		)
+	})
 }

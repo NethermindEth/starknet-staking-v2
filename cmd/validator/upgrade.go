@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const maxReleaseCheckTime = 30 * time.Second
+
 type GitHubRelease struct {
 	TagName string `json:"tag_name"`
 }
@@ -93,7 +95,7 @@ func trackRelease(
 		logger.Warn(
 			"cannot check for a new release",
 			errorField(err),
-			zap.Duration("nextCheckIn", interval),
+			zap.Stringer("nextCheckIn", interval),
 		)
 	}
 
@@ -104,8 +106,13 @@ func trackRelease(
 		case <-timer.C:
 			timer.Reset(interval)
 
-			latestVersion, err := latestRelease(ctx)
+			checkCtx, cancelCheck := context.WithTimeout(ctx, min(interval, maxReleaseCheckTime))
+			latestVersion, err := latestRelease(checkCtx)
+			cancelCheck()
 			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				checkFailed(fmt.Errorf("cannot get latest release: %w", err))
 
 				continue
