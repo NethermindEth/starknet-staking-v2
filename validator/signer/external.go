@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -21,6 +24,28 @@ import (
 )
 
 var _ Signer = (*ExternalSigner)(nil)
+
+const (
+	externalSignerTimeout     = 15 * time.Second
+	externalSignerDialTimeout = 5 * time.Second
+)
+
+var externalSignerClient = newExternalSignerClient(externalSignerTimeout)
+
+func newExternalSignerClient(timeout time.Duration) *http.Client {
+	client := new(http.Client)
+	client.Timeout = timeout
+
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		dialer := new(net.Dialer)
+		dialer.Timeout = externalSignerDialTimeout
+		clone := transport.Clone()
+		clone.DialContext = dialer.DialContext
+		client.Transport = clone
+	}
+
+	return client
+}
 
 // Used as a wrapper around an exgernal signer implementation
 type ExternalSigner struct {
@@ -237,8 +262,15 @@ func HashAndSignTx(
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := externalSignerClient.Do(req)
 	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() && ctx.Err() == nil {
+			return signer.Response{}, fmt.Errorf(
+				"external signer did not answer within %s: %w", externalSignerClient.Timeout, err,
+			)
+		}
+
 		return signer.Response{}, err
 	}
 	defer func() { _ = resp.Body.Close() }() // Intentionally ignoring the error, will fix in future

@@ -1,10 +1,12 @@
 package signer_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -423,6 +425,22 @@ func TestHashAndSignTx(t *testing.T) {
 		require.ErrorContains(t, err, "invalid character")
 	})
 
+	t.Run("Error: context done while the signer doesn't answer", func(t *testing.T) {
+		signerURL := newHungSignerServer(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
+
+		invokeTxnV3 := snUtils.BuildInvokeTxn(
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			&rpc.ResourceBoundsMapping{},
+			nil,
+		)
+		err := hashAndSignWithin(t, ctx, invokeTxnV3, signerURL)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
 	t.Run("Successful request and response", func(t *testing.T) {
 		// Create a mock server
 		mockServer := httptest.NewServer(
@@ -454,4 +472,42 @@ func TestHashAndSignTx(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expectedResult, res)
 	})
+}
+
+func hashAndSignWithin(
+	t *testing.T, ctx context.Context, txn *rpc.BroadcastInvokeTxnV3, signerURL string,
+) error {
+	t.Helper()
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := signer.HashAndSignTx(ctx, txn, new(felt.Felt).SetUint64(1), signerURL)
+		result <- err
+	}()
+
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "HashAndSignTx did not return while the signer doesn't answer")
+
+		return nil
+	}
+}
+
+func newHungSignerServer(t *testing.T) string {
+	t.Helper()
+
+	release := make(chan struct{})
+	handler := func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(release) })
+
+	return server.URL
 }

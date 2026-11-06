@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -243,6 +245,25 @@ func TestNewRewardSigner(t *testing.T) {
 		require.True(t, rs == nil)
 	})
 
+	t.Run("Error: external signer never answers", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rewardConf := config.Reward{
+				ExternalURL:    newHungSigner(t),
+				Address:        testRewardAddress,
+				ClaimThreshold: claimThreshold,
+			}
+			provider := newProvider(t, stakerInfo)
+			expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+			start := time.Now()
+			rs, err := newRewardSigner(t, provider, &rewardConf)
+			require.ErrorContains(t, err, "external reward signer check")
+			require.ErrorContains(t, err, "external signer did not answer within 15s")
+			require.True(t, rs == nil)
+			require.Equal(t, 15*time.Second, time.Since(start))
+		})
+	})
+
 	t.Run("Error: invalid private key", func(t *testing.T) {
 		rewardConf := config.Reward{
 			PrivKey:        "not a private key",
@@ -255,6 +276,25 @@ func TestNewRewardSigner(t *testing.T) {
 		require.Error(t, err)
 		// Must be an untyped nil, so `rs != nil` checks done by the callers hold
 		require.True(t, rs == nil)
+	})
+}
+
+func TestHashAndSignTxSignerNeverAnswers(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		signerURL := newHungSigner(t)
+		invokeTxnV3 := snGoUtils.BuildInvokeTxn(
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			new(rpc.ResourceBoundsMapping),
+			nil,
+		)
+
+		start := time.Now()
+		res, err := HashAndSignTx(t.Context(), invokeTxnV3, new(felt.Felt).SetUint64(1), signerURL)
+		require.Zero(t, res)
+		require.ErrorContains(t, err, "external signer did not answer within 15s")
+		require.Equal(t, 15*time.Second, time.Since(start))
 	})
 }
 
@@ -1012,6 +1052,26 @@ func newTestSignerServer(t *testing.T) string {
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
+
+	return server.URL
+}
+
+func newHungSigner(t *testing.T) string {
+	t.Helper()
+
+	release := make(chan struct{})
+	handler := func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}
+	server := httptest.NewTestServer(t, http.HandlerFunc(handler))
+	t.Cleanup(func() { close(release) })
+
+	transport := externalSignerClient.Transport
+	externalSignerClient.Transport = server.Client().Transport
+	t.Cleanup(func() { externalSignerClient.Transport = transport })
 
 	return server.URL
 }
