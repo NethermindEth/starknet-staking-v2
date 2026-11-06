@@ -6,7 +6,7 @@ validator:
 
 signer:
 	mkdir -p build
-	go build -o "./build/signer" "./cmd/signer/."
+	go build -ldflags "-X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(shell git describe --tags | sed 's/^v//')" -o "./build/signer" "./cmd/signer/."
 
 clean-testcache: ## Clean Go test cache
 	go clean -testcache

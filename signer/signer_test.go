@@ -2,11 +2,14 @@ package signer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -162,5 +165,64 @@ func TestSignHandler(t *testing.T) {
 		require.NotEmpty(t, fields["remoteAddress"])
 		require.Equal(t, int64(len(body)), fields["contentLength"])
 		require.NotContains(t, fields, "requestError")
+	})
+}
+
+func TestListen(t *testing.T) {
+	newSigner := func(t *testing.T) (Signer, *observer.ObservedLogs) {
+		t.Helper()
+
+		core, logs := observer.New(zapcore.InfoLevel)
+		signer, err := New("0x123", log.NewZapLoggerWithCore(core))
+		require.NoError(t, err)
+
+		return signer, logs
+	}
+
+	t.Run("Bind failure is returned without logging that the server runs", func(t *testing.T) {
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+
+		signer, logs := newSigner(t)
+		err = signer.Listen(t.Context(), listener.Addr().String())
+		require.ErrorContains(t, err, "address already in use")
+		require.Zero(t, logs.FilterMessage("server running").Len())
+	})
+
+	t.Run("Server serves until the context is done, then stops", func(t *testing.T) {
+		signer, logs := newSigner(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		listenErr := make(chan error, 1)
+		go func() {
+			listenErr <- signer.Listen(ctx, "127.0.0.1:0")
+		}()
+
+		// The address the server listens on is logged once it is bound
+		require.Eventually(t, func() bool {
+			return logs.FilterMessage("server running").Len() == 1
+		}, 5*time.Second, 10*time.Millisecond)
+		address, ok := logs.FilterMessage("server running").AllUntimed()[0].ContextMap()["URL"].(string)
+		require.True(t, ok)
+
+		req, err := http.NewRequestWithContext(
+			t.Context(), http.MethodPost, "http://"+address+SignEndpoint,
+			bytes.NewBufferString(validSignRequest(t)),
+		)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NoError(t, resp.Body.Close())
+
+		cancel()
+		select {
+		case err := <-listenErr:
+			require.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "the server didn't stop")
+		}
+		require.Equal(t, 1, logs.FilterMessage("Shutting down the server").Len())
 	})
 }
