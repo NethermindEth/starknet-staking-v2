@@ -254,6 +254,15 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	for block := range headersFeed {
+		// The node replays its latest header when resubscribing: dispatching its events again
+		// would end the same window twice (a false attestation failure and a second claim)
+		if !dispatcher.processedBlocks.add(block.Number) {
+			logger.Debug("block header already processed, skipping it",
+				zap.Uint64("blockNumber", block.Number),
+			)
+
+			continue
+		}
 		logBlock(block.Number, &epochInfo, &attestInfo, logger)
 		tracer.UpdateLatestBlockNumber(block.Number)
 

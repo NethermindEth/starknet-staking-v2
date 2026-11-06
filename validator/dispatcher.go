@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -175,15 +176,43 @@ type EventDispatcher[S signerP.Signer] struct {
 	EndOfWindow   chan struct{}
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
+	// Blocks whose events were already sent, so they are never sent twice
+	processedBlocks *processedBlocks
 }
 
 func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 	return EventDispatcher[S]{
-		CurrentAttest: NewAttestTracker(),
-		DoAttest:      make(chan types.DoAttest),
-		PrepareAttest: make(chan types.PrepareAttest),
-		EndOfWindow:   make(chan struct{}),
+		CurrentAttest:   NewAttestTracker(),
+		DoAttest:        make(chan types.DoAttest),
+		PrepareAttest:   make(chan types.PrepareAttest),
+		EndOfWindow:     make(chan struct{}),
+		processedBlocks: new(processedBlocks),
 	}
+}
+
+// Highest block number processed. The node replays its latest block header on every new
+// subscription, so a header received again after a resubscription is recognised as processed.
+// It is shared by the `ProcessBlockHeaders` routines of successive subscriptions, which may
+// briefly overlap.
+type processedBlocks struct {
+	mu        sync.Mutex
+	processed bool
+	highest   uint64
+}
+
+// Records the block number, returning false if it is not higher than every block recorded
+// before
+func (p *processedBlocks) add(blockNumber uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.processed && blockNumber <= p.highest {
+		return false
+	}
+	p.processed = true
+	p.highest = blockNumber
+
+	return true
 }
 
 //nolint:gocyclo,funlen // Refactor in another time
