@@ -16,6 +16,8 @@ The feature is disabled by default. It is enabled as soon as any reward option i
    2. estimates its fee and skips the claim with a warning if the fee is higher than the configured max fee,
    3. sends the transaction.
 
+Claim transactions are not time-sensitive, so they are always sent without a tip.
+
 Every claim error is logged, and none of them stops the validator: attestations keep running normally. Claims, failures and claims skipped due to the max fee are also reported through the [`validator_attestation_reward_*` metrics](./metrics#available-metrics), along with the staker's unclaimed rewards.
 
 :::info Delegation pools

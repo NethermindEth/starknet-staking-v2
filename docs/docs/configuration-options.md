@@ -29,6 +29,7 @@ In addition to the core configuration described in the [Configuration](./configu
 | `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | Amount of unclaimed rewards, in STRK, that triggers a claim |
 | `--reward-claim-max-fee` | `REWARD_CLAIM_MAX_FEE` | `reward.claimMaxFee` | Unlimited | Max fee, in FRI, to pay for a claim transaction |
 | `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | Set it if the reward account is a Braavos account |
+| `--max-tip` | `MAX_TIP` | `maxTip` | Unlimited | Max tip, in FRI per L2 gas unit, to pay for an attestation transaction |
 | `--config` | - | - | - | Path to JSON configuration file |
 | `--staking-contract-address` | - | - | Auto-detected | Custom staking contract address |
 | `--attest-contract-address` | - | - | Auto-detected | Custom attestation contract address |
@@ -53,3 +54,5 @@ In addition to the core configuration described in the [Configuration](./configu
 6. **Braavos Account**: `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_. It only applies to the operational account: use `--reward-braavos-account` for the reward account.
 
 7. **Auto-Claim Rewards**: the `--reward-*` options configure the optional automatic claiming of the staking rewards. If any of them is set, `--reward-address`, `--reward-claim-threshold` and exactly one of `--reward-priv-key` or `--reward-signer-url` are required. See [Auto-Claim Rewards](./auto-claim) for the details.
+
+8. **Max Tip**: `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. The tip is estimated as the average tip of the transactions in the latest block, multiplied by 1.5. A single transaction with an unusually high tip can therefore make the estimate spike, so setting a max tip limits what an attestation can pay. When the estimated tip is above the max tip, the max tip is used instead and a warning is logged. If not set, no limit is applied.

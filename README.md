@@ -122,6 +122,8 @@ In addition to the configuration described above, the tool allows for other non-
 
 5. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. It only applies to the operational account, use `--reward-braavos-account` for the reward account.
 
+6. `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. When the estimated tip is above it, the max tip is used instead and a warning is logged. Defaults to unlimited.
+
 ## Other features
 
 We offer advance features such as **[external signing](https://nethermindeth.github.io/starknet-staking-v2/external-signer)**, **[monitoring via prometheus](https://nethermindeth.github.io/starknet-staking-v2/metrics)** and **[automatic reward claiming](https://nethermindeth.github.io/starknet-staking-v2/auto-claim)**. 
