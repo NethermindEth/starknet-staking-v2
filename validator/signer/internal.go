@@ -8,7 +8,6 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
-	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
@@ -23,9 +22,12 @@ var _ Signer = (*InternalSigner)(nil)
 type InternalSigner struct {
 	ctx     context.Context
 	Account account.Account
+	logger  log.Logger
 	// If the account used represents a braavos account
 	braavos             bool
 	validationContracts types.ValidationContracts
+	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
+	maxTip uint64
 }
 
 func NewInternalSigner(
@@ -35,6 +37,7 @@ func NewInternalSigner(
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
 	braavos bool,
+	maxTip uint64,
 ) (InternalSigner, error) {
 	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
 	if !ok {
@@ -74,8 +77,10 @@ func NewInternalSigner(
 	return InternalSigner{
 		ctx:                 ctx,
 		Account:             *acc,
+		logger:              logger,
 		braavos:             braavos,
 		validationContracts: validationContracts,
+		maxTip:              maxTip,
 	}, nil
 }
 
@@ -105,9 +110,9 @@ func (s *InternalSigner) BuildAttestTransaction(
 
 	defaultResources := makeDefaultResources()
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Account.Provider, constants.TipMultiplier)
+	tip, err := estimateAttestTip(s.ctx, s.Account.Provider, s.maxTip, s.logger)
 	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
+		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
 	// Taken from starknet.go `utils.BuildInvokeTxn`

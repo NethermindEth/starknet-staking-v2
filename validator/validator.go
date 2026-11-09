@@ -52,6 +52,7 @@ func New(
 			&conf.Signer,
 			&snConfig.ContractAddresses,
 			braavos,
+			conf.MaxTip,
 		)
 		if err != nil {
 			return Validator{}, fmt.Errorf("failed to connect to external signer: %w", err)
@@ -69,6 +70,7 @@ func New(
 			&conf.Signer,
 			&snConfig.ContractAddresses,
 			braavos,
+			conf.MaxTip,
 		)
 		if err != nil {
 			return Validator{}, fmt.Errorf("failed to initialise internal signer: %w", err)

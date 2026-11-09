@@ -56,7 +56,8 @@ func TestConfigFromFile(t *testing.T) {
                 "claimThreshold": 100,
                 "claimMaxFee": 1000,
                 "braavos": true
-            }
+            },
+            "maxTip": 5000
         }`)
 		config, err := FromData(data)
 		require.NoError(t, err)
@@ -78,6 +79,7 @@ func TestConfigFromFile(t *testing.T) {
 				ClaimMaxFee:    1000,
 				Braavos:        new(true),
 			},
+			MaxTip: 5000,
 		}
 		require.Equal(t, expectedConfig, config)
 	})
@@ -149,12 +151,15 @@ func TestConfigFromEnv(t *testing.T) {
 	)
 
 	// Test Config
+	t.Setenv("MAX_TIP", "5000")
+
 	config, err := FromEnv()
 	require.NoError(t, err)
 	expectedConfig := Config{
 		Provider: expectedProvider,
 		Signer:   expectedSigner,
 		Reward:   expectedReward,
+		MaxTip:   5000,
 	}
 	require.Equal(t, expectedConfig, config)
 }
@@ -189,6 +194,26 @@ func TestRewardFromEnvInvalidValues(t *testing.T) {
 
 			_, err = FromEnv()
 			require.ErrorContains(t, err, tc.envVar)
+		})
+	}
+}
+
+func TestConfigFromEnvInvalidMaxTip(t *testing.T) {
+	testCases := []struct {
+		name  string
+		value string
+	}{
+		{name: "Non numeric max tip", value: "xyz"},
+		{name: "Negative max tip", value: "-10"},
+		{name: "Decimal max tip", value: "2.5"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MAX_TIP", tc.value)
+
+			_, err := FromEnv()
+			require.ErrorContains(t, err, "MAX_TIP")
 		})
 	}
 }
@@ -421,6 +446,20 @@ func TestRewardSetDefaults(t *testing.T) {
 	})
 }
 
+func TestConfigSetDefaults(t *testing.T) {
+	t.Run("Missing max tip defaults to max uint64", func(t *testing.T) {
+		config := Config{}
+		config.SetDefaults()
+		require.Equal(t, uint64(math.MaxUint64), config.MaxTip)
+	})
+
+	t.Run("Explicit max tip is kept", func(t *testing.T) {
+		config := Config{MaxTip: 1000}
+		config.SetDefaults()
+		require.Equal(t, uint64(1000), config.MaxTip)
+	})
+}
+
 func TestConfigFill(t *testing.T) {
 	// Test data
 	config1, err := FromData(
@@ -454,7 +493,8 @@ func TestConfigFill(t *testing.T) {
                 "claimThreshold": 99,
                 "claimMaxFee": 1000,
                 "braavos": true
-            }
+            },
+            "maxTip": 5000
         }`),
 	)
 	require.NoError(t, err)
@@ -477,7 +517,8 @@ func TestConfigFill(t *testing.T) {
                 "claimThreshold": 10,
                 "claimMaxFee": 1000,
                 "braavos": true
-            }
+            },
+            "maxTip": 5000
         }`),
 	)
 	require.NoError(t, err)

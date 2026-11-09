@@ -285,6 +285,14 @@ func NewCommand() cobra.Command {
 			"is configured, the reward account balance is checked as well.\n"+
 			"One stark equals 1 << 1e18.",
 	)
+	cmd.Flags().Uint64Var(
+		&config.MaxTip,
+		"max-tip",
+		0,
+		"Max tip, in FRI per L2 gas unit, to pay for the attestation transaction.\n"+
+			"The estimated tip is capped to this value.\n"+
+			"Defaults to 'unlimited' if not specified (max uint64)",
+	)
 	cmd.Flags().BoolVar(
 		&braavosAccount,
 		"braavos-account",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -87,12 +88,15 @@ func NewRewardSigner(
 	isExternal bool,
 ) (RewardSigner, error) {
 	signerConf := makeSignerConfFromRewardConf(rewardConfig)
+	// The reward signer never builds attestation transactions, and the claim
+	// transaction has no tip, so the max tip isn't used
+	const maxTip = math.MaxUint64
 
 	var signer Signer
 
 	if isExternal {
 		externalSigner, err := NewExternalSigner(
-			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+			ctx, provider, logger, &signerConf, contractAddresses, braavos, maxTip,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create external signer: %w", err)
@@ -100,7 +104,7 @@ func NewRewardSigner(
 		signer = &externalSigner
 	} else {
 		internalSigner, err := NewInternalSigner(
-			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+			ctx, provider, logger, &signerConf, contractAddresses, braavos, maxTip,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create internal signer: %w", err)

@@ -13,7 +13,6 @@ import (
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
-	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -26,12 +25,15 @@ var _ Signer = (*ExternalSigner)(nil)
 type ExternalSigner struct {
 	ctx                 context.Context
 	Provider            rpc.RPCProvider
+	logger              log.Logger
 	operationalAddress  types.Address
 	chainID             felt.Felt
 	url                 string
 	validationContracts types.ValidationContracts
 	// If the account used represents a braavos account
 	braavos bool
+	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
+	maxTip uint64
 }
 
 func NewExternalSigner(
@@ -41,6 +43,7 @@ func NewExternalSigner(
 	sig *config.Signer,
 	addresses *config.ContractAddresses,
 	braavos bool,
+	maxTip uint64,
 ) (ExternalSigner, error) {
 	operationalAddress, err := types.AddressFromString(sig.OperationalAddress)
 	if err != nil {
@@ -63,11 +66,13 @@ func NewExternalSigner(
 	return ExternalSigner{
 		ctx:                 ctx,
 		Provider:            provider,
+		logger:              logger,
 		operationalAddress:  operationalAddress,
 		url:                 sig.ExternalURL,
 		chainID:             *chainID,
 		validationContracts: validationContracts,
 		braavos:             braavos,
+		maxTip:              maxTip,
 	}, nil
 }
 
@@ -92,9 +97,9 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Provider, constants.TipMultiplier)
+	tip, err := estimateAttestTip(s.ctx, s.Provider, s.maxTip, s.logger)
 	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
+		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
 	// Taken from starknet.go `utils.BuildInvokeTxn`

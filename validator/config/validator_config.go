@@ -245,6 +245,8 @@ type Config struct {
 	Provider Provider `json:"provider"`
 	Signer   Signer   `json:"signer"`
 	Reward   Reward   `json:"reward"`
+	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
+	MaxTip uint64 `json:"maxTip"`
 }
 
 func FromEnv() (Config, error) {
@@ -253,10 +255,23 @@ func FromEnv() (Config, error) {
 		return Config{}, err
 	}
 
+	var maxTip uint64
+	if value := os.Getenv("MAX_TIP"); value != "" {
+		parsed, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return Config{}, fmt.Errorf(
+				"invalid MAX_TIP env var, not a valid integer: %w",
+				err,
+			)
+		}
+		maxTip = parsed
+	}
+
 	return Config{
 		Provider: ProviderFromEnv(),
 		Signer:   SignerFromEnv(),
 		Reward:   reward,
+		MaxTip:   maxTip,
 	}, nil
 }
 
@@ -284,11 +299,17 @@ func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
 	c.Reward.Fill(&other.Reward)
+	if isZero(c.MaxTip) {
+		c.MaxTip = other.MaxTip
+	}
 }
 
 // Sets default values for the fields not provided by any config source
 func (c *Config) SetDefaults() {
 	c.Reward.SetDefaults()
+	if isZero(c.MaxTip) {
+		c.MaxTip = math.MaxUint64
+	}
 }
 
 // Verifies its data is appropiatly set

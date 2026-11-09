@@ -1,6 +1,7 @@
 package signer
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -179,6 +180,44 @@ func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier floa
 	}
 
 	return txn, nil
+}
+
+// Caps the tip to maxTip. Returns the resulting tip and whether it was capped
+func capTip(tip rpc.U64, maxTip uint64) (rpc.U64, bool, error) {
+	uintTip, err := tip.ToUint64()
+	if err != nil {
+		return "", false, fmt.Errorf("invalid tip %q: %w", tip, err)
+	}
+	if uintTip <= maxTip {
+		return tip, false, nil
+	}
+
+	return rpc.U64(fmt.Sprintf("0x%x", maxTip)), true, nil
+}
+
+// Estimates the tip for the attestation transaction, capped to maxTip. A warning is
+// logged if the estimated tip is above maxTip
+func estimateAttestTip(
+	ctx context.Context, provider rpc.RPCProvider, maxTip uint64, logger log.Logger,
+) (rpc.U64, error) {
+	estimatedTip, err := rpc.EstimateTip(ctx, provider, constants.TipMultiplier)
+	if err != nil {
+		return "", fmt.Errorf("failed to estimate tip: %w", err)
+	}
+
+	tip, capped, err := capTip(estimatedTip, maxTip)
+	if err != nil {
+		return "", err
+	}
+	if capped {
+		logger.Warn(
+			"estimated tip exceeds the max tip, using the max tip instead",
+			zap.String("estimatedTip", string(estimatedTip)),
+			zap.String("maxTip", string(tip)),
+		)
+	}
+
+	return tip, nil
 }
 
 func ComputeBlockNumberToAttestTo(

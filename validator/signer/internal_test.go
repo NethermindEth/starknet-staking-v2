@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +54,7 @@ func TestNewInternalSigner(t *testing.T) {
 			&config.Signer{},
 			contractAddresses,
 			braavosAccount,
+			math.MaxUint64,
 		)
 
 		require.Equal(t, signer.InternalSigner{}, validatorAccount)
@@ -76,6 +78,7 @@ func TestNewInternalSigner(t *testing.T) {
 			&config.Signer{PrivKey: "0x123", OperationalAddress: malformedAddress},
 			contractAddresses,
 			braavosAccount,
+			math.MaxUint64,
 		)
 		require.ErrorContains(t, err, "invalid operational address")
 		require.ErrorContains(t, err, malformedAddress)
@@ -97,6 +100,7 @@ func TestNewInternalSigner(t *testing.T) {
 		logger := log.NewNopZapLogger()
 		internalSigner, err := signer.NewInternalSigner(
 			t.Context(), provider, logger, &configSigner, contractAddresses, braavosAccount,
+			math.MaxUint64,
 		)
 		require.NoError(t, err)
 
