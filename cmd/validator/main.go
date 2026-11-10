@@ -41,7 +41,7 @@ Auto-claim reward feature (optional):
 Full documentation: https://nethermindeth.github.io/starknet-staking-v2/	
 `
 
-//nolint:funlen // It's the main function, so it's normal to be long
+//nolint:funlen,gocyclo // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {
 	var configPath string
 	var logLevelF string
@@ -51,6 +51,7 @@ func NewCommand() cobra.Command {
 	var metricsPortF string
 	var braavosAccount bool
 	var rewardBraavosF bool
+	var maxTipF uint64
 
 	var config configP.Config
 	var maxRetries types.Retries
@@ -66,6 +67,9 @@ func NewCommand() cobra.Command {
 		// Only set when passed, so an unset flag doesn't override the other config sources
 		if cmd.Flags().Changed("reward-braavos-account") {
 			config.Reward.Braavos = &rewardBraavosF
+		}
+		if cmd.Flags().Changed("max-tip") {
+			config.MaxTip = &maxTipF
 		}
 		if err := loadConfig(&config, configPath); err != nil {
 			return err
@@ -286,11 +290,11 @@ func NewCommand() cobra.Command {
 			"One stark equals 1 << 1e18.",
 	)
 	cmd.Flags().Uint64Var(
-		&config.MaxTip,
+		&maxTipF,
 		"max-tip",
 		0,
 		"Max tip, in FRI per L2 gas unit, to pay for the attestation transaction.\n"+
-			"The estimated tip is capped to this value.\n"+
+			"The estimated tip is capped to this value. Set it to 0 to never pay a tip.\n"+
 			"Defaults to 'unlimited' if not specified (max uint64)",
 	)
 	cmd.Flags().BoolVar(

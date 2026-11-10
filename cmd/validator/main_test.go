@@ -139,20 +139,22 @@ func TestNewCommand(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("Full command setup works with max tip flag", func(t *testing.T) {
-		ctx, httpURL, wsURL := newTestNode(t)
+	for _, maxTip := range []string{"1000", "0"} {
+		t.Run("Full command setup works with max tip flag "+maxTip, func(t *testing.T) {
+			ctx, httpURL, wsURL := newTestNode(t)
 
-		command := newTestCommandWithArgs(
-			t,
-			"--provider-http", httpURL,
-			"--provider-ws", wsURL,
-			"--signer-op-address", "0x456",
-			"--signer-url", "http://localhost:5555",
-			"--max-tip", "1000",
-		)
-		err := command.ExecuteContext(ctx)
-		require.NoError(t, err)
-	})
+			command := newTestCommandWithArgs(
+				t,
+				"--provider-http", httpURL,
+				"--provider-ws", wsURL,
+				"--signer-op-address", "0x456",
+				"--signer-url", "http://localhost:5555",
+				"--max-tip", maxTip,
+			)
+			err := command.ExecuteContext(ctx)
+			require.NoError(t, err)
+		})
+	}
 
 	t.Run("Error: invalid max tip flag", func(t *testing.T) {
 		command := main.NewCommand()

@@ -33,6 +33,14 @@ func TestCapTip(t *testing.T) {
 		},
 		{name: "Zero tip", tip: "0x0", maxTip: 1000, expectedTip: "0x0"},
 		{
+			name:           "Zero max tip removes the tip",
+			tip:            "0x3e8",
+			maxTip:         0,
+			expectedTip:    "0x0",
+			expectedCapped: true,
+		},
+		{name: "Zero tip and zero max tip", tip: "0x0", maxTip: 0, expectedTip: "0x0"},
+		{
 			name:        "Unlimited max tip",
 			tip:         "0x6579c17031f",
 			maxTip:      math.MaxUint64,
@@ -96,6 +104,7 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 		},
 		{name: "Max tip above the estimated tip", maxTip: 2000, expectedTip: "0x5dc"},
 		{name: "Max tip below the estimated tip caps it", maxTip: 100, expectedTip: "0x64"},
+		{name: "Zero max tip never pays a tip", maxTip: 0, expectedTip: "0x0"},
 	}
 
 	for _, tc := range testCases {

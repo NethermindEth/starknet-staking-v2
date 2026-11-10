@@ -29,7 +29,7 @@ In addition to the core configuration described in the [Configuration](./configu
 | `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | Amount of unclaimed rewards, in STRK, that triggers a claim |
 | `--reward-claim-max-fee` | `REWARD_CLAIM_MAX_FEE` | `reward.claimMaxFee` | Unlimited | Max fee, in FRI, to pay for a claim transaction |
 | `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | Set it if the reward account is a Braavos account |
-| `--max-tip` | `MAX_TIP` | `maxTip` | Unlimited | Max tip, in FRI per L2 gas unit, to pay for an attestation transaction |
+| `--max-tip` | `MAX_TIP` | `maxTip` | Unlimited | Max tip, in FRI per L2 gas unit, to pay for an attestation transaction. `0` means never paying a tip |
 | `--config` | - | - | - | Path to JSON configuration file |
 | `--staking-contract-address` | - | - | Auto-detected | Custom staking contract address |
 | `--attest-contract-address` | - | - | Auto-detected | Custom attestation contract address |
@@ -55,4 +55,4 @@ In addition to the core configuration described in the [Configuration](./configu
 
 7. **Auto-Claim Rewards**: the `--reward-*` options configure the optional automatic claiming of the staking rewards. If any of them is set, `--reward-address`, `--reward-claim-threshold` and exactly one of `--reward-priv-key` or `--reward-signer-url` are required. See [Auto-Claim Rewards](./auto-claim) for the details.
 
-8. **Max Tip**: `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. The tip is estimated as the average tip of the transactions in the latest block, multiplied by 1.5. A single transaction with an unusually high tip can therefore make the estimate spike, so setting a max tip limits what an attestation can pay. When the estimated tip is above the max tip, the max tip is used instead and a warning is logged. If not set, no limit is applied.
+8. **Max Tip**: `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. The tip is estimated as the average tip of the transactions in the latest block, multiplied by 1.5. A single transaction with an unusually high tip can therefore make the estimate spike, so setting a max tip limits what an attestation can pay. When the estimated tip is above the max tip, the max tip is used instead and a warning is logged. Set it to 0 to never pay a tip. If not set, no limit is applied.

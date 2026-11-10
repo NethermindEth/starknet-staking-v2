@@ -79,7 +79,7 @@ func TestConfigFromFile(t *testing.T) {
 				ClaimMaxFee:    1000,
 				Braavos:        new(true),
 			},
-			MaxTip: 5000,
+			MaxTip: new(uint64(5000)),
 		}
 		require.Equal(t, expectedConfig, config)
 	})
@@ -159,7 +159,7 @@ func TestConfigFromEnv(t *testing.T) {
 		Provider: expectedProvider,
 		Signer:   expectedSigner,
 		Reward:   expectedReward,
-		MaxTip:   5000,
+		MaxTip:   new(uint64(5000)),
 	}
 	require.Equal(t, expectedConfig, config)
 }
@@ -446,17 +446,51 @@ func TestRewardSetDefaults(t *testing.T) {
 	})
 }
 
-func TestConfigSetDefaults(t *testing.T) {
-	t.Run("Missing max tip defaults to max uint64", func(t *testing.T) {
-		config := Config{}
-		config.SetDefaults()
-		require.Equal(t, uint64(math.MaxUint64), config.MaxTip)
+func TestConfigMaxTipOrDefault(t *testing.T) {
+	testCases := []struct {
+		name     string
+		maxTip   *uint64
+		expected uint64
+	}{
+		{name: "Not set defaults to max uint64", maxTip: nil, expected: math.MaxUint64},
+		{name: "Explicit zero is kept", maxTip: new(uint64(0)), expected: 0},
+		{name: "Explicit value is kept", maxTip: new(uint64(1000)), expected: 1000},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := Config{MaxTip: tc.maxTip}
+			config.SetDefaults()
+			require.Equal(t, tc.expected, config.MaxTipOrDefault())
+		})
+	}
+}
+
+// An explicit zero max tip means never paying a tip, so it must be told apart from
+// a value not set in every config source
+func TestConfigExplicitZeroMaxTip(t *testing.T) {
+	t.Run("From file", func(t *testing.T) {
+		config, err := FromData([]byte(`{"maxTip": 0}`))
+		require.NoError(t, err)
+		require.Equal(t, new(uint64(0)), config.MaxTip)
+
+		config, err = FromData([]byte(`{}`))
+		require.NoError(t, err)
+		require.Nil(t, config.MaxTip)
 	})
 
-	t.Run("Explicit max tip is kept", func(t *testing.T) {
-		config := Config{MaxTip: 1000}
-		config.SetDefaults()
-		require.Equal(t, uint64(1000), config.MaxTip)
+	t.Run("From env", func(t *testing.T) {
+		t.Setenv("MAX_TIP", "0")
+
+		config, err := FromEnv()
+		require.NoError(t, err)
+		require.Equal(t, new(uint64(0)), config.MaxTip)
+	})
+
+	t.Run("Not overridden by a lower priority source", func(t *testing.T) {
+		config := Config{MaxTip: new(uint64(0))}
+		config.Fill(&Config{MaxTip: new(uint64(5000))})
+		require.Equal(t, new(uint64(0)), config.MaxTip)
 	})
 }
 

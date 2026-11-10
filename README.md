@@ -122,7 +122,7 @@ In addition to the configuration described above, the tool allows for other non-
 
 5. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. It only applies to the operational account, use `--reward-braavos-account` for the reward account.
 
-6. `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. When the estimated tip is above it, the max tip is used instead and a warning is logged. Defaults to unlimited.
+6. `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. When the estimated tip is above it, the max tip is used instead and a warning is logged. Set it to 0 to never pay a tip. Defaults to unlimited.
 
 ## Other features
 

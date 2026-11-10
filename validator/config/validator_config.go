@@ -245,8 +245,10 @@ type Config struct {
 	Provider Provider `json:"provider"`
 	Signer   Signer   `json:"signer"`
 	Reward   Reward   `json:"reward"`
-	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
-	MaxTip uint64 `json:"maxTip"`
+	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction. It's a
+	// pointer so that an explicit 0 (never pay a tip) can be told apart from a value not
+	// set, and isn't overridden by a lower priority config source
+	MaxTip *uint64 `json:"maxTip"`
 }
 
 func FromEnv() (Config, error) {
@@ -255,7 +257,7 @@ func FromEnv() (Config, error) {
 		return Config{}, err
 	}
 
-	var maxTip uint64
+	var maxTip *uint64
 	if value := os.Getenv("MAX_TIP"); value != "" {
 		parsed, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
@@ -264,7 +266,7 @@ func FromEnv() (Config, error) {
 				err,
 			)
 		}
-		maxTip = parsed
+		maxTip = &parsed
 	}
 
 	return Config{
@@ -299,7 +301,7 @@ func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
 	c.Reward.Fill(&other.Reward)
-	if isZero(c.MaxTip) {
+	if c.MaxTip == nil {
 		c.MaxTip = other.MaxTip
 	}
 }
@@ -307,9 +309,15 @@ func (c *Config) Fill(other *Config) {
 // Sets default values for the fields not provided by any config source
 func (c *Config) SetDefaults() {
 	c.Reward.SetDefaults()
-	if isZero(c.MaxTip) {
-		c.MaxTip = math.MaxUint64
+}
+
+// Returns the max tip, or max uint64 (unlimited) if not set
+func (c *Config) MaxTipOrDefault() uint64 {
+	if c.MaxTip == nil {
+		return math.MaxUint64
 	}
+
+	return *c.MaxTip
 }
 
 // Verifies its data is appropiatly set
