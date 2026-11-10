@@ -199,9 +199,11 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 }
 
 type headerProgress struct {
-	mu        sync.Mutex
-	processed bool
-	highest   uint64
+	mu            sync.Mutex
+	processed     bool
+	highest       uint64
+	epochLogged   bool
+	loggedEpochID uint64
 }
 
 func (p *headerProgress) addBlock(blockNumber uint64) bool {
@@ -213,6 +215,26 @@ func (p *headerProgress) addBlock(blockNumber uint64) bool {
 	}
 	p.processed = true
 	p.highest = blockNumber
+
+	return true
+}
+
+func (p *headerProgress) highestBlock() (uint64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.highest, p.processed
+}
+
+func (p *headerProgress) newEpoch(epochID uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.epochLogged && p.loggedEpochID == epochID {
+		return false
+	}
+	p.epochLogged = true
+	p.loggedEpochID = epochID
 
 	return true
 }
