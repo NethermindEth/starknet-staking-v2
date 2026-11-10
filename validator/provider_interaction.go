@@ -2,6 +2,8 @@ package validator
 
 import (
 	"context"
+	"maps"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -25,27 +27,72 @@ func NewProvider(
 		nodeSpecVersion, specErr := provider.SpecVersion(ctx)
 		if specErr != nil {
 			return nil, errors.Errorf(
-				"cannot read spec version of node at %s: %w", providerURL, specErr,
+				"cannot read spec version of node at %s: %w", redactURL(providerURL), specErr,
 			)
 		}
 		if !slices.Contains(supportedSpecVersions, strings.TrimPrefix(nodeSpecVersion, "v")) {
 			return nil, errors.Errorf(
 				"node at %s implements JSON-RPC specification %s, this tool requires %s",
-				providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
+				redactURL(providerURL),
+				nodeSpecVersion,
+				strings.Join(supportedSpecVersions, " or "),
 			)
 		}
 		logger.Warn(
 			"node implements a different JSON-RPC specification than Starknet.Go targets",
-			zap.String("providerUrl", providerURL),
+			zap.String("providerUrl", redactURL(providerURL)),
 			zap.String("nodeSpecVersion", nodeSpecVersion),
 		)
 	} else if err != nil {
-		return nil, errors.Errorf("cannot create RPC provider at %s: %w", providerURL, err)
+		return nil, errors.Errorf(
+			"cannot create RPC provider at %s: %w", redactURL(providerURL), err,
+		)
 	}
 
-	logger.Info("connected to RPC", zap.String("providerURL", providerURL))
+	logger.Info("connected to RPC", zap.String("providerURL", redactURL(providerURL)))
 
 	return provider, nil
+}
+
+const (
+	redactedText            = "REDACTED"
+	minSecretPathSegmentLen = 16
+)
+
+func redactURL(rawURL string) string {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "<invalid URL>"
+	}
+
+	redacted := false
+	if parsedURL.User != nil {
+		parsedURL.User = url.User(redactedText)
+		redacted = true
+	}
+	if parsedURL.RawQuery != "" {
+		keys := slices.Sorted(maps.Keys(parsedURL.Query()))
+		for i, key := range keys {
+			keys[i] = key + "=" + redactedText
+		}
+		parsedURL.RawQuery = strings.Join(keys, "&")
+		redacted = true
+	}
+	segments := strings.Split(parsedURL.Path, "/")
+	for i, segment := range segments {
+		if len(segment) >= minSecretPathSegmentLen {
+			segments[i] = redactedText
+			redacted = true
+		}
+	}
+	if !redacted {
+		return rawURL
+	}
+	parsedURL.Path = strings.Join(segments, "/")
+	parsedURL.RawPath = ""
+	parsedURL.Fragment = ""
+
+	return parsedURL.String()
 }
 
 // Returns a Go channel where BlockHeaders are received
@@ -59,11 +106,15 @@ func SubscribeToBlockHeaders(
 	*client.ClientSubscription,
 	error,
 ) {
-	logger.Debug("initialising websocket connection", zap.String("wsProviderUrl", wsProviderURL))
+	logger.Debug(
+		"initialising websocket connection", zap.String("wsProviderUrl", redactURL(wsProviderURL)),
+	)
 	// This needs a timeout or something
 	wsProvider, err := rpc.NewWebsocketProvider(ctx, wsProviderURL)
 	if err != nil {
-		return nil, nil, nil, errors.Errorf("dialling WS provider at %s: %w", wsProviderURL, err)
+		return nil, nil, nil, errors.Errorf(
+			"dialling WS provider at %s: %w", redactURL(wsProviderURL), err,
+		)
 	}
 
 	logger.Debug("Subscribing to new block headers...")

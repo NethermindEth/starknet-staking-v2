@@ -59,7 +59,7 @@ func New(
 		signer = &externalSigner
 		logger.Info(
 			"using external signer",
-			zap.String("externalSignerURL", conf.Signer.ExternalURL),
+			zap.String("externalSignerURL", redactURL(conf.Signer.ExternalURL)),
 		)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
