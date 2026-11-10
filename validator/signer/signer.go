@@ -48,22 +48,18 @@ type Signer interface {
 
 func FetchEpochInfo[S Signer](ctx context.Context, signer S) (types.EpochInfo, error) {
 	functionCall := rpc.FunctionCall{
-		ContractAddress: signer.ValidationContracts().Staking.Felt(),
-		EntryPointSelector: utils.GetSelectorFromNameFelt(
-			"get_attestation_info_by_operational_address",
-		),
-		Calldata: []*felt.Felt{signer.Address().Felt()},
+		ContractAddress:    signer.ValidationContracts().Staking.Felt(),
+		EntryPointSelector: utils.GetSelectorFromNameFelt(epochInfoEntrypoint),
+		Calldata:           []*felt.Felt{signer.Address().Felt()},
 	}
 
 	result, err := signer.Call(ctx, functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
-		return types.EpochInfo{},
-			entrypointInternalError("get_attestation_info_by_operational_address", err)
+		return types.EpochInfo{}, epochInfoCallError(signer, &functionCall, err)
 	}
 
 	if len(result) != 5 { //nolint:mnd // The expected result length
-		return types.EpochInfo{},
-			entrypointResponseError("get_attestation_info_by_operational_address", result)
+		return types.EpochInfo{}, entrypointResponseError(epochInfoEntrypoint, result)
 	}
 
 	stake := result[1].Bits()
@@ -78,21 +74,18 @@ func FetchEpochInfo[S Signer](ctx context.Context, signer S) (types.EpochInfo, e
 }
 
 func FetchAttestWindow[S Signer](ctx context.Context, signer S) (uint64, error) {
-	result, err := signer.Call(
-		ctx,
-		rpc.FunctionCall{
-			ContractAddress:    signer.ValidationContracts().Attest.Felt(),
-			EntryPointSelector: utils.GetSelectorFromNameFelt("attestation_window"),
-			Calldata:           []*felt.Felt{},
-		},
-		rpc.WithBlockTag(rpc.BlockTagLatest),
-	)
+	functionCall := rpc.FunctionCall{
+		ContractAddress:    signer.ValidationContracts().Attest.Felt(),
+		EntryPointSelector: utils.GetSelectorFromNameFelt(attestWindowEntrypoint),
+		Calldata:           []*felt.Felt{},
+	}
+	result, err := signer.Call(ctx, functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
-		return 0, entrypointInternalError("attestation_window", err)
+		return 0, contractCallError(attestContractName, &functionCall, err)
 	}
 
 	if len(result) != 1 {
-		return 0, entrypointResponseError("attestation_window", result)
+		return 0, entrypointResponseError(attestWindowEntrypoint, result)
 	}
 
 	return result[0].Uint64(), nil
@@ -106,21 +99,18 @@ func FetchBalance[S Signer](
 	if err != nil {
 		return types.Balance{}, fmt.Errorf("invalid STRK contract address: %w", err)
 	}
-	result, err := signer.Call(
-		ctx,
-		rpc.FunctionCall{
-			ContractAddress:    StrkTokenContract.Felt(),
-			EntryPointSelector: utils.GetSelectorFromNameFelt("balance_of"),
-			Calldata:           []*felt.Felt{address.Felt()},
-		},
-		rpc.WithBlockTag(rpc.BlockTagLatest),
-	)
+	functionCall := rpc.FunctionCall{
+		ContractAddress:    StrkTokenContract.Felt(),
+		EntryPointSelector: utils.GetSelectorFromNameFelt(balanceOfEntrypoint),
+		Calldata:           []*felt.Felt{address.Felt()},
+	}
+	result, err := signer.Call(ctx, functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
-		return types.Balance{}, entrypointInternalError("balance_of", err)
+		return types.Balance{}, contractCallError(strkContractName, &functionCall, err)
 	}
 
 	if len(result) != 2 {
-		return types.Balance{}, entrypointResponseError("balance_of", result)
+		return types.Balance{}, entrypointResponseError(balanceOfEntrypoint, result)
 	}
 
 	return types.NewBalance(result[0], result[1]), nil
