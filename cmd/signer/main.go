@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
+	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -45,19 +48,23 @@ func NewCommand() cobra.Command {
 		return nil
 	}
 
-	runE := func(_ *cobra.Command, args []string) error {
+	runE := func(cmd *cobra.Command, args []string) error {
 		remoteSigner, err := signer.New(privKey, logger)
 		if err != nil {
 			return err
 		}
 
-		return remoteSigner.Listen(address)
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
+		return remoteSigner.Listen(ctx, address)
 	}
 
 	//nolint:exhaustruct_v5 // Only specifying used fields
 	cmd := cobra.Command{
 		Use:     "signer",
 		Short:   "Program that signs transactions received by http request",
+		Version: validator.Version,
 		PreRunE: preRunE,
 		RunE:    runE,
 		Args:    cobra.NoArgs,

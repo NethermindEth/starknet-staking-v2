@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -20,7 +21,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const SignEndpoint = "/sign"
+const (
+	SignEndpoint    = "/sign"
+	shutdownTimeout = 5 * time.Second
+)
 
 type Request struct {
 	*rpc.BroadcastInvokeTxnV3 `json:"transaction"`
@@ -64,13 +68,18 @@ func New(privateKey string, logger log.Logger) (Signer, error) {
 
 // Listen for requests of the type `POST` at `<address>/sign`. The request
 // should include the hash of the transaction being signed.
-func (s *Signer) Listen(address string) error {
+func (s *Signer) Listen(ctx context.Context, address string) error {
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(ctx, "tcp", address)
+	if err != nil {
+		return err
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc(SignEndpoint, s.handler)
 
 	//nolint:exhaustruct_v5 // Only specifying used fields
 	server := &http.Server{
-		Addr:         address,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -79,10 +88,26 @@ func (s *Signer) Listen(address string) error {
 
 	s.logger.Info(
 		"server running",
-		zap.String("URL", address),
+		zap.String("URL", listener.Addr().String()),
 	)
 
-	return server.ListenAndServe()
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- server.Serve(listener)
+	}()
+
+	select {
+	case err := <-serveErr:
+		return err
+	case <-ctx.Done():
+		s.logger.Info("Shutting down the server")
+		shutdownCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), shutdownTimeout,
+		)
+		defer cancel()
+
+		return server.Shutdown(shutdownCtx)
+	}
 }
 
 // Decodes the request and returns ECDSA `r` and `s` signature values via http
