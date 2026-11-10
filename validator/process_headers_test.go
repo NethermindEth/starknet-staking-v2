@@ -14,6 +14,7 @@ import (
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
+	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
@@ -138,6 +139,38 @@ func headersFeed(blockNumbers ...uint64) chan *rpc.BlockHeader {
 	close(feed)
 
 	return feed
+}
+
+func TestProcessBlockHeadersSkipsReplayedHeaders(t *testing.T) {
+	mockSigner := newEpochSigner(t)
+	logger := log.NewNopZapLogger()
+
+	_, attestInfo, err := signerP.FetchEpochAndAttestInfo(t.Context(), mockSigner, logger)
+	require.NoError(t, err)
+	windowEnd := attestInfo.WindowEnd.Uint64()
+	require.Less(t, windowEnd+1, uint64(testEpochStart+testEpochLen))
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	counter := countEvents(&dispatcher)
+
+	err = validator.ProcessBlockHeaders(
+		t.Context(), headersFeed(windowEnd-1, windowEnd), mockSigner, logger, &dispatcher,
+		types.Retries{}, metrics.NewNoOpMetrics(),
+	)
+	require.NoError(t, err)
+	err = validator.ProcessBlockHeaders(
+		t.Context(), headersFeed(windowEnd, windowEnd-1, windowEnd+1), mockSigner, logger,
+		&dispatcher, types.Retries{}, metrics.NewNoOpMetrics(),
+	)
+	require.NoError(t, err)
+
+	close(dispatcher.DoAttest)
+	close(dispatcher.EndOfWindow)
+	close(dispatcher.PrepareAttest)
+	counter.wg.Wait()
+
+	require.Equal(t, 1, counter.doAttest)
+	require.Equal(t, 1, counter.endOfWindow)
 }
 
 func TestProcessBlockHeadersLogsBlockAfterEpochSwitch(t *testing.T) {

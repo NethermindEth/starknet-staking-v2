@@ -273,6 +273,13 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	for block := range headersFeed {
+		if !dispatcher.progress.addBlock(block.Number) {
+			logger.Debug("block header already processed, skipping it",
+				zap.Uint64("blockNumber", block.Number),
+			)
+
+			continue
+		}
 		tracer.UpdateLatestBlockNumber(block.Number)
 
 		// todo(rdr): look for some nice way of refactoring this if/else blocks
