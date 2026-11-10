@@ -34,6 +34,15 @@ const (
 var startupRetries atomic.Int64
 
 func TestMain(m *testing.M) {
+	if os.Getenv(runMainEnvVar) != "" {
+		validator.Sleep = func(time.Duration) {}
+		command := main.NewCommand()
+		command.SetArgs(os.Args[1:])
+		if err := command.ExecuteContext(context.Background()); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	validator.Sleep = func(delay time.Duration) {
 		if delay == startupRetryDelay {
 			startupRetries.Add(1)
