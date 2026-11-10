@@ -68,6 +68,16 @@ func TestNewCommand(t *testing.T) {
 		)
 	})
 
+	t.Run("PreRunE returns an error: unknown log level", func(t *testing.T) {
+		command := main.NewCommand()
+		command.SetArgs(validFlags(testProviderHTTP, testProviderWS, "--log-level", "verbose"))
+
+		err := command.ExecuteContext(t.Context())
+		require.EqualError(
+			t, err, `unknown log level "verbose" (known: trace, debug, info, warn, error)`,
+		)
+	})
+
 	t.Run("PreRunE returns an error: config file verification fails", func(t *testing.T) {
 		command := main.NewCommand()
 
@@ -271,13 +281,9 @@ func TestNewCommand(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				ctx, httpURL, wsURL := newTestNode(t)
 
-				args := []string{
-					"--provider-http", httpURL,
-					"--provider-ws", wsURL,
-					"--signer-op-address", "0x456",
-					"--signer-url", "http://localhost:5555",
-				}
-				command := newTestCommandWithArgs(t, append(args, tc.rewardFlags...)...)
+				command := newTestCommandWithArgs(
+					t, validFlags(httpURL, wsURL, tc.rewardFlags...)...,
+				)
 
 				err := command.ExecuteContext(ctx)
 				if tc.expectedErr == "" {
@@ -309,6 +315,15 @@ func TestHelpText(t *testing.T) {
 	}
 	require.Contains(t, help, "Exclusive with --signer-url")
 	require.Contains(t, help, "Exclusive with --signer-priv-key")
+}
+
+func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
+	return append([]string{
+		"--provider-http", httpURL,
+		"--provider-ws", wsURL,
+		"--signer-op-address", "0x456",
+		"--signer-url", testSignerURL,
+	}, extraFlags...)
 }
 
 func createTemporaryConfigFile(t *testing.T, conf *config.Config) string {
