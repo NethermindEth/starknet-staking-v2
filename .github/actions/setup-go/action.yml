@@ -5,8 +5,11 @@ runs:
   steps:
     - id: go
       shell: bash
-      run: echo "minor=$(sed -nE 's/^go ([0-9]+\.[0-9]+).*/\1/p' go.mod)" >> "$GITHUB_OUTPUT"
+      run: |
+        minor=$(sed -nE 's/^go ([0-9]+\.[0-9]+).*/\1/p' go.mod)
+        latest=$(curl -fsSL --max-time 30 'https://go.dev/dl/?mode=json' | jq -r --arg prefix "go$minor." '[.[] | select(.stable and (.version | startswith($prefix))) | .version | ltrimstr("go")] | sort_by(split(".") | map(tonumber)) | last // empty' || true)
+        echo "version=${latest:-$minor}" >> "$GITHUB_OUTPUT"
     - uses: actions/setup-go@v5
       with:
-        go-version: ${{ steps.go.outputs.minor }}
+        go-version: ${{ steps.go.outputs.version }}
         check-latest: true
