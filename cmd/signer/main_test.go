@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -156,4 +157,57 @@ func TestVersionFlag(t *testing.T) {
 
 	require.Equal(t, 0, exitCode)
 	require.Equal(t, "signer version dev\n", output)
+}
+
+func TestEnvFile(t *testing.T) {
+	t.Run("Env file sets the private key", func(t *testing.T) {
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+
+		envFile := writeEnvFile(t, "SIGNER_PRIVATE_KEY=0x123\n")
+		cmd, output := newMainProcess(
+			t, "", "--env", envFile, "--address", listener.Addr().String(),
+		)
+
+		require.Equal(t, 1, processExitCode(t, cmd.Run()))
+		require.Contains(t, output.String(), "address already in use")
+	})
+
+	t.Run("Env file passed explicitly must exist", func(t *testing.T) {
+		missingFile := filepath.Join(t.TempDir(), "missing.env")
+		cmd, output := newMainProcess(t, "0x123", "--env", missingFile)
+
+		require.Equal(t, 1, processExitCode(t, cmd.Run()))
+		require.Contains(
+			t, output.String(), "Error: cannot read the env var file: open "+missingFile,
+		)
+	})
+
+	t.Run("Env file that isn't a dotenv file is an error without its content", func(t *testing.T) {
+		const secret = "0xSECRETdummy"
+		envFile := writeEnvFile(t, `{"SIGNER_PRIVATE_KEY": "`+secret+`"}`)
+		cmd, output := newMainProcess(t, "", "--env", envFile)
+
+		require.Equal(t, 1, processExitCode(t, cmd.Run()))
+		require.Contains(
+			t,
+			output.String(),
+			"Error: cannot parse the env var file "+envFile+": it must be a dotenv file",
+		)
+		require.NotContains(t, output.String(), secret)
+	})
+
+	t.Run("Missing private key", func(t *testing.T) {
+		output, exitCode := runMain(t, "")
+
+		require.Equal(t, 1, exitCode)
+		require.Equal(
+			t,
+			"Error: SIGNER_PRIVATE_KEY env var is not set. Set it in the environment or in the "+
+				"env var file (--env)\n",
+			output,
+		)
+	})
 }
