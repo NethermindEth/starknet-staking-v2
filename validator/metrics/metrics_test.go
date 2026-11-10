@@ -1,11 +1,16 @@
-package metrics
+package metrics_test
 
 import (
-	"maps"
+	"io"
+	"net"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/utils/log"
+	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -13,7 +18,7 @@ import (
 
 func TestBalanceSettersDebugLog(t *testing.T) {
 	core, logs := observer.New(zapcore.DebugLevel)
-	m := NewMetrics("127.0.0.1:0", "SN_SEPOLIA", log.NewZapLoggerWithCore(core))
+	m := metrics.NewMetrics("127.0.0.1:0", "SN_SEPOLIA", log.NewZapLoggerWithCore(core))
 
 	m.UpdateSignerBalance(1)
 	m.UpdateRewardBalance(2)
@@ -26,48 +31,61 @@ func TestBalanceSettersDebugLog(t *testing.T) {
 }
 
 func TestRecordBalanceCheckFailure(t *testing.T) {
-	m := NewMetrics("127.0.0.1:0", "SN_SEPOLIA", log.NewNopZapLogger())
+	address := freeAddress(t)
+	m := metrics.NewMetrics(address, "SN_SEPOLIA", log.NewNopZapLogger())
+	served := make(chan error, 1)
+	go func() { served <- m.Start() }()
+	defer func() {
+		require.NoError(t, m.Stop(t.Context()))
+		require.ErrorIs(t, <-served, http.ErrServerClosed)
+	}()
 
 	m.RecordBalanceCheckFailure("signer")
 	m.RecordBalanceCheckFailure("signer")
 	m.RecordBalanceCheckFailure("reward")
 
 	const name = "validator_attestation_balance_check_failure_count"
-	require.InDelta(t, 2.0, counterValue(t, m, name, map[string]string{
-		"network": "SN_SEPOLIA", "account": "signer",
-	}), 0)
-	require.InDelta(t, 1.0, counterValue(t, m, name, map[string]string{
-		"network": "SN_SEPOLIA", "account": "reward",
-	}), 0)
+	exposition := scrapeMetrics(t, address)
+	require.Contains(t, exposition, name+`{account="signer",network="SN_SEPOLIA"} 2`+"\n")
+	require.Contains(t, exposition, name+`{account="reward",network="SN_SEPOLIA"} 1`+"\n")
 }
 
-func counterValue(t *testing.T, m *Metrics, name string, labels map[string]string) float64 {
+func freeAddress(t *testing.T) string {
 	t.Helper()
 
-	families, err := m.registry.Gather()
+	var config net.ListenConfig
+	listener, err := config.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	for _, family := range families {
-		if family.GetName() != name {
-			continue
-		}
-		for _, metric := range family.GetMetric() {
-			metricLabels := make(map[string]string)
-			for _, label := range metric.GetLabel() {
-				metricLabels[label.GetName()] = label.GetValue()
-			}
-			if maps.Equal(metricLabels, labels) {
-				return metric.GetCounter().GetValue()
-			}
-		}
-	}
-	require.FailNow(t, "metric not found", "%s %v", name, labels)
+	address := listener.Addr().String()
+	require.NoError(t, listener.Close())
 
-	return 0
+	return address
+}
+
+func scrapeMetrics(t *testing.T, address string) string {
+	t.Helper()
+
+	var exposition string
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		request, err := http.NewRequestWithContext(
+			t.Context(), http.MethodGet, "http://"+address+"/metrics", http.NoBody,
+		)
+		require.NoError(c, err)
+		response, err := http.DefaultClient.Do(request)
+		require.NoError(c, err)
+		body, err := io.ReadAll(response.Body)
+		require.NoError(c, response.Body.Close())
+		require.NoError(c, err)
+		require.Equal(c, http.StatusOK, response.StatusCode)
+		exposition = string(body)
+	}, 5*time.Second, 10*time.Millisecond)
+
+	return exposition
 }
 
 func TestUpdateEpochInfoDebugLog(t *testing.T) {
 	core, logs := observer.New(zapcore.DebugLevel)
-	m := NewMetrics("127.0.0.1:0", "SN_SEPOLIA", log.NewZapLoggerWithCore(core))
+	m := metrics.NewMetrics("127.0.0.1:0", "SN_SEPOLIA", log.NewZapLoggerWithCore(core))
 
 	m.UpdateEpochInfo(&types.EpochInfo{
 		EpochLen:      231,
