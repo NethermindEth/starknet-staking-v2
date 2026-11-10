@@ -37,7 +37,12 @@ func TestConfigFromFile(t *testing.T) {
 		config, err := FromFile(tmpFile.Name())
 
 		require.Equal(t, Config{}, config)
-		require.NotNil(t, err)
+		require.EqualError(
+			t,
+			err,
+			"cannot parse config file "+tmpFile.Name()+
+				": invalid character '}' looking for beginning of object key string",
+		)
 	})
 
 	t.Run("Successfully load config", func(t *testing.T) {
@@ -502,5 +507,66 @@ func TestRewardFromEnvBraavos(t *testing.T) {
 		reward, err := RewardFromEnv()
 		require.NoError(t, err)
 		require.Equal(t, new(false), reward.Braavos)
+	})
+}
+
+func TestConfigCheckSources(t *testing.T) {
+	flags := Config{Signer: Signer{OperationalAddress: "0x456"}}
+	env := Config{Signer: Signer{PrivKey: "0x123"}}
+	file := Config{
+		Provider: Provider{HTTP: "http://localhost:1234", WS: "ws://localhost:1235"},
+		Signer:   Signer{ExternalURL: "http://localhost:5678"},
+	}
+	sources := []Source{
+		{Name: "flags", Config: &flags},
+		{Name: "env vars", Config: &env},
+		{Name: "config file config.json", Config: &file},
+	}
+
+	t.Run("Signer key and URL from different sources", func(t *testing.T) {
+		merged := flags
+		merged.Fill(&env)
+		merged.Fill(&file)
+
+		require.EqualError(
+			t,
+			merged.CheckSources(sources...),
+			"signer: both private key and external signer URL set in signer configuration "+
+				"where only one is allowed (private key set by env vars, external URL set by "+
+				"config file config.json)",
+		)
+	})
+
+	t.Run("Reward key and URL, the key from two sources", func(t *testing.T) {
+		rewardFlags := Config{Reward: Reward{PrivKey: "0xabc", ExternalURL: "http://localhost:7"}}
+		rewardEnv := Config{Reward: Reward{PrivKey: "0xdef"}}
+		rewardFile := file
+		rewardFile.Signer = Signer{OperationalAddress: "0x456", PrivKey: "0x123"}
+		rewardFile.Reward = Reward{Address: "0x789", ClaimThreshold: 1}
+
+		merged := rewardFlags
+		merged.Fill(&rewardEnv)
+		merged.Fill(&rewardFile)
+
+		err := merged.CheckSources(
+			Source{Name: "flags", Config: &rewardFlags},
+			Source{Name: "env vars", Config: &rewardEnv},
+			Source{Name: "config file config.json", Config: &rewardFile},
+		)
+		require.EqualError(
+			t,
+			err,
+			"reward: both private key and external signer URL set in reward configuration "+
+				"where only one is allowed (private key set by flags and env vars, external URL "+
+				"set by flags)",
+		)
+	})
+
+	t.Run("Other errors are unchanged", func(t *testing.T) {
+		require.EqualError(
+			t,
+			flags.CheckSources(sources...),
+			"provider: http provider url not set in provider configuration",
+		)
 	})
 }

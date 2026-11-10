@@ -41,6 +41,8 @@ Auto-claim reward feature (optional):
 Full documentation: https://nethermindeth.github.io/starknet-staking-v2/
 `
 
+const logLevels = "trace, debug, info, warn, error"
+
 //nolint:funlen // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {
 	var configPath string
@@ -80,7 +82,7 @@ func NewCommand() cobra.Command {
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
-			return err
+			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
 		}
 
 		loadedLogger, err := log.NewZapLogger(logLevel, log.WithColour(true))
@@ -301,9 +303,7 @@ func NewCommand() cobra.Command {
 			"query-bit transaction version (1<<128 + 0x3) that Braavos accounts require.\n"+
 			"Applies to both internal and external signing.",
 	)
-	cmd.Flags().StringVar(
-		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error.",
-	)
+	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels+".")
 
 	return cmd
 }
@@ -312,22 +312,31 @@ func NewCommand() cobra.Command {
 // ones from env vars and then from the config file. Afterwards it sets the
 // defaults for the missing values and verifies the result
 func loadConfig(config *configP.Config, configPath string) error {
+	configFromFlags := *config
 	configFromEnv, err := configP.FromEnv()
 	if err != nil {
 		return err
 	}
 	config.Fill(&configFromEnv)
 
+	sources := []configP.Source{
+		{Name: "flags", Config: &configFromFlags},
+		{Name: "env vars", Config: &configFromEnv},
+	}
 	if configPath != "" {
 		configFromFile, err := configP.FromFile(configPath)
 		if err != nil {
 			return err
 		}
 		config.Fill(&configFromFile)
+		sources = append(sources, configP.Source{
+			Name:   "config file " + configPath,
+			Config: &configFromFile,
+		})
 	}
 	config.SetDefaults()
 
-	return config.Check()
+	return config.CheckSources(sources...)
 }
 
 func main() {
