@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -246,6 +247,27 @@ func TestNewCommand(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestHelpText(t *testing.T) {
+	command := main.NewCommand()
+	command.SetArgs([]string{"--help"})
+	var output bytes.Buffer
+	command.SetOut(&output)
+
+	require.NoError(t, command.ExecuteContext(t.Context()))
+	help := output.String()
+
+	for i, line := range strings.Split(help, "\n") {
+		require.Equal(
+			t, strings.TrimRight(line, " \t"), line, "trailing whitespace on line %d", i+1,
+		)
+	}
+	for _, defect := range []string{"the the", "Defaults values", "1 << 1e18", "Only applies for"} {
+		require.NotContains(t, help, defect)
+	}
+	require.Contains(t, help, "Exclusive with --signer-url")
+	require.Contains(t, help, "Exclusive with --signer-priv-key")
 }
 
 func createTemporaryConfigFile(t *testing.T, conf *config.Config) string {
