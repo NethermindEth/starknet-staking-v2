@@ -1,6 +1,7 @@
 package validator_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -106,7 +107,9 @@ func TestDispatch(t *testing.T) {
 
 			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockSigner, nil, math.Inf(1), logger, tracer) })
+			wg.Go(func() {
+				dispatcher.Dispatch(t.Context(), mockSigner, nil, math.Inf(1), logger, tracer)
+			})
 
 			// Send event
 			dispatcher.DoAttest <- types.DoAttest{BlockHash: *blockhash}
@@ -167,7 +170,7 @@ func TestDispatch(t *testing.T) {
 
 				// Start routine
 				wg := &conc.WaitGroup{}
-				wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+				wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 				// Send the same event x3
 				blockHash := (*types.BlockHash)(blockHashFelt)
@@ -245,7 +248,7 @@ func TestDispatch(t *testing.T) {
 
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+			wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 			// Send the same event x3
 			blockHash := (*types.BlockHash)(blockHashFelt)
@@ -333,7 +336,7 @@ func TestDispatch(t *testing.T) {
 
 				// Start routine
 				wg := &conc.WaitGroup{}
-				wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+				wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 				// Send the same event x2
 				blockHash := (*types.BlockHash)(blockHashFelt)
@@ -447,7 +450,7 @@ func TestDispatch(t *testing.T) {
 
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+			wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 			// Send event A
 			blockHashA := (*types.BlockHash)(blockHashFeltA)
@@ -489,10 +492,10 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			TransactionStatus(txHash).
+			TransactionStatus(gomock.Any(), txHash).
 			Return(nil, validator.ErrTxnHashNotFound)
 
-		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+		txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
 		require.Equal(t, validator.Ongoing, txStatus)
 	})
@@ -503,10 +506,10 @@ func TestTrackAttest(t *testing.T) {
 			txHash := new(felt.Felt).SetUint64(1)
 
 			mockSigner.EXPECT().
-				TransactionStatus(txHash).
+				TransactionStatus(gomock.Any(), txHash).
 				Return(nil, errors.New("some internal error"))
 
-			txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+			txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
 			require.Equal(t, validator.Failed, txStatus)
 		})
@@ -516,14 +519,14 @@ func TestTrackAttest(t *testing.T) {
 
 		revertError := "reverted for some reason"
 		mockSigner.EXPECT().
-			TransactionStatus(txHash).
+			TransactionStatus(gomock.Any(), txHash).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
 				FailureReason:   revertError,
 			}, nil)
 
-		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+		txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
 		require.Equal(t, validator.Failed, txStatus)
 	})
@@ -532,13 +535,13 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			TransactionStatus(txHash).
+			TransactionStatus(gomock.Any(), txHash).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
 			}, nil)
 
-		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+		txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
 		require.Equal(t, validator.Successful, txStatus)
 	})
@@ -561,13 +564,15 @@ func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
 		AnyTimes()
 	// Called by `TrackAttest` when the window ends without a successful attest
 	mockSigner.EXPECT().
-		TransactionStatus(gomock.Any()).
+		TransactionStatus(gomock.Any(), gomock.Any()).
 		Return(nil, validator.ErrTxnHashNotFound).
 		AnyTimes()
 	// Called by the `CheckBalance` goroutine launched at the end of the window
 	mockSigner.EXPECT().
-		Call(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ rpc.FunctionCall, _ rpc.BlockID) ([]*felt.Felt, error) {
+		Call(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context, _ rpc.FunctionCall, _ rpc.BlockID,
+		) ([]*felt.Felt, error) {
 			select {
 			case balanceChecked <- struct{}{}:
 			default:
@@ -581,6 +586,7 @@ func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(
+			t.Context(),
 			mockSigner, nil, 100, log.NewNopZapLogger(), metrics.NewNoOpMetrics(),
 		)
 	})
@@ -623,13 +629,15 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 		AnyTimes()
 	// Called by `TrackAttest` when the window ends without a successful attest
 	mockSigner.EXPECT().
-		TransactionStatus(gomock.Any()).
+		TransactionStatus(gomock.Any(), gomock.Any()).
 		Return(nil, validator.ErrTxnHashNotFound).
 		AnyTimes()
 	// Called by the `CheckBalance` goroutine for the signer and the reward accounts
 	mockSigner.EXPECT().
-		Call(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ rpc.FunctionCall, _ rpc.BlockID) ([]*felt.Felt, error) {
+		Call(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context, _ rpc.FunctionCall, _ rpc.BlockID,
+		) ([]*felt.Felt, error) {
 			balanceChecked <- struct{}{}
 
 			return nil, errors.New("balance unavailable")
@@ -639,14 +647,15 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 	mockRewardSigner := mocks.NewMockRewardSigner(mockCtrl)
 	mockRewardSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
 	mockRewardSigner.EXPECT().
-		ClaimRewards(gomock.Any()).
-		Do(func(metrics.Tracer) { rewardsClaimed <- struct{}{} }).
+		ClaimRewards(gomock.Any(), gomock.Any()).
+		Do(func(context.Context, metrics.Tracer) { rewardsClaimed <- struct{}{} }).
 		Times(1)
 
 	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(
+			t.Context(),
 			mockSigner, mockRewardSigner, 100, log.NewNopZapLogger(), metrics.NewNoOpMetrics(),
 		)
 	})

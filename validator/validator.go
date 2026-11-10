@@ -84,7 +84,7 @@ func New(
 
 	var rewardSigner signerP.RewardSigner
 	if conf.Reward.IsSet() {
-		epochInfo, err := signerP.FetchEpochInfo(signer)
+		epochInfo, err := signerP.FetchEpochInfo(ctx, signer)
 		if err != nil {
 			return Validator{}, fmt.Errorf(
 				"failed to fetch staking address from epoch info: %w", err,
@@ -138,13 +138,13 @@ func (v *Validator) Attest(
 	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance
-	go CheckBalance(v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
+	go CheckBalance(ctx, v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
 
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
-		dispatcher.Dispatch(v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
+		dispatcher.Dispatch(ctx, v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
 	defer wg.Wait()
@@ -242,13 +242,13 @@ func ProcessBlockHeaders[Account signerP.Signer](
 ) error {
 	noEpochSwitch := func(*types.EpochInfo, *types.EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(
-		account, logger, nil, noEpochSwitch, maxRetries, "at app startup",
+		ctx, account, logger, nil, noEpochSwitch, maxRetries, "at app startup",
 	)
 	if err != nil {
 		return err
 	}
 
-	SetTargetBlockHashIfExists(account, logger, &attestInfo)
+	SetTargetBlockHashIfExists(ctx, account, logger, &attestInfo)
 
 	logNewEpoch(&epochInfo, &attestInfo, logger)
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
@@ -261,6 +261,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 		if block.Number >= uint64(epochInfo.StartingBlock)+epochInfo.EpochLen {
 			prevEpochInfo := epochInfo
 			epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
+				ctx,
 				account,
 				logger,
 				&prevEpochInfo,
@@ -309,12 +310,13 @@ func ProcessBlockHeaders[Account signerP.Signer](
 }
 
 func SetTargetBlockHashIfExists[Account signerP.Signer](
+	ctx context.Context,
 	account Account,
 	logger log.Logger,
 	attestInfo *types.AttestInfo,
 ) {
 	targetBlockNumber := attestInfo.TargetBlock.Uint64()
-	res, err := account.BlockWithTxHashes(rpc.WithBlockNumber(targetBlockNumber))
+	res, err := account.BlockWithTxHashes(ctx, rpc.WithBlockNumber(targetBlockNumber))
 
 	// If no error, then target block already exists
 	if err == nil {
@@ -329,6 +331,7 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 }
 
 func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
+	ctx context.Context,
 	signer Signer,
 	logger log.Logger,
 	prevEpoch *types.EpochInfo,
@@ -339,7 +342,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 	// storing the initial value for error reporting
 	totalRetryAmount := maxRetries.String()
 
-	newEpoch, newAttestInfo, err := signerP.FetchEpochAndAttestInfo(signer, logger)
+	newEpoch, newAttestInfo, err := signerP.FetchEpochAndAttestInfo(ctx, signer, logger)
 
 	for (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && !maxRetries.IsZero() {
 		if err != nil {
@@ -361,7 +364,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 
 		Sleep(time.Second)
 
-		newEpoch, newAttestInfo, err = signerP.FetchEpochAndAttestInfo(signer, logger)
+		newEpoch, newAttestInfo, err = signerP.FetchEpochAndAttestInfo(ctx, signer, logger)
 		maxRetries.Sub()
 	}
 

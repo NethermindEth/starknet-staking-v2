@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -36,16 +37,18 @@ type AttestTransaction struct {
 	valid bool
 }
 
-func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockHash) error {
+func (t *AttestTransaction) Build(
+	ctx context.Context, signer signerP.Signer, blockHash *types.BlockHash,
+) error {
 	t.valid = false
 
 	var err error
-	t.txn, err = signer.BuildAttestTransaction(blockHash)
+	t.txn, err = signer.BuildAttestTransaction(ctx, blockHash)
 	if err != nil {
 		return fmt.Errorf("signer failed building the transaction: %w", err)
 	}
 
-	_, err = signer.SignTransaction(&t.txn)
+	_, err = signer.SignTransaction(ctx, &t.txn)
 	if err != nil {
 		return fmt.Errorf("signer failed to sign the transaction: %w", err)
 	}
@@ -55,7 +58,7 @@ func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockH
 	return nil
 }
 
-func (t *AttestTransaction) Invoke(signer signerP.Signer) (
+func (t *AttestTransaction) Invoke(ctx context.Context, signer signerP.Signer) (
 	rpc.AddInvokeTransactionResponse, error,
 ) {
 	var resp rpc.AddInvokeTransactionResponse
@@ -65,7 +68,7 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	t.valid = false
 
 	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
-	estimate, err := signer.EstimateFee(&t.txn)
+	estimate, err := signer.EstimateFee(ctx, &t.txn)
 	if err != nil {
 		return resp, fmt.Errorf("signer failed to estimate fee: %w", err)
 	}
@@ -74,12 +77,12 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	// patch for making sure txn.Version is correct
 	t.txn.Version = rpc.TransactionV3
 
-	_, err = signer.SignTransaction(&t.txn)
+	_, err = signer.SignTransaction(ctx, &t.txn)
 	if err != nil {
 		return resp, fmt.Errorf("signer failed to sign the transaction: %w", err)
 	}
 
-	resp, err = signer.InvokeTransaction(&t.txn)
+	resp, err = signer.InvokeTransaction(ctx, &t.txn)
 	if err != nil {
 		return resp, fmt.Errorf("signer failed to invoke the transaction: %w", err)
 	}
@@ -87,17 +90,17 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	return resp, nil
 }
 
-func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
+func (t *AttestTransaction) UpdateNonce(ctx context.Context, signer signerP.Signer) error {
 	if !t.valid {
 		return errors.New("updating the transaction nonce before building the transaction")
 	}
-	newNonce, err := signer.Nonce()
+	newNonce, err := signer.Nonce(ctx)
 	if err != nil {
 		return fmt.Errorf("signer failed to get the nonce: %w", err)
 	}
 	if !t.txn.Nonce.Equal(newNonce) {
 		t.txn.Nonce = newNonce
-		_, err := signer.SignTransaction(&t.txn)
+		_, err := signer.SignTransaction(ctx, &t.txn)
 		if err != nil {
 			return fmt.Errorf("signer failed to sign the transaction: %w", err)
 		}
@@ -126,10 +129,11 @@ func NewAttestTracker() AttestTracker {
 }
 
 func (a *AttestTracker) UpdateStatus(
+	ctx context.Context,
 	signer signerP.Signer,
 	logger log.Logger,
 ) {
-	status := TrackAttest(signer, logger, &a.Hash)
+	status := TrackAttest(ctx, signer, logger, &a.Hash)
 	a.setStatus(status)
 }
 
@@ -166,6 +170,7 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 
 //nolint:gocyclo,funlen // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
+	ctx context.Context,
 	signer S,
 	rewardSigner signerP.RewardSigner,
 	balanceThreshold float64,
@@ -191,7 +196,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				"building attest transaction for blockhash",
 				zap.String("blockhash", targetBlockHash.String()),
 			)
-			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+			err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash)
 			if err != nil {
 				logger.Error("failed to build attest transaction", zap.Error(err))
 
@@ -208,7 +213,7 @@ func (d *EventDispatcher[S]) Dispatch(
 			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
 				// If  status is still not successful, check for it
 				if d.CurrentAttest.Status != Successful {
-					d.CurrentAttest.UpdateStatus(signer, logger)
+					d.CurrentAttest.UpdateStatus(ctx, signer, logger)
 				}
 				// If status is status is already successful or ongoing, do nothing.
 				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
@@ -225,7 +230,7 @@ func (d *EventDispatcher[S]) Dispatch(
 					"building attest transaction (in `do` stage) for blockhash",
 					zap.String("blockhash", targetBlockHash.String()),
 				)
-				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+				err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash)
 				if err != nil {
 					logger.Error("failed to build attest transaction", zap.Error(err))
 
@@ -236,7 +241,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
 				logger.Debug("updating attest transaction nonce")
-				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
+				err := d.CurrentAttest.Transaction.UpdateNonce(ctx, signer)
 				if err != nil {
 					logger.Error("failed to update transaction nonce", zap.Error(err))
 
@@ -248,7 +253,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				"invoking attest",
 				zap.String("target block hash", targetBlockHash.String()),
 			)
-			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
+			resp, err := d.CurrentAttest.Transaction.Invoke(ctx, signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
 					logger.Info("attestation is already done for this epoch")
@@ -274,7 +279,7 @@ func (d *EventDispatcher[S]) Dispatch(
 		case <-d.EndOfWindow:
 			logger.Info("end of window reached")
 			if d.CurrentAttest.Status != Successful {
-				d.CurrentAttest.UpdateStatus(signer, logger)
+				d.CurrentAttest.UpdateStatus(ctx, signer, logger)
 			}
 			if d.CurrentAttest.Status == Successful {
 				logger.Info(
@@ -293,22 +298,23 @@ func (d *EventDispatcher[S]) Dispatch(
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
 			// check the accounts balances
-			go CheckBalance(signer, rewardSigner, balanceThreshold, logger, tracer)
+			go CheckBalance(ctx, signer, rewardSigner, balanceThreshold, logger, tracer)
 
 			// Claim rewards if the feature is enabled
 			if rewardSigner != nil {
-				go rewardSigner.ClaimRewards(tracer)
+				go rewardSigner.ClaimRewards(ctx, tracer)
 			}
 		}
 	}
 }
 
 func TrackAttest[S signerP.Signer](
+	ctx context.Context,
 	signer S,
 	logger log.Logger,
 	txHash *felt.Felt,
 ) AttestStatus {
-	txStatus, err := signer.TransactionStatus(txHash)
+	txStatus, err := signer.TransactionStatus(ctx, txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Info(

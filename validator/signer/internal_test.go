@@ -208,7 +208,7 @@ func TestSignInvokeTx(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		err := signer.SignInvokeTx(&invokeTx, &felt.Felt{}, mockServer.URL)
+		err := signer.SignInvokeTx(t.Context(), &invokeTx, &felt.Felt{}, mockServer.URL)
 
 		require.Equal(t, []*felt.Felt{}, invokeTx.Signature)
 		expectedErrorMsg := fmt.Sprintf(
@@ -268,7 +268,7 @@ func TestSignInvokeTx(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		err := signer.SignInvokeTx(&invokeTx, chainID, mockServer.URL)
+		err := signer.SignInvokeTx(t.Context(), &invokeTx, chainID, mockServer.URL)
 
 		expectedSignature := []*felt.Felt{sigR, sigS}
 		require.Equal(t, expectedSignature, invokeTx.Signature)
@@ -308,10 +308,10 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, err := signer.FetchEpochInfo(mockSigner)
+		epochInfo, err := signer.FetchEpochInfo(t.Context(), mockSigner)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.ErrorContains(t, err, "some contract error")
@@ -336,10 +336,10 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(1)}, nil)
 
-		epochInfo, err := signer.FetchEpochInfo(mockSigner)
+		epochInfo, err := signer.FetchEpochInfo(t.Context(), mockSigner)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(
@@ -381,13 +381,13 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(
 				[]*felt.Felt{stakerAddress, stake, epochLen, epochID, currentEpochStartingBlock},
 				nil,
 			)
 
-		epochInfo, err := signer.FetchEpochInfo(mockSigner)
+		epochInfo, err := signer.FetchEpochInfo(t.Context(), mockSigner)
 
 		require.Equal(t, types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
@@ -423,14 +423,14 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		window, err := signer.FetchAttestWindow(mockSigner)
+		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(0), window)
 		require.Equal(
@@ -451,14 +451,14 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{}, nil)
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		window, err := signer.FetchAttestWindow(mockSigner)
+		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(0), window)
 		require.Equal(
@@ -479,14 +479,14 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(16)}, nil)
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		window, err := signer.FetchAttestWindow(mockSigner)
+		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(16), window)
 		require.Nil(t, err)
@@ -596,14 +596,16 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(mockSigner, logger)
+		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(
+			t.Context(), mockSigner, logger,
+		)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
@@ -635,7 +637,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		epochStartingBlock := uint64(5)
 		mockSigner.
 			EXPECT().
-			Call(expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{
 				new(felt.Felt).SetUint64(1),
 				new(felt.Felt).SetUint64(2),
@@ -654,10 +656,12 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(mockSigner, logger)
+		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(
+			t.Context(), mockSigner, logger,
+		)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
@@ -700,7 +704,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(
 				[]*felt.Felt{
 					stakerAddress,
@@ -724,11 +728,13 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		attestWindow := uint64(16)
 		mockSigner.
 			EXPECT().
-			Call(expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(attestWindow)}, nil)
 
 		// Test
-		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(mockSigner, logger)
+		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(
+			t.Context(), mockSigner, logger,
+		)
 
 		// Assert
 		expectedEpochInfo := types.EpochInfo{

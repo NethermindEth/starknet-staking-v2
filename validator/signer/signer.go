@@ -1,6 +1,7 @@
 package signer
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -18,18 +19,26 @@ import (
 //go:generate go tool mockgen -destination=../../mocks/mock_signer.go -package=mocks github.com/NethermindEth/starknet-staking-v2/validator/signer Signer
 type Signer interface {
 	// Methods from Starknet.go Account implementation
-	TransactionStatus(transactionHash *felt.Felt) (*rpc.TxnStatusResult, error)
+	TransactionStatus(
+		ctx context.Context, transactionHash *felt.Felt,
+	) (*rpc.TxnStatusResult, error)
 
-	BuildAttestTransaction(blockHash *types.BlockHash) (rpc.BroadcastInvokeTxnV3, error)
-	EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error)
-	SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error)
-	InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (rpc.AddInvokeTransactionResponse, error)
+	BuildAttestTransaction(
+		ctx context.Context, blockHash *types.BlockHash,
+	) (rpc.BroadcastInvokeTxnV3, error)
+	EstimateFee(ctx context.Context, txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error)
+	SignTransaction(
+		ctx context.Context, txn *rpc.BroadcastInvokeTxnV3,
+	) (*rpc.BroadcastInvokeTxnV3, error)
+	InvokeTransaction(
+		ctx context.Context, txn *rpc.BroadcastInvokeTxnV3,
+	) (rpc.AddInvokeTransactionResponse, error)
 
-	Call(call rpc.FunctionCall, blockID rpc.BlockID) ([]*felt.Felt, error)
-	BlockWithTxHashes(blockID rpc.BlockID) (any, error)
+	Call(ctx context.Context, call rpc.FunctionCall, blockID rpc.BlockID) ([]*felt.Felt, error)
+	BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (any, error)
 
 	// Property Access
-	Nonce() (*felt.Felt, error)
+	Nonce(ctx context.Context) (*felt.Felt, error)
 	Address() *types.Address
 	ValidationContracts() *types.ValidationContracts
 }
@@ -37,7 +46,7 @@ type Signer interface {
 // I believe all these functions down here should be methods
 // Postponing for now to not affect test code
 
-func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
+func FetchEpochInfo[S Signer](ctx context.Context, signer S) (types.EpochInfo, error) {
 	functionCall := rpc.FunctionCall{
 		ContractAddress: signer.ValidationContracts().Staking.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt(
@@ -46,7 +55,7 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 		Calldata: []*felt.Felt{signer.Address().Felt()},
 	}
 
-	result, err := signer.Call(functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
+	result, err := signer.Call(ctx, functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
 		return types.EpochInfo{},
 			entrypointInternalError("get_attestation_info_by_operational_address", err)
@@ -68,8 +77,9 @@ func FetchEpochInfo[S Signer](signer S) (types.EpochInfo, error) {
 	}, nil
 }
 
-func FetchAttestWindow[S Signer](signer S) (uint64, error) {
+func FetchAttestWindow[S Signer](ctx context.Context, signer S) (uint64, error) {
 	result, err := signer.Call(
+		ctx,
 		rpc.FunctionCall{
 			ContractAddress:    signer.ValidationContracts().Attest.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("attestation_window"),
@@ -89,12 +99,15 @@ func FetchAttestWindow[S Signer](signer S) (uint64, error) {
 }
 
 // Fetches the STRK balance of any account, using the signer only to perform the call
-func FetchBalance[S Signer](signer S, address *types.Address) (types.Balance, error) {
+func FetchBalance[S Signer](
+	ctx context.Context, signer S, address *types.Address,
+) (types.Balance, error) {
 	StrkTokenContract, err := types.AddressFromString(constants.StrkContractAddress)
 	if err != nil {
 		return types.Balance{}, fmt.Errorf("invalid STRK contract address: %w", err)
 	}
 	result, err := signer.Call(
+		ctx,
 		rpc.FunctionCall{
 			ContractAddress:    StrkTokenContract.Felt(),
 			EntryPointSelector: utils.GetSelectorFromNameFelt("balance_of"),
@@ -114,9 +127,9 @@ func FetchBalance[S Signer](signer S, address *types.Address) (types.Balance, er
 }
 
 func FetchEpochAndAttestInfo[S Signer](
-	signer S, logger log.Logger,
+	ctx context.Context, signer S, logger log.Logger,
 ) (types.EpochInfo, types.AttestInfo, error) {
-	epochInfo, err := FetchEpochInfo(signer)
+	epochInfo, err := FetchEpochInfo(ctx, signer)
 	if err != nil {
 		return types.EpochInfo{}, types.AttestInfo{}, err
 	}
@@ -128,7 +141,7 @@ func FetchEpochAndAttestInfo[S Signer](
 			epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen,
 		),
 	)
-	attestWindow, windowErr := FetchAttestWindow(signer)
+	attestWindow, windowErr := FetchAttestWindow(ctx, signer)
 	if windowErr != nil {
 		return types.EpochInfo{}, types.AttestInfo{}, windowErr
 	}
@@ -151,20 +164,22 @@ func FetchEpochAndAttestInfo[S Signer](
 	return epochInfo, attestInfo, nil
 }
 
-func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier float64) (
+func BuildAttest[S Signer](
+	ctx context.Context, signer S, blockHash *types.BlockHash, multiplier float64,
+) (
 	rpc.BroadcastInvokeTxnV3, error,
 ) {
-	txn, err := signer.BuildAttestTransaction(blockHash)
+	txn, err := signer.BuildAttestTransaction(ctx, blockHash)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	_, err = signer.SignTransaction(&txn)
+	_, err = signer.SignTransaction(ctx, &txn)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	estimate, err := signer.EstimateFee(&txn)
+	estimate, err := signer.EstimateFee(ctx, &txn)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
@@ -173,7 +188,7 @@ func BuildAttest[S Signer](signer S, blockHash *types.BlockHash, multiplier floa
 	// patch for making sure txn.Version is correct
 	txn.Version = rpc.TransactionV3
 
-	_, err = signer.SignTransaction(&txn)
+	_, err = signer.SignTransaction(ctx, &txn)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}

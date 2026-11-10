@@ -46,14 +46,13 @@ var (
 //go:generate go tool mockgen -destination=../../mocks/mock_reward_signer.go -package=mocks github.com/NethermindEth/starknet-staking-v2/validator/signer RewardSigner
 type RewardSigner interface {
 	Address() *types.Address
-	ClaimRewards(tracer metrics.Tracer)
+	ClaimRewards(ctx context.Context, tracer metrics.Tracer)
 }
 
 // rewardSigner is the implementation of the RewardSigner interface.
 //
 //go:generate go tool mockgen -destination=../../mocks/mock_rpc_provider.go -package=mocks github.com/NethermindEth/starknet.go/rpc RPCProvider
 type rewardSigner struct {
-	ctx           context.Context
 	logger        log.Logger
 	signer        Signer
 	provider      rpc.RPCProvider
@@ -109,7 +108,6 @@ func NewRewardSigner(
 	}
 
 	rs := &rewardSigner{
-		ctx:            ctx,
 		logger:         logger,
 		signer:         signer,
 		provider:       provider,
@@ -118,12 +116,12 @@ func NewRewardSigner(
 		claimThreshold: rewardConfig.ClaimThreshold,
 	}
 
-	if err := rs.checkRewardAddress(); err != nil {
+	if err := rs.checkRewardAddress(ctx); err != nil {
 		return nil, fmt.Errorf("reward address check: %w", err)
 	}
 
 	if isExternal {
-		if err := rs.checkExternalSigner(); err != nil {
+		if err := rs.checkExternalSigner(ctx); err != nil {
 			return nil, fmt.Errorf("external reward signer check: %w", err)
 		}
 	}
@@ -144,8 +142,8 @@ func (rs *rewardSigner) Address() *types.Address {
 }
 
 // Only the staker address or its reward address are allowed to claim the staker rewards
-func (rs *rewardSigner) checkRewardAddress() error {
-	info, err := rs.fetchStakerInfo()
+func (rs *rewardSigner) checkRewardAddress(ctx context.Context) error {
+	info, err := rs.fetchStakerInfo(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch staker info: %w", err)
 	}
@@ -168,8 +166,8 @@ func (rs *rewardSigner) checkRewardAddress() error {
 
 // Signs a claim transaction, without sending it, so an unreachable external signer
 // is detected at startup instead of when the first claim is due
-func (rs *rewardSigner) checkExternalSigner() error {
-	_, err := rs.buildClaimRewardTransaction()
+func (rs *rewardSigner) checkExternalSigner(ctx context.Context) error {
+	_, err := rs.buildClaimRewardTransaction(ctx)
 
 	return err
 }
@@ -177,11 +175,11 @@ func (rs *rewardSigner) checkExternalSigner() error {
 // ClaimRewards claims rewards if the unclaimed rewards amount reaches the claim threshold.
 // All errors and state changes are logged and recorded in the tracer, the feature does not
 // stop the flow.
-func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
+func (rs *rewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer) {
 	pref := "Auto-Claiming Rewards: "
 	rs.logger.Debug(pref + "starting claim rewards")
 
-	info, err := rs.fetchStakerInfo()
+	info, err := rs.fetchStakerInfo(ctx)
 	if err != nil {
 		rs.logger.Error(pref+"failed to get unclaimed rewards amount", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
@@ -207,7 +205,7 @@ func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
 		zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
 	)
 
-	txn, err := rs.buildClaimRewardTransaction()
+	txn, err := rs.buildClaimRewardTransaction(ctx)
 	if err != nil {
 		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
@@ -215,7 +213,7 @@ func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
 		return
 	}
 
-	overallFee, err := rs.populateFees(&txn)
+	overallFee, err := rs.populateFees(ctx, &txn)
 	if err != nil {
 		if errors.Is(err, errFeeExceedsClaimMaxFee) {
 			rs.logger.Warn(
@@ -233,7 +231,7 @@ func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
 		return
 	}
 
-	resp, err := rs.provider.AddInvokeTransaction(rs.ctx, &txn)
+	resp, err := rs.provider.AddInvokeTransaction(ctx, &txn)
 	if err != nil {
 		rs.logger.Error(pref+"failed to send reward claim transaction", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
@@ -248,7 +246,7 @@ func (rs *rewardSigner) ClaimRewards(tracer metrics.Tracer) {
 	)
 }
 
-func (rs *rewardSigner) fetchStakerInfo() (stakerInfo, error) {
+func (rs *rewardSigner) fetchStakerInfo(ctx context.Context) (stakerInfo, error) {
 	functionCall := rpc.FunctionCall{
 		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
 		EntryPointSelector: utils.GetSelectorFromNameFelt(
@@ -257,7 +255,7 @@ func (rs *rewardSigner) fetchStakerInfo() (stakerInfo, error) {
 		Calldata: []*felt.Felt{rs.stakerAddress.Felt()},
 	}
 
-	resp, err := rs.signer.Call(functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
+	resp, err := rs.signer.Call(ctx, functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
 		return stakerInfo{}, fmt.Errorf("calling 'get_staker_info_v1': %w", err)
 	}
@@ -340,7 +338,9 @@ func isOptionSome(variant *felt.Felt) (bool, error) {
 	}
 }
 
-func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3, error) {
+func (rs *rewardSigner) buildClaimRewardTransaction(
+	ctx context.Context,
+) (rpc.BroadcastInvokeTxnV3, error) {
 	invokeCall := []rpc.InvokeFunctionCall{{
 		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
 		FunctionName:    "claim_rewards",
@@ -351,7 +351,7 @@ func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 	defaultResources := makeDefaultResources()
 
 	nonce, err := rs.provider.Nonce(
-		rs.ctx,
+		ctx,
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 		rs.Address().Felt(),
 	)
@@ -359,7 +359,7 @@ func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to get nonce: %w", err)
 	}
 
-	tip, err := rpc.EstimateTip(rs.ctx, rs.provider, constants.TipMultiplier)
+	tip, err := rpc.EstimateTip(ctx, rs.provider, constants.TipMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
@@ -382,7 +382,7 @@ func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 		ProofFacts:            []*felt.Felt{},
 	}
 
-	_, err = rs.signer.SignTransaction(&claimTransaction)
+	_, err = rs.signer.SignTransaction(ctx, &claimTransaction)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to sign transaction: %w", err)
 	}
@@ -394,8 +394,10 @@ func (rs *rewardSigner) buildClaimRewardTransaction() (rpc.BroadcastInvokeTxnV3,
 // Returns the estimated overall fee and an error.
 // If the estimated fee exceeds the claim max fee, [errFeeExceedsClaimMaxFee] is returned
 // alongside the estimated fee, and the transaction is left untouched.
-func (rs *rewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) (felt.Felt, error) {
-	estimate, err := rs.signer.EstimateFee(txn)
+func (rs *rewardSigner) populateFees(
+	ctx context.Context, txn *rpc.BroadcastInvokeTxnV3,
+) (felt.Felt, error) {
+	estimate, err := rs.signer.EstimateFee(ctx, txn)
 	if err != nil {
 		return felt.Felt{}, fmt.Errorf("failed to estimate fee: %w", err)
 	}
@@ -410,7 +412,7 @@ func (rs *rewardSigner) populateFees(txn *rpc.BroadcastInvokeTxnV3) (felt.Felt, 
 	// patch for making sure txn.Version is correct
 	txn.Version = rpc.TransactionV3
 
-	_, err = rs.signer.SignTransaction(txn)
+	_, err = rs.signer.SignTransaction(ctx, txn)
 	if err != nil {
 		return overallFee, fmt.Errorf("failed to sign the transaction: %w", err)
 	}

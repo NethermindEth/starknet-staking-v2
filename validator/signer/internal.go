@@ -21,7 +21,6 @@ import (
 var _ Signer = (*InternalSigner)(nil)
 
 type InternalSigner struct {
-	ctx     context.Context
 	Account account.Account
 	// If the account used represents a braavos account
 	braavos             bool
@@ -72,20 +71,22 @@ func NewInternalSigner(
 	)
 
 	return InternalSigner{
-		ctx:                 ctx,
 		Account:             *acc,
 		braavos:             braavos,
 		validationContracts: validationContracts,
 	}, nil
 }
 
-func (s *InternalSigner) TransactionStatus(transactionHash *felt.Felt) (
+func (s *InternalSigner) TransactionStatus(
+	ctx context.Context, transactionHash *felt.Felt,
+) (
 	*rpc.TxnStatusResult, error,
 ) {
-	return s.Account.Provider.TransactionStatus(s.ctx, transactionHash)
+	return s.Account.Provider.TransactionStatus(ctx, transactionHash)
 }
 
 func (s *InternalSigner) BuildAttestTransaction(
+	ctx context.Context,
 	blockhash *types.BlockHash,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	calls := []rpc.InvokeFunctionCall{{
@@ -98,14 +99,14 @@ func (s *InternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to format calldata: %w", err)
 	}
 
-	nonce, err := s.Account.Nonce(s.ctx)
+	nonce, err := s.Account.Nonce(ctx)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to update the account nonce: %w", err)
 	}
 
 	defaultResources := makeDefaultResources()
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Account.Provider, constants.TipMultiplier)
+	tip, err := rpc.EstimateTip(ctx, s.Account.Provider, constants.TipMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
@@ -131,20 +132,22 @@ func (s *InternalSigner) BuildAttestTransaction(
 	return attestTransaction, nil
 }
 
-func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error) {
+func (s *InternalSigner) EstimateFee(
+	ctx context.Context, txn *rpc.BroadcastInvokeTxnV3,
+) (rpc.FeeEstimation, error) {
 	if s.braavos {
 		// Braavos require the use of the query bit txn version for fee estimation.
 		// The query bit txn version is used for custom validation logic from wallets/accounts
 		// when estimating fee/simulating txns
 		txn.Version = rpc.TransactionV3WithQueryBit
-		_, err := s.SignTransaction(txn)
+		_, err := s.SignTransaction(ctx, txn)
 		if err != nil {
 			return rpc.FeeEstimation{}, err
 		}
 	}
 
 	estimateFee, err := s.Account.Provider.EstimateFee(
-		s.ctx,
+		ctx,
 		[]rpc.BroadcastTxn{txn},
 		[]rpc.EstimateFeeFlag{},
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
@@ -162,25 +165,29 @@ func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEsti
 }
 
 func (s *InternalSigner) SignTransaction(
+	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (*rpc.BroadcastInvokeTxnV3, error) {
-	return txn, s.Account.SignInvokeTransaction(s.ctx, txn)
+	return txn, s.Account.SignInvokeTransaction(ctx, txn)
 }
 
 func (s *InternalSigner) InvokeTransaction(
+	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (rpc.AddInvokeTransactionResponse, error) {
-	return s.Account.Provider.AddInvokeTransaction(s.ctx, txn)
+	return s.Account.Provider.AddInvokeTransaction(ctx, txn)
 }
 
 func (s *InternalSigner) Call(
-	call rpc.FunctionCall, blockID rpc.BlockID,
+	ctx context.Context, call rpc.FunctionCall, blockID rpc.BlockID,
 ) ([]*felt.Felt, error) {
-	return s.Account.Provider.Call(s.ctx, call, blockID)
+	return s.Account.Provider.Call(ctx, call, blockID)
 }
 
-func (s *InternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
-	return s.Account.Provider.BlockWithTxHashes(s.ctx, blockID)
+func (s *InternalSigner) BlockWithTxHashes(
+	ctx context.Context, blockID rpc.BlockID,
+) (any, error) {
+	return s.Account.Provider.BlockWithTxHashes(ctx, blockID)
 }
 
 func (s *InternalSigner) Address() *types.Address {
@@ -191,6 +198,6 @@ func (s *InternalSigner) ValidationContracts() *types.ValidationContracts {
 	return &s.validationContracts
 }
 
-func (s *InternalSigner) Nonce() (*felt.Felt, error) {
-	return s.Account.Nonce(s.ctx)
+func (s *InternalSigner) Nonce(ctx context.Context) (*felt.Felt, error) {
+	return s.Account.Nonce(ctx)
 }

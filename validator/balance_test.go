@@ -55,6 +55,12 @@ func balanceOfCall(address *types.Address) (rpc.FunctionCall, rpc.BlockID) {
 		rpc.WithBlockTag(rpc.BlockTagLatest)
 }
 
+func expectBalanceOf(signer *mocks.MockSigner, address *types.Address) *gomock.Call {
+	call, blockID := balanceOfCall(address)
+
+	return signer.EXPECT().Call(gomock.Any(), call, blockID)
+}
+
 // Returns a `balance_of` result for an amount of STRK
 func strkBalance(strk uint64) []*felt.Felt {
 	fri := felt.NewFromUint64[felt.Felt](strk)
@@ -79,12 +85,11 @@ func TestCheckBalance(t *testing.T) {
 	t.Run("Only signer balance is checked when reward address is not set", func(t *testing.T) {
 		mockSigner := mocks.NewMockSigner(mockCtrl)
 		mockSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
-		mockSigner.EXPECT().
-			Call(balanceOfCall(&signerAddress)).
+		expectBalanceOf(mockSigner, &signerAddress).
 			Return(strkBalance(150), nil)
 
 		tracer := &balanceTracer{}
-		validator.CheckBalance(mockSigner, nil, threshold, logger, tracer)
+		validator.CheckBalance(t.Context(), mockSigner, nil, threshold, logger, tracer)
 
 		require.Equal(t, 150.0, *tracer.signerBalance)
 		require.False(t, *tracer.signerBelow)
@@ -97,14 +102,15 @@ func TestCheckBalance(t *testing.T) {
 		func(t *testing.T) {
 			mockSigner := mocks.NewMockSigner(mockCtrl)
 			mockSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
-			mockSigner.EXPECT().
-				Call(balanceOfCall(&signerAddress)).
+			expectBalanceOf(mockSigner, &signerAddress).
 				Return(strkBalance(50), nil)
 			sameRewardSigner := mocks.NewMockRewardSigner(mockCtrl)
 			sameRewardSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
 
 			tracer := &balanceTracer{}
-			validator.CheckBalance(mockSigner, sameRewardSigner, threshold, logger, tracer)
+			validator.CheckBalance(
+				t.Context(), mockSigner, sameRewardSigner, threshold, logger, tracer,
+			)
 
 			require.Equal(t, 50.0, *tracer.signerBalance)
 			require.True(t, *tracer.signerBelow)
@@ -133,15 +139,13 @@ func TestCheckBalance(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockSigner := mocks.NewMockSigner(mockCtrl)
 			mockSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
-			mockSigner.EXPECT().
-				Call(balanceOfCall(&signerAddress)).
+			expectBalanceOf(mockSigner, &signerAddress).
 				Return(strkBalance(tc.signerBalance), nil)
-			mockSigner.EXPECT().
-				Call(balanceOfCall(&rewardAddress)).
+			expectBalanceOf(mockSigner, &rewardAddress).
 				Return(strkBalance(tc.rewardBalance), nil)
 
 			tracer := &balanceTracer{}
-			validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
+			validator.CheckBalance(t.Context(), mockSigner, rewardSigner, threshold, logger, tracer)
 
 			require.Equal(t, float64(tc.signerBalance), *tracer.signerBalance)
 			require.Equal(t, float64(tc.signerBalance) <= threshold, *tracer.signerBelow)
@@ -153,15 +157,13 @@ func TestCheckBalance(t *testing.T) {
 	t.Run("Reward balance is checked even if signer balance fetch fails", func(t *testing.T) {
 		mockSigner := mocks.NewMockSigner(mockCtrl)
 		mockSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
-		mockSigner.EXPECT().
-			Call(balanceOfCall(&signerAddress)).
+		expectBalanceOf(mockSigner, &signerAddress).
 			Return(nil, errors.New("some error"))
-		mockSigner.EXPECT().
-			Call(balanceOfCall(&rewardAddress)).
+		expectBalanceOf(mockSigner, &rewardAddress).
 			Return(strkBalance(150), nil)
 
 		tracer := &balanceTracer{}
-		validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
+		validator.CheckBalance(t.Context(), mockSigner, rewardSigner, threshold, logger, tracer)
 
 		require.Nil(t, tracer.signerBalance)
 		require.Nil(t, tracer.signerBelow)
@@ -172,15 +174,13 @@ func TestCheckBalance(t *testing.T) {
 	t.Run("Signer balance is recorded even if reward balance fetch fails", func(t *testing.T) {
 		mockSigner := mocks.NewMockSigner(mockCtrl)
 		mockSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
-		mockSigner.EXPECT().
-			Call(balanceOfCall(&signerAddress)).
+		expectBalanceOf(mockSigner, &signerAddress).
 			Return(strkBalance(150), nil)
-		mockSigner.EXPECT().
-			Call(balanceOfCall(&rewardAddress)).
+		expectBalanceOf(mockSigner, &rewardAddress).
 			Return(nil, errors.New("some error"))
 
 		tracer := &balanceTracer{}
-		validator.CheckBalance(mockSigner, rewardSigner, threshold, logger, tracer)
+		validator.CheckBalance(t.Context(), mockSigner, rewardSigner, threshold, logger, tracer)
 
 		require.Equal(t, 150.0, *tracer.signerBalance)
 		require.False(t, *tracer.signerBelow)
