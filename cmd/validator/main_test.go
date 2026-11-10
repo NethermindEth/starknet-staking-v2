@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -547,6 +548,35 @@ func TestStartMetricsServer(t *testing.T) {
 		require.Equal(t, 1, exitCode(t, cmd.Wait()), output.String())
 		require.Contains(t, output.String(), "metrics server failed, stopping the validator")
 		require.Contains(t, output.String(), "address already in use")
+		require.NotContains(t, output.String(), "Stopping metrics server")
+	})
+
+	t.Run("Stopping a running server reports no error", func(t *testing.T) {
+		_, httpURL, _ := newTestNode(t)
+		port := freePort(t)
+
+		cmd, output := newMainProcess(t, validFlags(httpURL, unresponsiveWSURL(t),
+			"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...)
+		require.NoError(t, cmd.Start())
+
+		healthURL := "http://" + net.JoinHostPort("127.0.0.1", port) + "/health"
+		health, err := http.NewRequestWithContext(
+			t.Context(), http.MethodGet, healthURL, http.NoBody,
+		)
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			resp, err := http.DefaultClient.Do(health)
+			if err != nil {
+				return false
+			}
+
+			return resp.Body.Close() == nil && resp.StatusCode == http.StatusOK
+		}, processTimeout, 10*time.Millisecond)
+		require.NoError(t, cmd.Process.Signal(syscall.SIGINT))
+
+		require.Equal(t, 0, exitCode(t, cmd.Wait()), output.String())
+		require.Equal(t, 1, strings.Count(output.String(), "Stopping metrics server"))
+		require.NotContains(t, output.String(), "failed to stop metrics server")
 	})
 }
 
