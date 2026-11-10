@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -79,6 +84,12 @@ func NewCommand() cobra.Command {
 		}
 		maxRetries = parsedRetries
 
+		if metricsF {
+			if err = checkMetricsAddress(cmd.Context(), metricsHostF, metricsPortF); err != nil {
+				return fmt.Errorf("metrics: %w", err)
+			}
+		}
+
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
@@ -116,28 +127,16 @@ func NewCommand() cobra.Command {
 		}
 
 		var tracer metrics.Tracer = metrics.NewNoOpMetrics()
+		var metricsErrCh <-chan error
 		if metricsF {
-			// Create metrics server
-			address := fmt.Sprintf("%s:%s", metricsHostF, metricsPortF)
-			metrics := metrics.NewMetrics(address, v.ChainID(cmd.Context()), logger)
-			tracer = metrics
-
-			// Start metrics server in a goroutine
-			go func() {
-				if err := metrics.Start(); err != nil && err.Error() != "http: Server closed" {
-					logger.Error("failed to start metrics server", zap.Error(err))
-				}
-			}()
+			address := net.JoinHostPort(metricsHostF, metricsPortF)
+			metricsServer, errCh, stopMetrics := startMetricsServer(
+				cmd.Context(), address, v.ChainID(cmd.Context()), logger,
+			)
+			tracer = metricsServer
+			metricsErrCh = errCh
 			// Graceful shutdown at the end
-			defer func() {
-				shutdownCtx, shutdownCancel := context.WithTimeout(
-					cmd.Context(), 5*time.Second, //nolint:mnd // Timeout time
-				)
-				defer shutdownCancel()
-				if err := metrics.Stop(shutdownCtx); err != nil {
-					logger.Error("failed to stop metrics server", zap.Error(err))
-				}
-			}()
+			defer stopMetrics()
 		}
 
 		signalCh := make(chan os.Signal, 1)
@@ -167,6 +166,10 @@ func NewCommand() cobra.Command {
 			return nil
 		case err := <-errCh:
 			logger.Error("validator stopped with error", errorField(err))
+
+			return err
+		case err := <-metricsErrCh:
+			logger.Error("metrics server failed, stopping the validator", errorField(err))
 
 			return err
 		}
@@ -310,6 +313,52 @@ func NewCommand() cobra.Command {
 
 func errorField(err error) zap.Field {
 	return zap.String("error", err.Error())
+}
+
+func checkMetricsAddress(ctx context.Context, host, port string) error {
+	portNumber, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNumber == 0 {
+		return fmt.Errorf("invalid --metrics-port %q, it must be a number from 1 to 65535", port)
+	}
+
+	address := net.JoinHostPort(host, port)
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(ctx, "tcp", address)
+	if err != nil {
+		return fmt.Errorf("cannot listen on %s (--metrics-host, --metrics-port): %w", address, err)
+	}
+
+	return listener.Close()
+}
+
+func startMetricsServer(
+	ctx context.Context, address, chainID string, logger *log.ZapLogger,
+) (server *metrics.Metrics, failed <-chan error, stop func()) {
+	server = metrics.NewMetrics(address, chainID, logger)
+
+	errCh := make(chan error, 1)
+	var startFailed atomic.Bool
+	go func() {
+		if err := server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			startFailed.Store(true)
+			errCh <- err
+		}
+	}()
+
+	stop = func() {
+		if startFailed.Load() {
+			return
+		}
+		shutdownCtx, shutdownCancel := context.WithTimeout(
+			ctx, 5*time.Second, //nolint:mnd // Timeout time
+		)
+		defer shutdownCancel()
+		if err := server.Stop(shutdownCtx); err != nil {
+			logger.Error("failed to stop metrics server", errorField(err))
+		}
+	}
+
+	return server, errCh, stop
 }
 
 // Completes the config, which already holds the values from flags, with the
