@@ -112,67 +112,20 @@ func NewCommand() cobra.Command {
 
 		fmt.Printf(greeting, validator.Version)
 
-		v, err := tryNewValidator(
-			cmd.Context(),
-			&config,
-			&snConfig,
-			maxRetries,
-			logger,
-			braavosAccount,
-		)
-		if err != nil {
-			logger.Error("couldn't start validator", errorField(err))
-
-			return err
-		}
-
-		var tracer metrics.Tracer = metrics.NewNoOpMetrics()
-		var metricsErrCh <-chan error
+		var metricsAddress string
 		if metricsF {
-			address := net.JoinHostPort(metricsHostF, metricsPortF)
-			metricsServer, errCh, stopMetrics := startMetricsServer(
-				cmd.Context(), address, v.ChainID(cmd.Context()), logger,
-			)
-			tracer = metricsServer
-			metricsErrCh = errCh
-			// Graceful shutdown at the end
-			defer stopMetrics()
+			metricsAddress = net.JoinHostPort(metricsHostF, metricsPortF)
 		}
 
-		signalCh := make(chan os.Signal, 1)
-		signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
-
-		// Start validator in a goroutine
-		errCh := make(chan error, 1)
-		go func() {
-			err := v.Attest(cmd.Context(), maxRetries, balanceThreshold, tracer)
-			if err != nil {
-				errCh <- err
-			}
-		}()
-
-		// run upgrader tracker
-		go trackLatestRelease(cmd.Context(), logger)
-
-		// Wait for signal, context cancellation or error
-		select {
-		case <-signalCh:
-			logger.Info("Received shutdown signal")
-
-			return nil
-		case <-cmd.Context().Done():
-			logger.Info("Context cancelled, shutting down")
-
-			return nil
-		case err := <-errCh:
-			logger.Error("validator stopped with error", errorField(err))
-
-			return err
-		case err := <-metricsErrCh:
-			logger.Error("metrics server failed, stopping the validator", errorField(err))
-
-			return err
-		}
+		return run(cmd.Context(), &runOptions{
+			config:           &config,
+			snConfig:         &snConfig,
+			maxRetries:       maxRetries,
+			balanceThreshold: balanceThreshold,
+			braavosAccount:   braavosAccount,
+			metricsAddress:   metricsAddress,
+			logger:           logger,
+		})
 	}
 
 	//nolint:exhaustruct_v5 // Only specifying used fields
@@ -309,6 +262,115 @@ func NewCommand() cobra.Command {
 	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels+".")
 
 	return cmd
+}
+
+type runOptions struct {
+	config           *configP.Config
+	snConfig         *configP.StarknetConfig
+	maxRetries       types.Retries
+	balanceThreshold float64
+	braavosAccount   bool
+	metricsAddress   string
+	logger           *log.ZapLogger
+}
+
+func run(ctx context.Context, opts *runOptions) error {
+	logger := opts.logger
+
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signalCh)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	v, stopped, err := startValidator(ctx, signalCh, logger, func() (validator.Validator, error) {
+		return tryNewValidator(
+			ctx, opts.config, opts.snConfig, opts.maxRetries, logger, opts.braavosAccount,
+		)
+	})
+	if stopped {
+		return nil
+	}
+	if err != nil {
+		logger.Error("couldn't start validator", errorField(err))
+
+		return err
+	}
+
+	var tracer metrics.Tracer = metrics.NewNoOpMetrics()
+	var metricsErrCh <-chan error
+	if opts.metricsAddress != "" {
+		metricsServer, errCh, stopMetrics := startMetricsServer(
+			ctx, opts.metricsAddress, v.ChainID(ctx), logger,
+		)
+		tracer = metricsServer
+		metricsErrCh = errCh
+		// Graceful shutdown at the end
+		defer stopMetrics()
+	}
+
+	// Start validator in a goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		err := v.Attest(ctx, opts.maxRetries, opts.balanceThreshold, tracer)
+		if err != nil {
+			errCh <- err
+		}
+	}()
+
+	// run upgrader tracker
+	go trackLatestRelease(ctx, logger)
+
+	// Wait for signal, context cancellation or error
+	select {
+	case <-signalCh:
+		logger.Info("Received shutdown signal")
+
+		return nil
+	case <-ctx.Done():
+		logger.Info("Context cancelled, shutting down")
+
+		return nil
+	case err := <-errCh:
+		logger.Error("validator stopped with error", errorField(err))
+
+		return err
+	case err := <-metricsErrCh:
+		logger.Error("metrics server failed, stopping the validator", errorField(err))
+
+		return err
+	}
+}
+
+func startValidator(
+	ctx context.Context,
+	signalCh <-chan os.Signal,
+	logger *log.ZapLogger,
+	newValidator func() (validator.Validator, error),
+) (v validator.Validator, stopped bool, err error) {
+	type result struct {
+		v   validator.Validator
+		err error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		v, err := newValidator()
+		resultCh <- result{v: v, err: err}
+	}()
+
+	select {
+	case <-signalCh:
+		logger.Info("Received shutdown signal")
+
+		return validator.Validator{}, true, nil
+	case <-ctx.Done():
+		logger.Info("Context cancelled, shutting down")
+
+		return validator.Validator{}, true, nil
+	case res := <-resultCh:
+		return res.v, false, res.err
+	}
 }
 
 func errorField(err error) zap.Field {
