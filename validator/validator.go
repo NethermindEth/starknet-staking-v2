@@ -92,7 +92,8 @@ func newValidator(
 
 	logger.Info(
 		"Validation contracts",
-		zap.String("validationContracts", signer.ValidationContracts().String()),
+		zap.String("stakingContractAddress", signer.ValidationContracts().Staking.String()),
+		zap.String("attestContractAddress", signer.ValidationContracts().Attest.String()),
 	)
 
 	var rewardSigner signerP.RewardSigner
@@ -294,7 +295,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Info(
 				"Target block reached",
-				zap.String("blockHash", block.Hash.String()),
+				zap.String("targetBlockHash", block.Hash.String()),
 			)
 			dispatcher.PrepareAttest <- types.PrepareAttest{
 				BlockHash: attestInfo.TargetBlockHash,
