@@ -214,9 +214,10 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			}
 			logger.Error(
 				"cannot connect to ws provider",
+				zap.String("wsProviderURL", shownWSURL),
+				zap.Error(redactErrorURLs(err)),
 				zap.String("retriesLeft", retries.String()),
 			)
-			logger.Debug(redactErrorURLs(err).Error())
 			retries.Sub()
 			Sleep(wsDialRetryDelay)
 
