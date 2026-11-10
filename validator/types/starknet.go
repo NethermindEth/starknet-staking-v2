@@ -18,6 +18,9 @@ var starkCurveOrder, _ = new(big.Int).SetString(
 )
 
 var (
+	errNotHexFelt = errors.New(
+		"it must be a 0x-prefixed hexadecimal number of at most 64 digits",
+	)
 	errPrivateKeyNotHex = errors.New(
 		"it must be a 0x-prefixed hexadecimal number of at most 64 digits " +
 			"(the value isn't shown, check it for quotes, spaces or a trailing newline)",
@@ -34,6 +37,10 @@ func (a *Address) Felt() *felt.Felt {
 }
 
 func AddressFromString(addrStr string) (Address, error) {
+	if !hexFeltRegexp.MatchString(addrStr) {
+		return Address{},
+			fmt.Errorf("cannot turn string `%s` into an address: %w", addrStr, errNotHexFelt)
+	}
 	adr, err := felt.NewFromString[felt.Felt](addrStr)
 	if err != nil {
 		return Address{}, fmt.Errorf("cannot turn string `%s` into an address: %w", addrStr, err)

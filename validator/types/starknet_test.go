@@ -22,6 +22,44 @@ func TestAddressFromString(t *testing.T) {
 		require.ErrorContains(t, err, "cannot turn string `0xZZZ` into an address")
 	})
 
+	t.Run("Address that isn't 0x-prefixed hexadecimal returns an error", func(t *testing.T) {
+		for _, addrStr := range []string{
+			"",
+			"0x",
+			"-1",
+			"-0x1f",
+			"+0x1f",
+			"017",
+			"0o17",
+			"0b1010",
+			"0x1_f",
+			"123",
+			"abc",
+			" 0x1f",
+			"0x1f ",
+			"0x" + strings.Repeat("0", 65),
+		} {
+			_, err := types.AddressFromString(addrStr)
+			require.ErrorContains(
+				t,
+				err,
+				"it must be a 0x-prefixed hexadecimal number of at most 64 digits",
+				addrStr,
+			)
+			require.ErrorContains(t, err, "`"+addrStr+"`")
+		}
+	})
+
+	t.Run("Address too big for a felt returns an error", func(t *testing.T) {
+		_, err := types.AddressFromString("0x" + strings.Repeat("f", 64))
+		require.ErrorContains(t, err, "cannot turn string")
+	})
+
+	t.Run("Uppercase prefix and digits are accepted", func(t *testing.T) {
+		address, err := types.AddressFromString("0X1F")
+		require.NoError(t, err)
+		require.Equal(t, felt.NewUnsafeFromString[felt.Felt]("0x1f"), address.Felt())
+	})
 }
 
 func TestPrivateKeyFromString(t *testing.T) {
