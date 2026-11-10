@@ -1,12 +1,14 @@
 package validator_test
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
+	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -128,5 +130,64 @@ func TestBlockHeaderSubscription(t *testing.T) {
 		})
 	} else {
 		t.Logf("Ignoring tests that require env variables: %s", err)
+	}
+}
+
+func TestNewLogsBraavosMode(t *testing.T) {
+	server := validator.MockRPCServer(t, validator.MockRPC{
+		Results: nil,
+		CallResults: map[string]string{
+			"get_attestation_info_by_operational_address": `["0x789", "0x1", "0xa", "0x1", "0x1"]`,
+			"get_staker_info_v1":                          `["0x0", "0x789", "0x456", "0x1", "0x0", "0x0"]`,
+		},
+		OnWSUpgrade: nil,
+	})
+	rewardBraavos := true
+
+	testCases := []struct {
+		name         string
+		signer       config.Signer
+		braavos      bool
+		expectedLine string
+	}{
+		{
+			name:         "internal signer",
+			signer:       config.Signer{OperationalAddress: "0x456", PrivKey: "0x123"},
+			braavos:      true,
+			expectedLine: `using internal signer	{"braavosAccount": true}`,
+		},
+		{
+			name: "external signer",
+			signer: config.Signer{
+				OperationalAddress: "0x456", ExternalURL: "http://localhost:1",
+			},
+			expectedLine: `using external signer	{"externalSignerURL": ` +
+				`"http://localhost:1", "braavosAccount": false}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger, err := log.NewZapLogger(
+				log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+			)
+			require.NoError(t, err)
+			conf := config.Config{
+				Provider: config.Provider{HTTP: server.URL, WS: "ws://localhost:1"},
+				Signer:   tc.signer,
+				Reward: config.Reward{
+					Address: "0x789", PrivKey: "0xabc", ClaimThreshold: 1, Braavos: &rewardBraavos,
+				},
+			}
+
+			_, err = validator.New(
+				t.Context(), &conf, new(config.StarknetConfig), logger, tc.braavos,
+			)
+
+			require.NoError(t, err)
+			require.Contains(t, buf.String(), tc.expectedLine)
+			require.Contains(t, buf.String(), `"rewardAddress": "0x789", "braavosAccount": true}`)
+		})
 	}
 }

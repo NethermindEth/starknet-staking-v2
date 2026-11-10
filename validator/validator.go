@@ -72,6 +72,7 @@ func newValidator(
 		logger.Info(
 			"using external signer",
 			zap.String("externalSignerURL", redactURL(conf.Signer.ExternalURL)),
+			zap.Bool("braavosAccount", braavos),
 		)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
@@ -86,7 +87,7 @@ func newValidator(
 			return Validator{}, fmt.Errorf("failed to initialise internal signer: %w", err)
 		}
 		signer = &internalSigner
-		logger.Info("using internal signer")
+		logger.Info("using internal signer", zap.Bool("braavosAccount", braavos))
 	}
 
 	logger.Info(
@@ -120,6 +121,7 @@ func newValidator(
 		logger.Info(
 			"Reward auto-claiming enabled",
 			zap.String("rewardAddress", rewardSigner.Address().String()),
+			zap.Bool("braavosAccount", conf.Reward.IsBraavos()),
 		)
 	}
 
