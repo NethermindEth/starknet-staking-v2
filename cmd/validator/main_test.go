@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -329,6 +333,73 @@ func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
 	}, extraFlags...)
 }
 
+func TestMetricsFlags(t *testing.T) {
+	t.Run("Invalid metrics port is rejected at startup", func(t *testing.T) {
+		for _, port := range []string{"abc", "99999", "0", "-1", ""} {
+			t.Run(port, func(t *testing.T) {
+				command := newTestCommandWithArgs(
+					t,
+					validFlags(testProviderHTTP, testProviderWS,
+						"--metrics", "--metrics-port", port)...,
+				)
+				err := command.ExecuteContext(t.Context())
+				require.ErrorContains(t, err, fmt.Sprintf("invalid --metrics-port %q", port))
+			})
+		}
+	})
+
+	t.Run("Metrics port already in use is rejected at startup", func(t *testing.T) {
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+		_, port, err := net.SplitHostPort(listener.Addr().String())
+		require.NoError(t, err)
+
+		command := newTestCommandWithArgs(
+			t,
+			validFlags(testProviderHTTP, testProviderWS,
+				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...,
+		)
+		err = command.ExecuteContext(t.Context())
+		require.ErrorContains(t, err, "cannot listen on 127.0.0.1:"+port)
+		require.ErrorContains(t, err, "address already in use")
+	})
+
+	t.Run("Metrics port is not checked without --metrics", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		command := newTestCommandWithArgs(
+			t, validFlags(httpURL, wsURL, "--metrics-port", "abc")...,
+		)
+		require.NoError(t, command.ExecuteContext(ctx))
+	})
+
+	t.Run("Metrics server on a free port starts", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		command := newTestCommandWithArgs(
+			t,
+			validFlags(httpURL, wsURL,
+				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", freePort(t))...,
+		)
+		require.NoError(t, command.ExecuteContext(ctx))
+	})
+}
+
+func freePort(t *testing.T) string {
+	t.Helper()
+
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, listener.Close())
+
+	return port
+}
+
 func createTemporaryConfigFile(t *testing.T, conf *config.Config) string {
 	t.Helper()
 
@@ -434,4 +505,58 @@ func TestFatalErrorIsLoggedWithoutStackTrace(t *testing.T) {
 	require.Contains(t, output.String(), "validator stopped with error")
 	require.NotContains(t, output.String(), "errorVerbose")
 	require.NotContains(t, output.String(), "\n\t")
+}
+
+func TestStartMetricsServer(t *testing.T) {
+	t.Run("A server that cannot listen reports the error", func(t *testing.T) {
+		requested := make(chan struct{})
+		release := make(chan struct{})
+		var firstRequest sync.Once
+		_, httpURL, _ := newFaultyNode(t, supportedSpecVersion,
+			func(string, string) (int, string, bool) {
+				firstRequest.Do(func() {
+					close(requested)
+					select {
+					case <-release:
+					case <-t.Context().Done():
+					}
+				})
+
+				return 0, "", false
+			},
+		)
+		port := freePort(t)
+
+		cmd, output := newMainProcess(t, validFlags(httpURL, unresponsiveWSURL(t),
+			"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...)
+		require.NoError(t, cmd.Start())
+
+		select {
+		case <-requested:
+		case <-time.After(processTimeout):
+			require.FailNow(t, "the validator didn't call the node")
+		}
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(
+			t.Context(), "tcp", net.JoinHostPort("127.0.0.1", port),
+		)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+		close(release)
+
+		require.Equal(t, 1, exitCode(t, cmd.Wait()), output.String())
+		require.Contains(t, output.String(), "metrics server failed, stopping the validator")
+		require.Contains(t, output.String(), "address already in use")
+	})
+}
+
+func unresponsiveWSURL(t *testing.T) string {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	return "ws" + strings.TrimPrefix(server.URL, "http")
 }
