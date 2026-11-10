@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/NethermindEth/juno/utils/log"
@@ -13,38 +13,38 @@ import (
 	"go.uber.org/zap"
 )
 
+const startupRetryDelay = 3 * time.Second
+
 func tryNewValidator(
 	ctx context.Context,
 	conf *config.Config,
 	snConfig *config.StarknetConfig,
-	retries types.Retries,
+	maxRetries types.Retries,
 	logger log.Logger,
 	braavosAccount bool,
 ) (validator.Validator, error) {
+	retries := maxRetries
 	for {
 		v, err := validator.New(ctx, conf, snConfig, logger, braavosAccount)
 		if err == nil {
 			return v, nil
 		}
-
-		if strings.Contains(err.Error(), "cannot connect to RPC provider") {
-			logger.Warn(
-				"couldn't connect with RPC Provider. Retrying in 3s...",
-				zap.String("provider", conf.Provider.HTTP),
-				zap.String("attemptsLeft", retries.String()),
-			)
-			time.Sleep(3 * time.Second)
-		} else {
-			return validator.Validator{},
-				fmt.Errorf("cannot start validator. Unexepcted error: %w", err)
+		if !errors.Is(err, validator.ErrTransient) || ctx.Err() != nil {
+			return validator.Validator{}, fmt.Errorf("cannot start validator: %w", err)
 		}
-
-		retries.Sub()
 		if retries.IsZero() {
-			return validator.Validator{},
-				fmt.Errorf(
-					"RPC provider unreachable at %s", conf.Provider.HTTP,
-				)
+			return validator.Validator{}, fmt.Errorf(
+				"cannot start validator, no retries left (--max-retries %s): %w",
+				maxRetries.String(), err,
+			)
 		}
+
+		logger.Warn(
+			"cannot start validator. Retrying in "+startupRetryDelay.String(),
+			zap.Error(err),
+			zap.String("retriesLeft", retries.String()),
+		)
+		retries.Sub()
+		validator.Sleep(startupRetryDelay)
 	}
 }

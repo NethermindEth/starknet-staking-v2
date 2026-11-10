@@ -70,7 +70,9 @@ func newValidator(
 			braavos,
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to connect to external signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to connect to external signer: %w", err),
+			)
 		}
 		signer = &externalSigner
 		logger.Info(
@@ -88,7 +90,9 @@ func newValidator(
 			braavos,
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to initialise internal signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to initialise internal signer: %w", err),
+			)
 		}
 		signer = &internalSigner
 		logger.Info("using internal signer", zap.Bool("braavosAccount", braavos))
@@ -104,8 +108,8 @@ func newValidator(
 	if conf.Reward.IsSet() {
 		epochInfo, err := signerP.FetchEpochInfo(ctx, signer)
 		if err != nil {
-			return Validator{}, fmt.Errorf(
-				"failed to fetch staking address from epoch info: %w", err,
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to fetch staking address from epoch info: %w", err),
 			)
 		}
 
@@ -120,7 +124,9 @@ func newValidator(
 			conf.Reward.IsExternal(),
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to initialise reward signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to initialise reward signer: %w", err),
+			)
 		}
 
 		logger.Info(
