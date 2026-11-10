@@ -27,5 +27,8 @@ generate: ## Generate mocks
 	mkdir -p mocks
 	go generate ./...
 
-lint:
+lint: lint-diff
 	go tool -modfile=golangci-lint.mod golangci-lint run
+
+lint-diff:
+	go tool -modfile=golangci-lint.mod golangci-lint run --config=./.golangci_diff.yaml --new-from-rev=origin/main
