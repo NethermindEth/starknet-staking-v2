@@ -211,7 +211,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				return
 			}
 			if d.CurrentAttest.Status != Iddle {
-				logger.Error("receiveing prepare attest info while doing attest")
+				logger.Debug("received a prepare attest event while attesting")
 			}
 			if d.CurrentAttest.Transaction.Valid() {
 				continue

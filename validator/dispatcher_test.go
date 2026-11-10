@@ -1061,6 +1061,33 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 	})
 }
 
+func TestDispatchPrepareWhileAttestingIsNotAnError(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(gomock.Any(), &blockHash).
+		Return(rpc.BroadcastInvokeTxnV3{}, errors.New("node down")).
+		Times(2)
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	require.Equal(t, validator.Failed, dispatcher.CurrentAttest.Status)
+	require.NotContains(t, buf.String(), "prepare attest")
+}
+
 func TestDispatchRedactsProviderURLsInErrors(t *testing.T) {
 	const apiKey = "0123456789abcdef0123456789abcdef"
 	var buf bytes.Buffer
