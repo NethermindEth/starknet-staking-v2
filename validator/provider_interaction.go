@@ -41,7 +41,7 @@ func NewProvider(
 		}
 		logger.Warn(
 			"node implements a different JSON-RPC specification than Starknet.Go targets",
-			zap.String("providerUrl", redactURL(providerURL)),
+			zap.String("providerURL", redactURL(providerURL)),
 			zap.String("nodeSpecVersion", nodeSpecVersion),
 		)
 	} else if err != nil {
@@ -137,7 +137,7 @@ func SubscribeToBlockHeaders(
 	error,
 ) {
 	logger.Debug(
-		"initialising websocket connection", zap.String("wsProviderUrl", redactURL(wsProviderURL)),
+		"initialising websocket connection", zap.String("wsProviderURL", redactURL(wsProviderURL)),
 	)
 	// This needs a timeout or something
 	wsProvider, err := rpc.NewWebsocketProvider(ctx, wsProviderURL)
@@ -158,7 +158,7 @@ func SubscribeToBlockHeaders(
 
 	logger.Info(
 		"subscribed to new block header",
-		zap.String("subscription ID", clientSubscription.ID()),
+		zap.String("subscriptionID", clientSubscription.ID()),
 	)
 
 	return wsProvider, headersFeed, clientSubscription, nil

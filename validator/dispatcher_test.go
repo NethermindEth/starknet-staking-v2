@@ -1061,6 +1061,64 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 	})
 }
 
+func TestDispatchPrepareWhileAttestingIsNotAnError(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(gomock.Any(), &blockHash).
+		Return(rpc.BroadcastInvokeTxnV3{}, errors.New("node down")).
+		Times(2)
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	require.Equal(t, validator.Failed, dispatcher.CurrentAttest.Status)
+	require.NotContains(t, buf.String(), "prepare attest")
+}
+
+func TestDispatchAttestLogKeys(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.DEBUG), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	txHash := new(felt.Felt).SetUint64(0xa77e57)
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash).Return(attestTxn(), nil)
+	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+	mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil)
+	mockSigner.EXPECT().
+		InvokeTransaction(gomock.Any(), gomock.Any()).
+		Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	out := buf.String()
+	require.Contains(t, out, `invoking attest	{"targetBlockHash": "0xb10c"}`)
+	require.Contains(t, out, `attest transaction sent	{"transactionHash": "0xa77e57"}`)
+	require.Contains(t, out, `for blockhash	{"targetBlockHash": "0xb10c"}`)
+}
+
 func TestDispatchRedactsProviderURLsInErrors(t *testing.T) {
 	const apiKey = "0123456789abcdef0123456789abcdef"
 	var buf bytes.Buffer

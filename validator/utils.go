@@ -51,20 +51,22 @@ func logBlock(
 	var suffix string
 	switch {
 	case blockNum < attestInfo.WindowStart.Uint64():
-		suffix = fmt.Sprintf(
-			"%d blocks to attest", uint64(attestInfo.WindowStart)-blockNum,
-		)
+		suffix = blockCount(uint64(attestInfo.WindowStart)-blockNum) + " to attest"
 	case blockNum < attestInfo.WindowEnd.Uint64():
-		suffix = fmt.Sprintf(
-			"%d blocks before end of window",
-			uint64(attestInfo.WindowEnd)-blockNum,
-		)
+		suffix = blockCount(uint64(attestInfo.WindowEnd)-blockNum) + " before end of window"
 	default:
-		suffix = fmt.Sprintf(
-			"%d blocks for the next epoch",
+		suffix = blockCount(
 			uint64(epochInfo.StartingBlock)+epochInfo.EpochLen-blockNum,
-		)
+		) + " for the next epoch"
 	}
 
-	logger.Info(base + ", " + suffix)
+	logger.Info(base+", "+suffix, zap.Uint64("blockNumber", blockNum))
+}
+
+func blockCount(blocks uint64) string {
+	if blocks == 1 {
+		return "1 block"
+	}
+
+	return fmt.Sprintf("%d blocks", blocks)
 }

@@ -126,3 +126,40 @@ func TestRedactURLsIn(t *testing.T) {
 		require.Equal(t, tc.expected, redactURLsIn(tc.text))
 	}
 }
+
+func TestLogBlockCountsBlocks(t *testing.T) {
+	epochInfo := types.EpochInfo{EpochID: 1, EpochLen: 100, StartingBlock: 1000}
+	attestInfo := types.AttestInfo{TargetBlock: 1010, WindowStart: 1021, WindowEnd: 1050}
+
+	testCases := []struct {
+		block    uint64
+		expected string
+	}{
+		{block: 1020, expected: "block 1020 received, 1 block to attest"},
+		{block: 1019, expected: "block 1019 received, 2 blocks to attest"},
+		{block: 1049, expected: "block 1049 received, 1 block before end of window"},
+		{block: 1099, expected: "block 1099 received, 1 block for the next epoch"},
+		{block: 1098, expected: "block 1098 received, 2 blocks for the next epoch"},
+	}
+	for _, tc := range testCases {
+		rec := &recordingLogger{ZapLogger: log.NewNopZapLogger()}
+
+		logBlock(tc.block, &epochInfo, &attestInfo, rec)
+
+		require.Equal(t, []string{tc.expected}, rec.msgs)
+	}
+}
+
+func TestLogBlockNumberField(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+
+	logBlock(1020, &types.EpochInfo{}, &types.AttestInfo{WindowStart: 1021}, logger)
+
+	require.Contains(
+		t, buf.String(), `block 1020 received, 1 block to attest	{"blockNumber": 1020}`,
+	)
+}

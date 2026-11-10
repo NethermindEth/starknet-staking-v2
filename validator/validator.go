@@ -72,6 +72,7 @@ func newValidator(
 		logger.Info(
 			"using external signer",
 			zap.String("externalSignerURL", redactURL(conf.Signer.ExternalURL)),
+			zap.Bool("braavosAccount", braavos),
 		)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
@@ -86,12 +87,13 @@ func newValidator(
 			return Validator{}, fmt.Errorf("failed to initialise internal signer: %w", err)
 		}
 		signer = &internalSigner
-		logger.Info("using internal signer")
+		logger.Info("using internal signer", zap.Bool("braavosAccount", braavos))
 	}
 
 	logger.Info(
 		"Validation contracts",
-		zap.String("validationContracts", signer.ValidationContracts().String()),
+		zap.String("stakingContractAddress", signer.ValidationContracts().Staking.String()),
+		zap.String("attestContractAddress", signer.ValidationContracts().Attest.String()),
 	)
 
 	var rewardSigner signerP.RewardSigner
@@ -120,6 +122,7 @@ func newValidator(
 		logger.Info(
 			"Reward auto-claiming enabled",
 			zap.String("rewardAddress", rewardSigner.Address().String()),
+			zap.Bool("braavosAccount", conf.Reward.IsBraavos()),
 		)
 	}
 
@@ -292,7 +295,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Info(
 				"Target block reached",
-				zap.String("blockHash", block.Hash.String()),
+				zap.String("targetBlockHash", block.Hash.String()),
 			)
 			dispatcher.PrepareAttest <- types.PrepareAttest{
 				BlockHash: attestInfo.TargetBlockHash,
