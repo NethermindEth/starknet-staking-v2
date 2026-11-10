@@ -97,7 +97,7 @@ func TestEstimateAttestTip(t *testing.T) {
 
 		_, err := estimateAttestTip(t.Context(), provider, math.MaxUint64, log.NewNopZapLogger())
 		require.ErrorIs(t, err, blockErr)
-		require.ErrorContains(t, err, "failed to estimate tip")
+		require.ErrorContains(t, err, "estimate tip")
 	})
 }
 

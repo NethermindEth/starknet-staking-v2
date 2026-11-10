@@ -202,16 +202,16 @@ func estimateAttestTip(
 ) (rpc.U64, error) {
 	estimatedTip, err := rpc.EstimateTip(ctx, provider, constants.TipMultiplier)
 	if err != nil {
-		return "", fmt.Errorf("failed to estimate tip: %w", err)
+		return "", fmt.Errorf("estimate tip: %w", err)
 	}
 
 	tip, capped, err := capTip(estimatedTip, maxTip)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("cap tip: %w", err)
 	}
 	if capped {
 		logger.Warn(
-			"estimated tip exceeds the max tip, using the max tip instead",
+			"Estimated tip exceeds the max tip, using the max tip instead",
 			zap.String("estimatedTip", string(estimatedTip)),
 			zap.String("maxTip", string(tip)),
 		)
