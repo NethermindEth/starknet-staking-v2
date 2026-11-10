@@ -27,9 +27,8 @@ func CheckBalance[S signerP.Signer](
 	logger log.Logger,
 	tracer metrics.Tracer,
 ) {
-	if balance, ok := fetchStrkBalance(
-		ctx, signer, signerAccount, signer.Address(), logger,
-	); ok {
+	balance, ok := fetchStrkBalance(ctx, signer, signerAccount, signer.Address(), logger)
+	if ok {
 		tracer.UpdateSignerBalance(balance)
 		if isBelowThreshold(signerAccount, balance, threshold, logger) {
 			tracer.RecordSignerBalanceBelowThreshold()
@@ -42,9 +41,8 @@ func CheckBalance[S signerP.Signer](
 	if rewardS == nil || rewardS.Address().Felt().Equal(signer.Address().Felt()) {
 		return
 	}
-	if balance, ok := fetchStrkBalance(
-		ctx, signer, rewardAccount, rewardS.Address(), logger,
-	); ok {
+	balance, ok = fetchStrkBalance(ctx, signer, rewardAccount, rewardS.Address(), logger)
+	if ok {
 		tracer.UpdateRewardBalance(balance)
 		if isBelowThreshold(rewardAccount, balance, threshold, logger) {
 			tracer.RecordRewardBalanceBelowThreshold()
