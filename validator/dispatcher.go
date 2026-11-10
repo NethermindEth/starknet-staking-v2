@@ -25,6 +25,8 @@ var ErrTxnHashNotFound = rpc.ErrHashNotFound
 
 type AttestStatus uint8
 
+const maxUnknownStatusPolls = 5
+
 const (
 	Iddle AttestStatus = iota
 	Ongoing
@@ -102,6 +104,8 @@ func (t *AttestTransaction) UpdateNonce(ctx context.Context, signer signerP.Sign
 		t.txn.Nonce = newNonce
 		_, err := signer.SignTransaction(ctx, &t.txn)
 		if err != nil {
+			t.valid = false
+
 			return fmt.Errorf("signer failed to sign the transaction: %w", err)
 		}
 	}
@@ -118,6 +122,9 @@ type AttestTracker struct {
 	Transaction AttestTransaction
 	Hash        felt.Felt
 	Status      AttestStatus
+
+	unknownPolls   int
+	unresolvedHash felt.Felt
 }
 
 func NewAttestTracker() AttestTracker {
@@ -133,8 +140,26 @@ func (a *AttestTracker) UpdateStatus(
 	signer signerP.Signer,
 	logger log.Logger,
 ) {
-	status := TrackAttest(ctx, signer, logger, &a.Hash)
+	status, known := trackAttest(ctx, signer, logger, &a.Hash)
+	if known {
+		a.unknownPolls = 0
+	} else {
+		a.unknownPolls++
+	}
 	a.setStatus(status)
+}
+
+func (a *AttestTracker) unresolvedTransaction() (*felt.Felt, bool) {
+	switch {
+	case a.Status == Successful:
+		return nil, false
+	case a.Status == Ongoing && a.unknownPolls > 0:
+		return &a.Hash, true
+	case !a.unresolvedHash.IsZero():
+		return &a.unresolvedHash, true
+	default:
+		return nil, false
+	}
 }
 
 func (a *AttestTracker) setStatus(status AttestStatus) {
@@ -143,6 +168,7 @@ func (a *AttestTracker) setStatus(status AttestStatus) {
 	case Ongoing, Successful:
 	case Failed:
 		a.Hash = felt.Zero
+		a.unknownPolls = 0
 	case Iddle:
 		panic("status cannot be change to iddle")
 	default:
@@ -209,18 +235,24 @@ func (d *EventDispatcher[S]) Dispatch(
 				return
 			}
 
-			// if the attest event is already being tracked by the tool
-			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
-				// If  status is still not successful, check for it
-				if d.CurrentAttest.Status != Successful {
-					d.CurrentAttest.UpdateStatus(ctx, signer, logger)
+			if d.CurrentAttest.Status == Successful {
+				continue
+			}
+			if d.CurrentAttest.Status == Ongoing {
+				d.CurrentAttest.UpdateStatus(ctx, signer, logger)
+				if d.CurrentAttest.unknownPolls >= maxUnknownStatusPolls {
+					logger.Warn(
+						"attest transaction status still unknown. Sending the attestation again",
+						zap.String("transactionHash", d.CurrentAttest.Hash.String()),
+						zap.Int("blocksUnknown", d.CurrentAttest.unknownPolls),
+					)
+					d.CurrentAttest.unresolvedHash = d.CurrentAttest.Hash
+					d.CurrentAttest.setStatus(Failed)
 				}
-				// If status is status is already successful or ongoing, do nothing.
-				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
+				if d.CurrentAttest.Status != Failed {
 					continue
 				}
 			}
-			d.CurrentAttest.setStatus(Ongoing)
 
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
@@ -233,8 +265,10 @@ func (d *EventDispatcher[S]) Dispatch(
 				err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash)
 				if err != nil {
 					logger.Error(
-						"failed to build attest transaction", zap.Error(redactErrorURLs(err)),
+						"failed to build attest transaction. Will retry on the next block",
+						zap.Error(redactErrorURLs(err)),
 					)
+					d.CurrentAttest.setStatus(Failed)
 
 					continue
 				}
@@ -246,8 +280,10 @@ func (d *EventDispatcher[S]) Dispatch(
 				err := d.CurrentAttest.Transaction.UpdateNonce(ctx, signer)
 				if err != nil {
 					logger.Error(
-						"failed to update transaction nonce", zap.Error(redactErrorURLs(err)),
+						"failed to update transaction nonce. Will retry on the next block",
+						zap.Error(redactErrorURLs(err)),
 					)
+					d.CurrentAttest.setStatus(Failed)
 
 					continue
 				}
@@ -267,7 +303,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				}
 
 				logger.Error(
-					"failed to attest",
+					"failed to attest. Will retry on the next block",
 					zap.Error(redactErrorURLs(err)),
 				)
 				d.CurrentAttest.setStatus(Failed)
@@ -277,21 +313,31 @@ func (d *EventDispatcher[S]) Dispatch(
 
 			logger.Debug("attest transaction sent", zap.String("hash", resp.Hash.String()))
 			d.CurrentAttest.Hash = *resp.Hash
+			d.CurrentAttest.setStatus(Ongoing)
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
 		case <-d.EndOfWindow:
 			logger.Info("end of window reached")
-			if d.CurrentAttest.Status != Successful {
+			if d.CurrentAttest.Status == Ongoing {
 				d.CurrentAttest.UpdateStatus(ctx, signer, logger)
 			}
-			if d.CurrentAttest.Status == Successful {
+			unresolvedHash, unresolved := d.CurrentAttest.unresolvedTransaction()
+			switch {
+			case d.CurrentAttest.Status == Successful:
 				logger.Info(
 					"successfully attested to target block",
 					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
 				tracer.RecordAttestationConfirmed()
-			} else {
+			case unresolved:
+				logger.Warn(
+					"end of window reached without knowing if the attestation succeeded. "+
+						"Not counted as a failure, check the transaction on a block explorer",
+					zap.String("targetBlockHash", targetBlockHash.String()),
+					zap.String("transactionHash", unresolvedHash.String()),
+				)
+			default:
 				logger.Warn(
 					"failed to attest to target block",
 					zap.String("targetBlockHash", targetBlockHash.String()),
@@ -318,24 +364,39 @@ func TrackAttest[S signerP.Signer](
 	logger log.Logger,
 	txHash *felt.Felt,
 ) AttestStatus {
+	status, _ := trackAttest(ctx, signer, logger, txHash)
+
+	return status
+}
+
+func trackAttest[S signerP.Signer](
+	ctx context.Context,
+	signer S,
+	logger log.Logger,
+	txHash *felt.Felt,
+) (AttestStatus, bool) {
+	if txHash.IsZero() {
+		logger.Warn("no attest transaction to track. Will retry")
+
+		return Failed, true
+	}
+
 	txStatus, err := signer.TransactionStatus(ctx, txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Info(
-				"attest transaction status was not found. Will wait.",
+				"attest transaction status was not found. Will check again on the next block",
 				zap.String("transactionHash", txHash.String()),
 			)
-
-			return Ongoing
 		} else {
-			logger.Error(
-				"attest transaction FAILED. Will retry.",
+			logger.Warn(
+				"failed to get the attest transaction status. Will check again on the next block",
 				zap.String("transactionHash", txHash.String()),
 				zap.Error(redactErrorURLs(err)),
 			)
-
-			return Failed
 		}
+
+		return Ongoing, false
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
@@ -345,7 +406,7 @@ func TrackAttest[S signerP.Signer](
 			zap.String("failureReason", txStatus.FailureReason),
 		)
 
-		return Failed
+		return Failed, true
 	}
 
 	switch txStatus.FinalityStatus {
@@ -356,7 +417,7 @@ func TrackAttest[S signerP.Signer](
 			zap.String("finalityStatus", string(txStatus.FinalityStatus)),
 		)
 
-		return Ongoing
+		return Ongoing, true
 	default:
 		logger.Info(
 			"attest transaction SUCCESSFUL.",
@@ -365,6 +426,6 @@ func TrackAttest[S signerP.Signer](
 			zap.String("executionStatus", string(txStatus.ExecutionStatus)),
 		)
 
-		return Successful
+		return Successful, true
 	}
 }
