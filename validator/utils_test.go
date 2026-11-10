@@ -96,3 +96,33 @@ func TestRedactURL(t *testing.T) {
 		})
 	}
 }
+
+func TestRedactURLsIn(t *testing.T) {
+	testCases := []struct {
+		text     string
+		expected string
+	}{
+		{
+			text: `-32603 The error is not a valid RPC error: Post ` +
+				`"http://node:6060/v3/0123456789abcdef0123456789abcdef?apikey=topsecret": EOF`,
+			expected: `-32603 The error is not a valid RPC error: Post ` +
+				`"http://node:6060/v3/REDACTED?apikey=REDACTED": EOF`,
+		},
+		{
+			text:     "cannot reach RPC provider at http://127.0.0.1:1: connection refused",
+			expected: "cannot reach RPC provider at http://127.0.0.1:1: connection refused",
+		},
+		{
+			text:     `WS provider URL must use ws:// or wss://, got "http://localhost:6061"`,
+			expected: `WS provider URL must use ws:// or wss://, got "http://localhost:6061"`,
+		},
+		{
+			text:     "dialling WS provider at wss://user:pw@node/ws: refused",
+			expected: "dialling WS provider at wss://REDACTED@node/ws: refused",
+		},
+	}
+
+	for _, tc := range testCases {
+		require.Equal(t, tc.expected, redactURLsIn(tc.text))
+	}
+}
