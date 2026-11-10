@@ -37,6 +37,12 @@ func TestDispatchUsesItsContext(t *testing.T) {
 		ValidationContracts().
 		Return(validator.SepoliaValidationContracts(t)).
 		AnyTimes()
+	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), gomock.Any()).Return(attestTxn(), nil)
+	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+	mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil)
+	mockSigner.EXPECT().
+		InvokeTransaction(gomock.Any(), gomock.Any()).
+		Return(rpc.AddInvokeTransactionResponse{Hash: new(felt.Felt).SetUint64(1)}, nil)
 	mockSigner.EXPECT().
 		TransactionStatus(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, _ *felt.Felt) (*rpc.TxnStatusResult, error) {
@@ -73,7 +79,8 @@ func TestDispatchUsesItsContext(t *testing.T) {
 		)
 	})
 
-	dispatcher.EndOfWindow <- struct{}{}
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{})
+	sendEvent(t, dispatcher.EndOfWindow, struct{}{})
 	close(dispatcher.DoAttest)
 	require.Nil(t, wg.WaitAndRecover())
 
