@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/NethermindEth/juno/utils/log"
@@ -77,9 +76,7 @@ func NewCommand() cobra.Command {
 
 func main() {
 	cmd := NewCommand()
-	err := cmd.ExecuteContext(context.Background())
-	if err != nil {
-		fmt.Printf("Signer closed unexepctedly: %s", err)
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		os.Exit(1)
 	}
 }
