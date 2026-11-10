@@ -508,6 +508,42 @@ func TestFatalErrorIsLoggedWithoutStackTrace(t *testing.T) {
 	require.NotContains(t, output.String(), "\n\t")
 }
 
+func TestShutdownSignalDuringStartup(t *testing.T) {
+	for _, signal := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		t.Run(signal.String(), func(t *testing.T) {
+			requested := make(chan struct{}, 1)
+			release := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case requested <- struct{}{}:
+					default:
+					}
+					select {
+					case <-release:
+					case <-r.Context().Done():
+					}
+				},
+			))
+			t.Cleanup(server.Close)
+			t.Cleanup(func() { close(release) })
+
+			cmd, output := newMainProcess(t, validFlags(server.URL, "ws://127.0.0.1:1")...)
+			require.NoError(t, cmd.Start())
+
+			select {
+			case <-requested:
+			case <-time.After(processTimeout):
+				require.FailNow(t, "the validator didn't call the node")
+			}
+			require.NoError(t, cmd.Process.Signal(signal))
+
+			require.Equal(t, 0, exitCode(t, cmd.Wait()), output.String())
+			require.Contains(t, output.String(), "Received shutdown signal")
+		})
+	}
+}
+
 func TestStartMetricsServer(t *testing.T) {
 	t.Run("A server that cannot listen reports the error", func(t *testing.T) {
 		requested := make(chan struct{})
