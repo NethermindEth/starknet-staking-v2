@@ -358,7 +358,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, externalSignerURL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "connection refused")
@@ -386,7 +386,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		expectedErrorMsg := fmt.Sprintf(
@@ -417,7 +417,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
@@ -443,7 +443,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		expectedResult := s.Response{
 			Signature: [2]*felt.Felt{
