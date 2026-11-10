@@ -52,6 +52,9 @@ linters:
       settings:
         hugeParam:
           sizeThreshold: 256
+        ruleguard:
+          failOn: all
+          rules: '${config-path}/tools/ruleguard/rules.go'
     gocyclo:
       min-complexity: 15
     govet:

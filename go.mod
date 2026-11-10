@@ -9,6 +9,7 @@ require (
 	github.com/cockroachdb/errors v1.14.0
 	github.com/joho/godotenv v1.5.1
 	github.com/prometheus/client_golang v1.24.1
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
