@@ -312,22 +312,31 @@ func NewCommand() cobra.Command {
 // ones from env vars and then from the config file. Afterwards it sets the
 // defaults for the missing values and verifies the result
 func loadConfig(config *configP.Config, configPath string) error {
+	configFromFlags := *config
 	configFromEnv, err := configP.FromEnv()
 	if err != nil {
 		return err
 	}
 	config.Fill(&configFromEnv)
 
+	sources := []configP.Source{
+		{Name: "flags", Config: &configFromFlags},
+		{Name: "env vars", Config: &configFromEnv},
+	}
 	if configPath != "" {
 		configFromFile, err := configP.FromFile(configPath)
 		if err != nil {
 			return err
 		}
 		config.Fill(&configFromFile)
+		sources = append(sources, configP.Source{
+			Name:   "config file " + configPath,
+			Config: &configFromFile,
+		})
 	}
 	config.SetDefaults()
 
-	return config.Check()
+	return config.CheckSources(sources...)
 }
 
 func main() {

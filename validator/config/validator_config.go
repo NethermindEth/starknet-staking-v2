@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -264,10 +265,15 @@ func FromEnv() (Config, error) {
 func FromFile(filePath string) (Config, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("cannot read config file: %w", err)
 	}
 
-	return FromData(data)
+	config, err := FromData(data)
+	if err != nil {
+		return Config{}, fmt.Errorf("cannot parse config file %s: %w", filePath, err)
+	}
+
+	return config, nil
 }
 
 func FromData(data []byte) (Config, error) {
@@ -304,6 +310,51 @@ func (c *Config) Check() error {
 	}
 
 	return nil
+}
+
+type Source struct {
+	Name   string
+	Config *Config
+}
+
+func (c *Config) CheckSources(sources ...Source) error {
+	err := c.Check()
+	switch {
+	case errors.Is(err, errSignerBothKeysAndURL):
+		return fmt.Errorf("%w (%s)", err, signingSources(sources, signerSigning))
+	case errors.Is(err, errRewardBothKeysAndURL):
+		return fmt.Errorf("%w (%s)", err, signingSources(sources, rewardSigning))
+	default:
+		return err
+	}
+}
+
+func signerSigning(c *Config) (privKey, url string) {
+	return c.Signer.PrivKey, c.Signer.ExternalURL
+}
+
+func rewardSigning(c *Config) (privKey, url string) {
+	return c.Reward.PrivKey, c.Reward.ExternalURL
+}
+
+func signingSources(sources []Source, signing func(*Config) (privKey, url string)) string {
+	privKeySources := make([]string, 0, len(sources))
+	urlSources := make([]string, 0, len(sources))
+	for _, source := range sources {
+		privKey, url := signing(source.Config)
+		if privKey != "" {
+			privKeySources = append(privKeySources, source.Name)
+		}
+		if url != "" {
+			urlSources = append(urlSources, source.Name)
+		}
+	}
+
+	return fmt.Sprintf(
+		"private key set by %s, external URL set by %s",
+		strings.Join(privKeySources, " and "),
+		strings.Join(urlSources, " and "),
+	)
 }
 
 func isZero[T comparable](v T) bool {
