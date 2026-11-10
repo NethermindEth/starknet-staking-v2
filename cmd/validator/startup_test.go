@@ -290,6 +290,10 @@ func TestStartupRetries(t *testing.T) {
 		contractErrorBody := `{"jsonrpc": "2.0", "id": 1, ` +
 			`"error": {"code": 40, "message": "Contract error", ` +
 			`"data": {"revert_error": "Staker does not exist"}}}`
+		feltRevertBody := `{"jsonrpc": "2.0", "id": 1, ` +
+			`"error": {"code": 40, "message": "Contract error", "data": {"revert_error": ` +
+			`"0x46a6158a16a947e5916b2a2ca68501a45e93d7110e81aa2d6438b1c57c879a3, 0x0, ` +
+			`0x5374616b657220646f6573206e6f74206578697374, 0x15"}}}`
 
 		testCases := []struct {
 			name          string
@@ -321,6 +325,20 @@ func TestStartupRetries(t *testing.T) {
 				),
 				rewardAddress: "0x789",
 				expectedErr:   "Staker does not exist",
+			},
+			{
+				name:        "contract revert encoded as felts",
+				specVersion: supportedSpecVersion,
+				fault: failFirst(
+					1, "starknet_call", epochInfoEntryPoint, http.StatusOK, feltRevertBody,
+				),
+				rewardAddress: "0x789",
+				expectedErr: "failed to fetch staking address from epoch info: calling " +
+					"get_attestation_info_by_operational_address on the staking contract " +
+					"0x3745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1 " +
+					"failed: Staker does not exist; the operational address 0x456 is not " +
+					"registered as a staker on SN_SEPOLIA (check --signer-op-address and " +
+					"--staking-contract-address)",
 			},
 			{
 				name:          "wrong reward address",

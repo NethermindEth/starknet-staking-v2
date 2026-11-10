@@ -59,6 +59,8 @@ type MockRPC struct {
 	Results map[string]string
 	// `starknet_call` results by entry point selector name
 	CallResults map[string]string
+	Errors      map[string]string
+	CallErrors  map[string]string
 	// Called on a websocket upgrade request, which is always refused
 	OnWSUpgrade func()
 }
@@ -78,6 +80,10 @@ func MockRPCServer(t *testing.T, mock MockRPC) *httptest.Server {
 	callResults := make(map[felt.Felt]string, len(mock.CallResults))
 	for name, result := range mock.CallResults {
 		callResults[*snGoUtils.GetSelectorFromNameFelt(name)] = result
+	}
+	callErrors := make(map[felt.Felt]string, len(mock.CallErrors))
+	for name, rpcError := range mock.CallErrors {
+		callErrors[*snGoUtils.GetSelectorFromNameFelt(name)] = rpcError
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -102,13 +108,21 @@ func MockRPCServer(t *testing.T, mock MockRPC) *httptest.Server {
 		}
 
 		result, ok := results[req.Method]
+		rpcError, isError := mock.Errors[req.Method]
 		if req.Method == "starknet_call" && len(req.Params) > 0 {
 			var call struct {
 				Selector felt.Felt `json:"entry_point_selector"`
 			}
 			if err := json.Unmarshal(req.Params[0], &call); err == nil {
 				result, ok = callResults[call.Selector]
+				rpcError, isError = callErrors[call.Selector]
 			}
+		}
+
+		if isError {
+			_, _ = fmt.Fprintf(w, `{"jsonrpc": "2.0", "id": %s, "error": %s}`, req.ID, rpcError)
+
+			return
 		}
 
 		if !ok {
