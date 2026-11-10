@@ -102,3 +102,23 @@ func TestUpdateEpochInfoDebugLog(t *testing.T) {
 		"targetBlock":        uint64(17749100),
 	}, entries[0].ContextMap())
 }
+
+func TestRecordEpochInfoFetchFailure(t *testing.T) {
+	address := freeAddress(t)
+	m := metrics.NewMetrics(address, "SN_SEPOLIA", log.NewNopZapLogger())
+	served := make(chan error, 1)
+	go func() { served <- m.Start() }()
+	defer func() {
+		require.NoError(t, m.Stop(t.Context()))
+		require.ErrorIs(t, <-served, http.ErrServerClosed)
+	}()
+
+	m.RecordEpochInfoFetchFailure()
+	m.RecordEpochInfoFetchFailure()
+
+	require.Contains(
+		t,
+		scrapeMetrics(t, address),
+		`validator_attestation_epoch_info_fetch_failure_count{network="SN_SEPOLIA"} 2`,
+	)
+}

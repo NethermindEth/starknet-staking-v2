@@ -34,6 +34,7 @@ type Metrics struct {
 	attestationSubmittedCount       *prometheus.CounterVec
 	attestationFailureCount         *prometheus.CounterVec
 	attestationConfirmedCount       *prometheus.CounterVec
+	epochInfoFetchFailureCount      *prometheus.CounterVec
 	signerBalance                   *prometheus.GaugeVec
 	signerBalanceBelowThreshold     *prometheus.GaugeVec
 	balanceCheckFailureCount        *prometheus.CounterVec
@@ -118,6 +119,13 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			prometheus.CounterOpts{
 				Name: "validator_attestation_attestation_confirmed_count",
 				Help: "The total number of attestations that have been confirmed on the network since validator startup",
+			},
+			[]string{networkLabel},
+		),
+		epochInfoFetchFailureCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_epoch_info_fetch_failure_count",
+				Help: "The total number of failed attempts to fetch the epoch info, at startup or at an epoch switch, since startup. Block headers are not processed while it fails",
 			},
 			[]string{networkLabel},
 		),
@@ -211,6 +219,7 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		m.attestationSubmittedCount,
 		m.attestationFailureCount,
 		m.attestationConfirmedCount,
+		m.epochInfoFetchFailureCount,
 		m.signerBalance,
 		m.signerBalanceBelowThreshold,
 		m.balanceCheckFailureCount,
@@ -308,6 +317,11 @@ func (m *Metrics) RecordAttestationFailure() {
 func (m *Metrics) RecordAttestationConfirmed() {
 	m.logger.Debug("RecordAttestationConfirmed")
 	m.attestationConfirmedCount.WithLabelValues(m.network).Inc()
+}
+
+func (m *Metrics) RecordEpochInfoFetchFailure() {
+	m.logger.Debug("RecordEpochInfoFetchFailure")
+	m.epochInfoFetchFailureCount.WithLabelValues(m.network).Inc()
 }
 
 // RecordSignerBalanceAboveThreshold sets the value to 0

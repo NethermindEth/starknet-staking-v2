@@ -22,6 +22,8 @@ func (m *NoOpMetrics) RecordAttestationFailure() {}
 
 func (m *NoOpMetrics) RecordAttestationConfirmed() {}
 
+func (m *NoOpMetrics) RecordEpochInfoFetchFailure() {}
+
 func (m *NoOpMetrics) RecordSignerBalanceAboveThreshold() {}
 
 func (m *NoOpMetrics) RecordSignerBalanceBelowThreshold() {}

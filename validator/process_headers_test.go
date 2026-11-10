@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -167,4 +168,62 @@ func TestProcessBlockHeadersLogsBlockAfterEpochSwitch(t *testing.T) {
 	newEpochLine := fmt.Sprintf(`"epochID": %d,`, testEpochID+1)
 	require.Contains(t, out, newEpochLine)
 	require.Less(t, strings.Index(out, newEpochLine), strings.Index(out, blockLine))
+}
+
+type epochFetchTracer struct {
+	metrics.NoOpMetrics
+
+	fetchFailures int
+}
+
+func (e *epochFetchTracer) RecordEpochInfoFetchFailure() { e.fetchFailures++ }
+
+func TestFetchEpochAndAttestInfoWithRetryReportsFailures(t *testing.T) {
+	sleep := validator.Sleep
+	validator.Sleep = func(time.Duration) {}
+	t.Cleanup(func() { validator.Sleep = sleep })
+
+	countLevel := func(out, level string) int {
+		return strings.Count(out, "\t"+level+"\t")
+	}
+
+	t.Run("Outage that ends", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger, err := log.NewZapLogger(
+			log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+		)
+		require.NoError(t, err)
+		tracer := new(epochFetchTracer)
+
+		epochInfo, _, err := validator.FetchEpochAndAttestInfoWithRetry(
+			t.Context(), newFailingEpochSigner(t, 21), logger, nil,
+			func(*types.EpochInfo, *types.EpochInfo) bool { return true },
+			types.NewRetries(), "100", tracer,
+		)
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(testEpochID), epochInfo.EpochID)
+		require.Equal(t, 21, tracer.fetchFailures)
+		out := buf.String()
+		require.Equal(t, 3, countLevel(out, "WARN"), out)
+		require.Contains(t, out, "injected outage")
+		require.Contains(t, out, `"retriesLeft": "infinite"`)
+		require.Contains(t, out, `"epochID": 100,`)
+		require.Contains(t, out, "Resuming block processing")
+	})
+
+	t.Run("Outage outlasting the retries", func(t *testing.T) {
+		tracer := new(epochFetchTracer)
+		retries, err := types.RetriesFromString("2")
+		require.NoError(t, err)
+
+		_, _, err = validator.FetchEpochAndAttestInfoWithRetry(
+			t.Context(), newFailingEpochSigner(t, 3), log.NewNopZapLogger(), nil,
+			func(*types.EpochInfo, *types.EpochInfo) bool { return true },
+			retries, "100", tracer,
+		)
+
+		require.ErrorContains(t, err, "failed to fetch epoch info after 2 retries")
+		require.Equal(t, 3, tracer.fetchFailures)
+	})
 }
