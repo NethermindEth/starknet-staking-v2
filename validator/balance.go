@@ -68,7 +68,7 @@ func fetchStrkBalance[S signerP.Signer](
 			"Unable to get STRK balance of account",
 			zap.String("account", account),
 			zap.String("address", address.String()),
-			zap.Error(err),
+			zap.Error(redactErrorURLs(err)),
 		)
 
 		return 0, false

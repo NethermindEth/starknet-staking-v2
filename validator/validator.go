@@ -38,6 +38,18 @@ func New(
 	logger log.Logger,
 	braavos bool,
 ) (Validator, error) {
+	v, err := newValidator(ctx, conf, snConfig, logger, braavos)
+
+	return v, redactErrorURLs(err)
+}
+
+func newValidator(
+	ctx context.Context,
+	conf *config.Config,
+	snConfig *config.StarknetConfig,
+	logger log.Logger,
+	braavos bool,
+) (Validator, error) {
 	provider, err := NewProvider(ctx, conf.Provider.HTTP, logger)
 	if err != nil {
 		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
@@ -59,7 +71,7 @@ func New(
 		signer = &externalSigner
 		logger.Info(
 			"using external signer",
-			zap.String("externalSignerURL", conf.Signer.ExternalURL),
+			zap.String("externalSignerURL", redactURL(conf.Signer.ExternalURL)),
 		)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
@@ -150,9 +162,9 @@ func (v *Validator) Attest(
 	defer wg.Wait()
 	defer close(dispatcher.PrepareAttest)
 
-	return RunBlockHeaderWatcher(
+	return redactErrorURLs(RunBlockHeaderWatcher(
 		ctx, v.wsProvider, v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
-	)
+	))
 }
 
 func RunBlockHeaderWatcher[S signerP.Signer](
@@ -183,7 +195,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				"cannot connect to ws provider",
 				zap.String("retriesLeft", retries.String()),
 			)
-			logger.Debug(err.Error())
+			logger.Debug(redactErrorURLs(err).Error())
 			retries.Sub()
 			Sleep(5 * time.Second) //nolint:mnd // Number of seconds to sleep
 
@@ -213,7 +225,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 
 			return nil
 		case err := <-clientSubscription.Err():
-			logger.Error("client subscription error", zap.Error(err))
+			logger.Error("client subscription error", zap.Error(redactErrorURLs(err)))
 			cleanUp(wsProvider, headersFeed)
 		case reorgEvent := <-clientSubscription.Reorg():
 			logger.Info(
@@ -223,7 +235,7 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			)
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
-			logger.Error("processing block headers", zap.Error(err))
+			logger.Error("processing block headers", zap.Error(redactErrorURLs(err)))
 			cleanUp(wsProvider, headersFeed)
 
 			return err
@@ -348,7 +360,7 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 		if err != nil {
 			logger.Debug("failed to fetch epoch info",
 				zap.String("epochID", newEpochID),
-				zap.Error(err),
+				zap.Error(redactErrorURLs(err)),
 			)
 		} else {
 			logger.Debug(
