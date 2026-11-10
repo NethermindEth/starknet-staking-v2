@@ -3,7 +3,6 @@ package signer
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -35,10 +34,9 @@ func NewInternalSigner(
 	addresses *config.ContractAddresses,
 	braavos bool,
 ) (InternalSigner, error) {
-	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
-	if !ok {
-		return InternalSigner{},
-			errors.Errorf("cannot turn private key %s into a big int", privateKey)
+	privateKey, err := types.PrivateKeyFromString(signer.PrivKey)
+	if err != nil {
+		return InternalSigner{}, fmt.Errorf("invalid private key: %w", err)
 	}
 
 	publicKey, _ := curve.PrivateKeyToPoint(privateKey)
