@@ -200,6 +200,10 @@ func capTip(tip rpc.U64, maxTip uint64) (rpc.U64, bool, error) {
 func estimateAttestTip(
 	ctx context.Context, provider rpc.RPCProvider, maxTip uint64, logger log.Logger,
 ) (rpc.U64, error) {
+	if maxTip == 0 {
+		return "0x0", nil
+	}
+
 	estimatedTip, err := rpc.EstimateTip(ctx, provider, constants.TipMultiplier)
 	if err != nil {
 		return "", fmt.Errorf("estimate tip: %w", err)

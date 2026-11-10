@@ -12,6 +12,8 @@ import (
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // Returns a latest block with a single transaction paying the given tip
@@ -56,18 +58,6 @@ func TestEstimateAttestTip(t *testing.T) {
 			expectedTip: "0x3e8", // 1000
 		},
 		{
-			name:        "Zero max tip never pays a tip",
-			blockTip:    "0x3e8", // 1000
-			maxTip:      0,
-			expectedTip: "0x0", // 0
-		},
-		{
-			name:        "Zero estimated tip and zero max tip",
-			blockTip:    "0x0", // 0
-			maxTip:      0,
-			expectedTip: "0x0", // 0
-		},
-		{
 			name:        "Unlimited max tip keeps an outlier tip",
 			blockTip:    "0xe8d4a51000", // 1000000000000
 			maxTip:      math.MaxUint64,
@@ -87,6 +77,30 @@ func TestEstimateAttestTip(t *testing.T) {
 			require.Equal(t, tc.expectedTip, tip)
 		})
 	}
+
+	t.Run("Capped tip logs a warning", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().
+			BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), gomock.Nil()).
+			Return(latestBlockWithTip("0x7d0"), nil) // 2000
+		core, logs := observer.New(zapcore.DebugLevel)
+
+		tip, err := estimateAttestTip(t.Context(), provider, 1000, log.NewZapLoggerWithCore(core))
+		require.NoError(t, err)
+		require.Equal(t, rpc.U64("0x3e8"), tip) // 1000
+		require.Equal(t, 1, logs.FilterLevelExact(zapcore.WarnLevel).Len())
+	})
+
+	t.Run("Zero max tip skips the estimation and logs no warning", func(t *testing.T) {
+		// No provider expectations: any RPC call fails the test
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		core, logs := observer.New(zapcore.DebugLevel)
+
+		tip, err := estimateAttestTip(t.Context(), provider, 0, log.NewZapLoggerWithCore(core))
+		require.NoError(t, err)
+		require.Equal(t, rpc.U64("0x0"), tip)
+		require.Zero(t, logs.Len())
+	})
 
 	t.Run("Error: estimate tip fails", func(t *testing.T) {
 		blockErr := errors.New("block error")
@@ -152,9 +166,12 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 			provider.EXPECT().
 				Nonce(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(felt.NewFromUint64[felt.Felt](1), nil)
-			provider.EXPECT().
-				BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), gomock.Nil()).
-				Return(latestBlock, nil)
+			// A zero max tip skips the tip estimation, so the latest block is not fetched
+			if tc.maxTip != 0 {
+				provider.EXPECT().
+					BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), gomock.Nil()).
+					Return(latestBlock, nil)
+			}
 
 			s := newExternalSigner(t, provider, tc.maxTip)
 			txn, err := s.BuildAttestTransaction(new(types.BlockHash))
