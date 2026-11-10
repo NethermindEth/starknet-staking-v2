@@ -128,6 +128,22 @@ func TestRedactURLsIn(t *testing.T) {
 	}
 }
 
+func TestLogNewEpochFields(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+
+	epochInfo := types.EpochInfo{EpochID: 79310, EpochLen: 231, StartingBlock: 17745944}
+	logNewEpoch(&epochInfo, &types.AttestInfo{}, logger)
+
+	out := buf.String()
+	require.Contains(t, out, `"epochID": 79310,`)
+	require.Contains(t, out, `"startBlock": 17745944,`)
+	require.Contains(t, out, `"endBlock": 17746174}`)
+}
+
 func TestLogBlockCountsBlocks(t *testing.T) {
 	epochInfo := types.EpochInfo{EpochID: 1, EpochLen: 100, StartingBlock: 1000}
 	attestInfo := types.AttestInfo{TargetBlock: 1010, WindowStart: 1021, WindowEnd: 1050}

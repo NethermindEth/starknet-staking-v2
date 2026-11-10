@@ -11,6 +11,7 @@ type Tracer interface {
 	RecordAttestationSubmitted()
 	RecordAttestationFailure()
 	RecordAttestationConfirmed()
+	RecordEpochInfoFetchFailure()
 	RecordSignerBalanceAboveThreshold()
 	RecordSignerBalanceBelowThreshold()
 	RecordBalanceCheckFailure(account string)
