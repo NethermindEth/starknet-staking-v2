@@ -528,10 +528,8 @@ func TestFetchAttestWindow(t *testing.T) {
 		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(0), window)
-		require.Equal(
-			t,
-			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
-			err,
+		require.EqualError(
+			t, err, "Error when calling entrypoint `attestation_window`: some contract error",
 		)
 	})
 
@@ -760,10 +758,8 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
-		require.Equal(
-			t,
-			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
-			err,
+		require.EqualError(
+			t, err, "Error when calling entrypoint `attestation_window`: some contract error",
 		)
 	})
 

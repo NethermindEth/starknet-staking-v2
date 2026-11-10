@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -10,7 +9,7 @@ import (
 )
 
 func entrypointInternalError(entrypointName string, err error) error {
-	return errors.New("Error when calling entrypoint `" + entrypointName + "`: " + err.Error())
+	return fmt.Errorf("%s: %w", "Error when calling entrypoint `"+entrypointName+"`", err)
 }
 
 func entrypointResponseError(entrypointName string, result []*felt.Felt) error {
