@@ -273,7 +273,6 @@ func ProcessBlockHeaders[Account signerP.Signer](
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	for block := range headersFeed {
-		logBlock(block.Number, &epochInfo, &attestInfo, logger)
 		tracer.UpdateLatestBlockNumber(block.Number)
 
 		// todo(rdr): look for some nice way of refactoring this if/else blocks
@@ -295,6 +294,7 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			// Update epoch info metrics
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 		}
+		logBlock(block.Number, &epochInfo, &attestInfo, logger)
 		if uint64(attestInfo.TargetBlock) == block.Number {
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Info(
