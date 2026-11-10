@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	main "github.com/NethermindEth/starknet-staking-v2/cmd/signer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -210,4 +211,15 @@ func TestEnvFile(t *testing.T) {
 			output,
 		)
 	})
+}
+
+func TestUnknownLogLevel(t *testing.T) {
+	command := main.NewCommand()
+	command.SetArgs([]string{"--log-level", "verbose"})
+	command.SetErr(new(bytes.Buffer))
+
+	err := command.ExecuteContext(t.Context())
+	require.EqualError(
+		t, err, `unknown log level "verbose" (known: trace, debug, info, warn, error)`,
+	)
 }
