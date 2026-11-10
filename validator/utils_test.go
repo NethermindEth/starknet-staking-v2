@@ -2,6 +2,7 @@ package validator
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -162,4 +163,14 @@ func TestLogBlockNumberField(t *testing.T) {
 	require.Contains(
 		t, buf.String(), `block 1020 received, 1 block to attest	{"blockNumber": 1020}`,
 	)
+}
+
+func TestRedactErrorURLsKeepsTheErrorChain(t *testing.T) {
+	err := redactErrorURLs(transient(errors.New(
+		`Post "http://node/v3/0123456789abcdef0123456789abcdef": EOF`,
+	)))
+
+	require.ErrorIs(t, err, ErrTransient)
+	require.Equal(t, `Post "http://node/v3/REDACTED": EOF`, err.Error())
+	require.NoError(t, redactErrorURLs(nil))
 }
