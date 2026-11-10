@@ -15,9 +15,9 @@ RUN make validator
 
 
 # ---- Final Stage ----
-FROM alpine:3.21 AS final
+FROM alpine:3.24 AS final
 
-RUN apk add --no-cache ca-certificates
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
