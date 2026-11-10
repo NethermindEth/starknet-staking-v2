@@ -3,9 +3,13 @@ package signer
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -18,6 +22,8 @@ import (
 	snGoUtils "github.com/NethermindEth/starknet.go/utils"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 const (
@@ -28,6 +34,8 @@ const (
 	testStakerAddress = "0x7f3f971211da11bbf86527424b9fb7640c0f3fc3c426d3cd1ad833389476a6"
 	testRewardAddress = "0x5c85dd30df86ed1f2cfe1806417efb2cae421bffdee8110a74a3d3eb95b28d3"
 	testSignerURL     = "http://localhost:1234"
+
+	testClaimStartBlock = uint64(1000)
 )
 
 func TestRewardSignerAddress(t *testing.T) {
@@ -209,7 +217,9 @@ func TestNewRewardSigner(t *testing.T) {
 		}
 
 		rs, err := newRewardSigner(t, newProvider(t, stakerInfo), &rewardConf)
-		require.ErrorContains(t, err, "is not the real reward address nor the staker address")
+		require.EqualError(t, err, "reward address check: the configured reward account 0x999 "+
+			"is neither the staker address "+stakerAddress.String()+
+			" nor its reward address "+rewardAddress.String())
 		require.Nil(t, rs)
 	})
 
@@ -243,6 +253,46 @@ func TestNewRewardSigner(t *testing.T) {
 		require.True(t, rs == nil)
 	})
 
+	t.Run("Error: external signer answers a short signature", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, err := w.Write([]byte(`{"signature": ["0x1"]}`))
+			require.NoError(t, err)
+		}))
+		t.Cleanup(server.Close)
+
+		rewardConf := config.Reward{
+			ExternalURL:    server.URL,
+			Address:        testRewardAddress,
+			ClaimThreshold: claimThreshold,
+		}
+		provider := newProvider(t, stakerInfo)
+		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs, err := newRewardSigner(t, provider, &rewardConf)
+		require.ErrorContains(t, err, "external reward signer check")
+		require.ErrorContains(t, err, "expected a signature of 2 felts")
+		require.True(t, rs == nil)
+	})
+
+	t.Run("Error: external signer never answers", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			rewardConf := config.Reward{
+				ExternalURL:    newHungSigner(t),
+				Address:        testRewardAddress,
+				ClaimThreshold: claimThreshold,
+			}
+			provider := newProvider(t, stakerInfo)
+			expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+			start := time.Now()
+			rs, err := newRewardSigner(t, provider, &rewardConf)
+			require.ErrorContains(t, err, "external reward signer check")
+			require.ErrorContains(t, err, "external signer did not answer within 15s")
+			require.True(t, rs == nil)
+			require.Equal(t, 15*time.Second, time.Since(start))
+		})
+	})
+
 	t.Run("Error: invalid private key", func(t *testing.T) {
 		rewardConf := config.Reward{
 			PrivKey:        "not a private key",
@@ -255,6 +305,25 @@ func TestNewRewardSigner(t *testing.T) {
 		require.Error(t, err)
 		// Must be an untyped nil, so `rs != nil` checks done by the callers hold
 		require.True(t, rs == nil)
+	})
+}
+
+func TestHashAndSignTxSignerNeverAnswers(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		signerURL := newHungSigner(t)
+		invokeTxnV3 := snGoUtils.BuildInvokeTxn(
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			new(rpc.ResourceBoundsMapping),
+			nil,
+		)
+
+		start := time.Now()
+		res, err := HashAndSignTx(t.Context(), invokeTxnV3, new(felt.Felt).SetUint64(1), signerURL)
+		require.Zero(t, res)
+		require.ErrorContains(t, err, "external signer did not answer within 15s")
+		require.Equal(t, 15*time.Second, time.Since(start))
 	})
 }
 
@@ -769,6 +838,7 @@ func TestClaimRewards(t *testing.T) {
 	t.Run("Error: building the transaction fails: no transaction sent", func(t *testing.T) {
 		mockSigner := newMockSigner(t, snGoUtils.STRKToFRI(200))
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock, nil)
 		provider.EXPECT().
 			Nonce(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("nonce error"))
@@ -784,7 +854,7 @@ func TestClaimRewards(t *testing.T) {
 			EstimateFee(gomock.Any(), gomock.Any()).
 			Return(newFeeEstimation(t, claimMaxFee+1), nil)
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
 		rs.ClaimRewards(t.Context(), metrics.NewNoOpMetrics())
@@ -797,7 +867,7 @@ func TestClaimRewards(t *testing.T) {
 			EstimateFee(gomock.Any(), gomock.Any()).
 			Return(rpc.FeeEstimation{}, errors.New("estimate error"))
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
 		rs.ClaimRewards(t.Context(), metrics.NewNoOpMetrics())
@@ -810,7 +880,7 @@ func TestClaimRewards(t *testing.T) {
 			EstimateFee(gomock.Any(), gomock.Any()).
 			Return(newFeeEstimation(t, 1), nil)
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 		expectAddInvoke(t, provider, errors.New("add invoke error"))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
@@ -826,8 +896,9 @@ func TestClaimRewards(t *testing.T) {
 		mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
 		mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(estimate, nil)
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		expectBuildClaimTxn(t, provider, nonce)
+		expectClaimStart(t, provider, nonce)
 		sent := expectAddInvoke(t, provider, nil)
+		expectUnclaimedRefresh(t, mockSigner, &felt.Zero)
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 100, claimMaxFee)
 		rs.ClaimRewards(t.Context(), metrics.NewNoOpMetrics())
@@ -848,11 +919,315 @@ func TestClaimRewards(t *testing.T) {
 			EstimateFee(gomock.Any(), gomock.Any()).
 			Return(newFeeEstimation(t, 1), nil)
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 		expectAddInvoke(t, provider, nil)
+		expectUnclaimedRefresh(t, mockSigner, &felt.Zero)
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 10, claimMaxFee)
 		rs.ClaimRewards(t.Context(), metrics.NewNoOpMetrics())
+	})
+}
+
+func TestClaimRewardsBounds(t *testing.T) {
+	rewardAddress, err := types.AddressFromString(testRewardAddress)
+	require.NoError(t, err)
+	const claimMaxFee = uint64(1e15)
+
+	t.Run("The block limit leaves room before the next attest nonce read", func(t *testing.T) {
+		require.Equal(t, uint64(8), uint64(claimMaxBlocks))
+		require.LessOrEqual(t, claimMaxBlocks+2, constants.MinAttestationWindow-1)
+	})
+
+	t.Run("A claim still running makes the next one skip", func(t *testing.T) {
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil)
+
+		signing := make(chan struct{})
+		release := make(chan struct{})
+		mockSigner.EXPECT().
+			SignTransaction(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(
+				context.Context, *rpc.BroadcastInvokeTxnV3,
+			) (*rpc.BroadcastInvokeTxnV3, error) {
+				close(signing)
+				<-release
+
+				return nil, errors.New("sign error")
+			})
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		firstTracer := &claimTracer{}
+		firstDone := make(chan struct{})
+		go func() {
+			rs.ClaimRewards(t.Context(), firstTracer)
+			close(firstDone)
+		}()
+		select {
+		case <-signing:
+		case <-firstDone:
+			require.FailNow(t, "the first claim ended before signing")
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "the first claim did not reach the signer")
+		}
+
+		secondTracer := &claimTracer{}
+		rs.ClaimRewards(t.Context(), secondTracer)
+		require.Equal(t, &claimTracer{}, secondTracer)
+
+		close(release)
+		<-firstDone
+		require.Equal(t, 1, firstTracer.failures)
+	})
+
+	t.Run("A panic during the claim is recorded as a failure", func(t *testing.T) {
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil).
+			Times(2)
+		mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil)
+		mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(rpc.FeeEstimation{}, nil)
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		tracer := &claimTracer{}
+		require.NotPanics(t, func() { rs.ClaimRewards(t.Context(), tracer) })
+		require.Equal(t, 1, tracer.failures)
+		require.Zero(t, tracer.submitted)
+
+		mockSigner.EXPECT().
+			SignTransaction(gomock.Any(), gomock.Any()).
+			Return(nil, errors.New("sign error"))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+		rs.ClaimRewards(t.Context(), tracer)
+		require.Equal(t, 2, tracer.failures)
+	})
+
+	claimUpToSend := func(t *testing.T) (*mocks.MockSigner, *mocks.MockRPCProvider) {
+		t.Helper()
+
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil)
+		mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+		mockSigner.EXPECT().
+			EstimateFee(gomock.Any(), gomock.Any()).
+			Return(newFeeEstimation(t, 1), nil)
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		return mockSigner, provider
+	}
+
+	t.Run("Claim ready at the block limit is sent", func(t *testing.T) {
+		mockSigner, provider := claimUpToSend(t)
+		provider.EXPECT().
+			BlockNumber(gomock.Any()).
+			Return(testClaimStartBlock+claimMaxBlocks, nil)
+		provider.EXPECT().
+			AddInvokeTransaction(gomock.Any(), gomock.Any()).
+			Return(rpc.AddInvokeTransactionResponse{Hash: new(felt.Felt).SetUint64(1)}, nil)
+		provider.EXPECT().
+			TransactionStatus(gomock.Any(), gomock.Any()).
+			Return(&rpc.TxnStatusResult{FinalityStatus: rpc.TxnStatusAcceptedOnL2}, nil)
+		expectUnclaimedRefresh(t, mockSigner, &felt.Zero)
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		tracer := &claimTracer{}
+		rs.ClaimRewards(t.Context(), tracer)
+		require.Equal(t, 1, tracer.submitted)
+		require.Zero(t, tracer.failures)
+	})
+
+	t.Run("Claim not ready within the block limit is not sent", func(t *testing.T) {
+		mockSigner, provider := claimUpToSend(t)
+		provider.EXPECT().
+			BlockNumber(gomock.Any()).
+			Return(testClaimStartBlock+claimMaxBlocks+1, nil)
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		tracer := &claimTracer{}
+		rs.ClaimRewards(t.Context(), tracer)
+		require.Zero(t, tracer.submitted)
+		require.Equal(t, 1, tracer.failures)
+	})
+
+	t.Run("Error: latest block before sending fails: not sent", func(t *testing.T) {
+		mockSigner, provider := claimUpToSend(t)
+		provider.EXPECT().BlockNumber(gomock.Any()).Return(uint64(0), errors.New("block error"))
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		tracer := &claimTracer{}
+		rs.ClaimRewards(t.Context(), tracer)
+		require.Zero(t, tracer.submitted)
+		require.Equal(t, 1, tracer.failures)
+	})
+
+	t.Run("Error: latest block at the claim start fails: not built", func(t *testing.T) {
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil)
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockNumber(gomock.Any()).Return(uint64(0), errors.New("block error"))
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		tracer := &claimTracer{}
+		rs.ClaimRewards(t.Context(), tracer)
+		require.Equal(t, 1, tracer.failures)
+	})
+
+	t.Run("The claim deadline cancels a signer that doesn't answer", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+			provider.EXPECT().
+				Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+				Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil)
+			expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+			externalSigner := &ExternalSigner{
+				Provider:            provider,
+				operationalAddress:  rewardAddress,
+				chainID:             *new(felt.Felt).SetBytes([]byte("SN_SEPOLIA")),
+				url:                 newHungSigner(t),
+				validationContracts: *sepoliaContracts(t),
+				braavos:             false,
+			}
+			rs := newTestRewardSigner(t, externalSigner, provider, 1, claimMaxFee)
+			rs.claimTimeout = time.Second
+
+			start := time.Now()
+			tracer := &claimTracer{}
+			rs.ClaimRewards(t.Context(), tracer)
+			require.Equal(t, time.Second, time.Since(start))
+			require.Equal(t, 1, tracer.failures)
+			require.Zero(t, tracer.submitted)
+		})
+	})
+}
+
+func TestClaimRewardsTracking(t *testing.T) {
+	rewardAddress, err := types.AddressFromString(testRewardAddress)
+	require.NoError(t, err)
+	const claimMaxFee = uint64(1e15)
+	hash := felt.NewUnsafeFromString[felt.Felt]("0xabc")
+
+	claim := func(t *testing.T, provider *mocks.MockRPCProvider) *claimTracer {
+		t.Helper()
+
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil).
+			AnyTimes()
+		mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+		mockSigner.EXPECT().
+			EstimateFee(gomock.Any(), gomock.Any()).
+			Return(newFeeEstimation(t, 1), nil)
+
+		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+		tracer := &claimTracer{}
+		rs.ClaimRewards(t.Context(), tracer)
+
+		return tracer
+	}
+	newProvider := func(t *testing.T) *mocks.MockRPCProvider {
+		t.Helper()
+
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+		provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock, nil)
+		provider.EXPECT().
+			AddInvokeTransaction(gomock.Any(), gomock.Any()).
+			Return(rpc.AddInvokeTransactionResponse{Hash: hash}, nil)
+
+		return provider
+	}
+	expectStatus := func(provider *mocks.MockRPCProvider, status *rpc.TxnStatusResult, err error) {
+		provider.EXPECT().TransactionStatus(gomock.Any(), hash).Return(status, err)
+	}
+
+	t.Run("Accepted on L2: confirmed", func(t *testing.T) {
+		provider := newProvider(t)
+		expectStatus(provider, &rpc.TxnStatusResult{
+			FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+			ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+		}, nil)
+
+		tracer := claim(t, provider)
+		require.Equal(t, 1, tracer.submitted)
+		require.Equal(t, 1, tracer.confirmed)
+		require.Zero(t, tracer.failures)
+	})
+
+	t.Run("Not found, then pending, then accepted: confirmed", func(t *testing.T) {
+		provider := newProvider(t)
+		gomock.InOrder(
+			provider.EXPECT().
+				TransactionStatus(gomock.Any(), hash).
+				Return(nil, rpc.ErrHashNotFound),
+			provider.EXPECT().
+				TransactionStatus(gomock.Any(), hash).
+				Return(&rpc.TxnStatusResult{FinalityStatus: rpc.TxnStatusReceived}, nil),
+			provider.EXPECT().
+				TransactionStatus(gomock.Any(), hash).
+				Return(&rpc.TxnStatusResult{
+					FinalityStatus:  rpc.TxnStatusPreConfirmed,
+					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+				}, nil),
+			provider.EXPECT().
+				TransactionStatus(gomock.Any(), hash).
+				Return(&rpc.TxnStatusResult{
+					FinalityStatus:  rpc.TxnStatusAcceptedOnL1,
+					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+				}, nil),
+		)
+
+		tracer := claim(t, provider)
+		require.Equal(t, 1, tracer.confirmed)
+		require.Zero(t, tracer.failures)
+	})
+
+	t.Run("Reverted: failure, not confirmed", func(t *testing.T) {
+		provider := newProvider(t)
+		expectStatus(provider, &rpc.TxnStatusResult{
+			FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+			ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
+			FailureReason:   "out of gas",
+		}, nil)
+
+		tracer := claim(t, provider)
+		require.Equal(t, 1, tracer.submitted)
+		require.Zero(t, tracer.confirmed)
+		require.Equal(t, 1, tracer.failures)
+	})
+
+	t.Run("Never accepted: neither confirmed nor failed", func(t *testing.T) {
+		provider := newProvider(t)
+		provider.EXPECT().
+			TransactionStatus(gomock.Any(), hash).
+			Return(&rpc.TxnStatusResult{FinalityStatus: rpc.TxnStatusReceived}, nil).
+			AnyTimes()
+
+		tracer := claim(t, provider)
+		require.Equal(t, 1, tracer.submitted)
+		require.Zero(t, tracer.confirmed)
+		require.Zero(t, tracer.failures)
 	})
 }
 
@@ -860,15 +1235,20 @@ func TestClaimRewards(t *testing.T) {
 type claimTracer struct {
 	metrics.NoOpMetrics
 
-	unclaimed      *float64
+	unclaimed      []float64
 	submitted      int
+	confirmed      int
 	failures       int
 	maxFeeExceeded int
 }
 
-func (c *claimTracer) UpdateRewardUnclaimed(amount float64) { c.unclaimed = &amount }
+func (c *claimTracer) UpdateRewardUnclaimed(amount float64) {
+	c.unclaimed = append(c.unclaimed, amount)
+}
 
 func (c *claimTracer) RecordRewardClaimSubmitted() { c.submitted++ }
+
+func (c *claimTracer) RecordRewardClaimConfirmed() { c.confirmed++ }
 
 func (c *claimTracer) RecordRewardClaimFailure() { c.failures++ }
 
@@ -879,7 +1259,7 @@ func TestClaimRewardsMetrics(t *testing.T) {
 	rewardAddress, err := types.AddressFromString(testRewardAddress)
 	require.NoError(t, err)
 	unclaimed := snGoUtils.STRKToFRI(200)
-	unclaimedStrk := snGoUtils.FRIToSTRK(unclaimed)
+	unclaimedStrk := 200.0
 	const claimMaxFee = uint64(1e15)
 
 	// Mocks of a reward signer whose staker has `unclaimed` rewards
@@ -904,11 +1284,12 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		tracer := &claimTracer{}
 		rs.ClaimRewards(t.Context(), tracer)
 
-		require.Equal(t, &claimTracer{unclaimed: &unclaimedStrk}, tracer)
+		require.Equal(t, &claimTracer{unclaimed: []float64{unclaimedStrk}}, tracer)
 	})
 
 	t.Run("Claim failure", func(t *testing.T) {
 		mockSigner, provider := newMocks(t)
+		provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock, nil)
 		provider.EXPECT().
 			Nonce(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("nonce error"))
@@ -917,7 +1298,7 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		tracer := &claimTracer{}
 		rs.ClaimRewards(t.Context(), tracer)
 
-		require.Equal(t, &claimTracer{unclaimed: &unclaimedStrk, failures: 1}, tracer)
+		require.Equal(t, &claimTracer{unclaimed: []float64{unclaimedStrk}, failures: 1}, tracer)
 	})
 
 	t.Run("Max fee exceeded", func(t *testing.T) {
@@ -926,14 +1307,14 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		mockSigner.EXPECT().
 			EstimateFee(gomock.Any(), gomock.Any()).
 			Return(newFeeEstimation(t, claimMaxFee+1), nil)
-		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
 		tracer := &claimTracer{}
 		rs.ClaimRewards(t.Context(), tracer)
 
 		require.Equal(t,
-			&claimTracer{unclaimed: &unclaimedStrk, maxFeeExceeded: 1},
+			&claimTracer{unclaimed: []float64{unclaimedStrk}, maxFeeExceeded: 1},
 			tracer,
 		)
 	})
@@ -944,15 +1325,229 @@ func TestClaimRewardsMetrics(t *testing.T) {
 		mockSigner.EXPECT().
 			EstimateFee(gomock.Any(), gomock.Any()).
 			Return(newFeeEstimation(t, 1), nil)
-		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
 		expectAddInvoke(t, provider, nil)
+		expectUnclaimedRefresh(t, mockSigner, snGoUtils.STRKToFRI(0.5))
 
 		rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
 		tracer := &claimTracer{}
 		rs.ClaimRewards(t.Context(), tracer)
 
-		require.Equal(t, &claimTracer{unclaimed: &unclaimedStrk, submitted: 1}, tracer)
+		require.Equal(t, &claimTracer{
+			unclaimed: []float64{unclaimedStrk, 0.5},
+			submitted: 1,
+			confirmed: 1,
+		}, tracer)
 	})
+}
+
+func TestFriToStrkFloor(t *testing.T) {
+	testCases := []struct {
+		fri      string
+		expected float64
+	}{
+		{fri: "0", expected: 0},
+		{fri: "1", expected: math.Nextafter(1e-18, 0)},
+		{fri: "999999999999999999", expected: math.Nextafter(1, 0)},
+		{fri: "1000000000000000000", expected: 1},
+		{fri: "1000000000000000001", expected: 1},
+		{fri: "1500000000000000000", expected: 1.5},
+		{fri: "99999999999999999999", expected: math.Nextafter(100, 0)},
+		{fri: "123456000000000000000000", expected: 123456},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.fri+" FRI", func(t *testing.T) {
+			fri, err := felt.NewFromString[felt.Felt](tc.fri)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, friToStrkFloor(fri))
+		})
+	}
+}
+
+func TestClaimRewardsUnclaimedGauge(t *testing.T) {
+	t.Run("Just below the threshold is reported below it", func(t *testing.T) {
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(
+				stakerInfoResponse(t, felt.NewUnsafeFromString[felt.Felt]("0xde0b6b3a763ffff")),
+				nil,
+			)
+
+		rs := newTestRewardSigner(
+			t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 1, 1,
+		)
+		tracer := &claimTracer{}
+		rs.ClaimRewards(t.Context(), tracer)
+
+		require.Len(t, tracer.unclaimed, 1)
+		require.Less(t, tracer.unclaimed[0], 1.0)
+	})
+}
+
+func TestClaimRewardsBelowThresholdLog(t *testing.T) {
+	mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+	mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+	mockSigner.EXPECT().
+		Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+		Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(1.5)), nil)
+
+	core, logs := observer.New(zapcore.InfoLevel)
+	rs := newTestRewardSigner(
+		t, mockSigner, mocks.NewMockRPCProvider(gomock.NewController(t)), 2, 1,
+	)
+	rs.logger = log.NewZapLoggerWithCore(core)
+	rs.ClaimRewards(t.Context(), metrics.NewNoOpMetrics())
+
+	entries := logs.All()
+	require.Len(t, entries, 1)
+	require.Equal(t, zapcore.InfoLevel, entries[0].Level)
+	require.Equal(t,
+		claimLogPrefix+"unclaimed rewards amount is below claim threshold; skipping claim...",
+		entries[0].Message,
+	)
+	require.Equal(t, map[string]any{
+		"unclaimedRewardsSTRK": "1.50",
+		"unclaimedRewardsFRI":  "1500000000000000000",
+		"claimThresholdSTRK":   uint64(2),
+	}, entries[0].ContextMap())
+}
+
+func TestClaimRewardsLogKeys(t *testing.T) {
+	rewardAddress, err := types.AddressFromString(testRewardAddress)
+	require.NoError(t, err)
+	const claimMaxFee = uint64(1e15)
+	camelCase := regexp.MustCompile(`^[a-z][a-zA-Z0-9]*$`)
+
+	newMocks := func(t *testing.T) (*mocks.MockSigner, *mocks.MockRPCProvider) {
+		t.Helper()
+
+		mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+		mockSigner.EXPECT().ValidationContracts().Return(sepoliaContracts(t)).AnyTimes()
+		mockSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
+		mockSigner.EXPECT().
+			Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Return(stakerInfoResponse(t, snGoUtils.STRKToFRI(200)), nil).
+			AnyTimes()
+		mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		expectClaimStart(t, provider, felt.NewFromUint64[felt.Felt](5))
+
+		return mockSigner, provider
+	}
+	sendClaim := func(provider *mocks.MockRPCProvider, status *rpc.TxnStatusResult) {
+		provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock, nil)
+		provider.EXPECT().
+			AddInvokeTransaction(gomock.Any(), gomock.Any()).
+			Return(rpc.AddInvokeTransactionResponse{Hash: new(felt.Felt).SetUint64(0xabc)}, nil)
+		provider.EXPECT().TransactionStatus(gomock.Any(), gomock.Any()).Return(status, nil)
+	}
+
+	testCases := []struct {
+		name         string
+		setup        func(*mocks.MockSigner, *mocks.MockRPCProvider)
+		expectedKeys []string
+	}{
+		{
+			name: "max fee exceeded",
+			setup: func(mockSigner *mocks.MockSigner, _ *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().
+					EstimateFee(gomock.Any(), gomock.Any()).
+					Return(newFeeEstimation(t, claimMaxFee+1), nil)
+			},
+			expectedKeys: []string{"overallFeeFRI", "claimMaxFeeFRI"},
+		},
+		{
+			name: "block limit passed",
+			setup: func(mockSigner *mocks.MockSigner, provider *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().
+					EstimateFee(gomock.Any(), gomock.Any()).
+					Return(newFeeEstimation(t, 1), nil)
+				provider.EXPECT().
+					BlockNumber(gomock.Any()).
+					Return(testClaimStartBlock+claimMaxBlocks+1, nil)
+			},
+			expectedKeys: []string{"startBlockNumber", "latestBlockNumber", "blockLimit"},
+		},
+		{
+			name: "accepted",
+			setup: func(mockSigner *mocks.MockSigner, provider *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().
+					EstimateFee(gomock.Any(), gomock.Any()).
+					Return(newFeeEstimation(t, 1), nil)
+				sendClaim(provider, &rpc.TxnStatusResult{
+					FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+					ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+				})
+			},
+			expectedKeys: []string{"transactionHash", "finalityStatus"},
+		},
+		{
+			name: "reverted",
+			setup: func(mockSigner *mocks.MockSigner, provider *mocks.MockRPCProvider) {
+				mockSigner.EXPECT().
+					EstimateFee(gomock.Any(), gomock.Any()).
+					Return(newFeeEstimation(t, 1), nil)
+				sendClaim(provider, &rpc.TxnStatusResult{
+					FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+					ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
+					FailureReason:   "out of gas",
+				})
+			},
+			expectedKeys: []string{"transactionHash", "failureReason"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockSigner, provider := newMocks(t)
+			tc.setup(mockSigner, provider)
+
+			core, logs := observer.New(zapcore.DebugLevel)
+			rs := newTestRewardSigner(t, mockSigner, provider, 1, claimMaxFee)
+			rs.logger = log.NewZapLoggerWithCore(core)
+			rs.ClaimRewards(t.Context(), metrics.NewNoOpMetrics())
+
+			keys := make(map[string]bool)
+			for _, entry := range logs.All() {
+				for key := range entry.ContextMap() {
+					require.Regexp(t, camelCase, key, entry.Message)
+					keys[key] = true
+				}
+			}
+			for _, key := range append(tc.expectedKeys, "unclaimedRewardsSTRK") {
+				require.True(t, keys[key], key)
+			}
+		})
+	}
+}
+
+func TestNewRewardSignerLogsAccount(t *testing.T) {
+	stakerAddress, err := types.AddressFromString(testStakerAddress)
+	require.NoError(t, err)
+	provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+	provider.EXPECT().ChainID(gomock.Any()).Return("SN_SEPOLIA", nil).AnyTimes()
+	provider.EXPECT().
+		Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+		Return(stakerInfoResponse(t, &felt.Zero), nil)
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	_, err = NewRewardSigner(
+		t.Context(),
+		provider,
+		log.NewZapLoggerWithCore(core),
+		&config.Reward{PrivKey: "0x123", Address: testRewardAddress, ClaimThreshold: 1},
+		new(config.ContractAddresses),
+		&stakerAddress,
+		false,
+		false,
+	)
+	require.NoError(t, err)
+
+	setUp := logs.FilterMessage("internal signer has been set up").All()
+	require.Len(t, setUp, 1)
+	require.Equal(t, "reward", setUp[0].ContextMap()["account"])
 }
 
 func TestFriToStrkString(t *testing.T) {
@@ -999,6 +1594,10 @@ func newTestRewardSigner(
 		stakerAddress:  &stakerAddress,
 		claimMaxFee:    felt.FromUint64[felt.Felt](claimMaxFeeFri),
 		claimThreshold: claimThresholdStrk,
+		claimTimeout:   claimTimeout,
+
+		claimTrackingTimeout: time.Second,
+		claimStatusInterval:  time.Millisecond,
 	}
 }
 
@@ -1012,6 +1611,26 @@ func newTestSignerServer(t *testing.T) string {
 		require.NoError(t, err)
 	}))
 	t.Cleanup(server.Close)
+
+	return server.URL
+}
+
+func newHungSigner(t *testing.T) string {
+	t.Helper()
+
+	release := make(chan struct{})
+	handler := func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}
+	server := httptest.NewTestServer(t, http.HandlerFunc(handler))
+	t.Cleanup(func() { close(release) })
+
+	transport := externalSignerClient.Transport
+	externalSignerClient.Transport = server.Client().Transport
+	t.Cleanup(func() { externalSignerClient.Transport = transport })
 
 	return server.URL
 }
@@ -1098,6 +1717,21 @@ func expectBuildClaimTxn(t *testing.T, provider *mocks.MockRPCProvider, nonce *f
 		Return(&rpc.Block{}, nil)
 }
 
+func expectClaimStart(t *testing.T, provider *mocks.MockRPCProvider, nonce *felt.Felt) {
+	t.Helper()
+
+	provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock, nil)
+	expectBuildClaimTxn(t, provider, nonce)
+}
+
+func expectUnclaimedRefresh(t *testing.T, mockSigner *mocks.MockSigner, unclaimed *felt.Felt) {
+	t.Helper()
+
+	mockSigner.EXPECT().
+		Call(gomock.Any(), stakerInfoCall(t), rpc.WithBlockTag(rpc.BlockTagLatest)).
+		Return(stakerInfoResponse(t, unclaimed), nil)
+}
+
 // expectAddInvoke expects a single transaction to be sent, answered with `err`.
 // The returned pointer holds the sent transaction once it is sent.
 func expectAddInvoke(
@@ -1105,6 +1739,7 @@ func expectAddInvoke(
 ) *rpc.BroadcastInvokeTxnV3 {
 	t.Helper()
 
+	provider.EXPECT().BlockNumber(gomock.Any()).Return(testClaimStartBlock+1, nil)
 	sent := new(rpc.BroadcastInvokeTxnV3)
 	provider.EXPECT().
 		AddInvokeTransaction(gomock.Any(), gomock.Any()).
@@ -1120,6 +1755,14 @@ func expectAddInvoke(
 				Hash: felt.NewUnsafeFromString[felt.Felt]("0xabc"),
 			}, nil
 		})
+	if err == nil {
+		provider.EXPECT().
+			TransactionStatus(gomock.Any(), felt.NewUnsafeFromString[felt.Felt]("0xabc")).
+			Return(&rpc.TxnStatusResult{
+				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+			}, nil)
+	}
 
 	return sent
 }

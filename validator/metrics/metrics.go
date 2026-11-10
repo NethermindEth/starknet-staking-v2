@@ -15,7 +15,10 @@ import (
 var _ Tracer = (*Metrics)(nil)
 
 // Metrics represents the metrics server for the validator
-const networkLabel = "network"
+const (
+	networkLabel = "network"
+	accountLabel = "account"
+)
 
 type Metrics struct {
 	server                          *http.Server
@@ -33,10 +36,12 @@ type Metrics struct {
 	attestationConfirmedCount       *prometheus.CounterVec
 	signerBalance                   *prometheus.GaugeVec
 	signerBalanceBelowThreshold     *prometheus.GaugeVec
+	balanceCheckFailureCount        *prometheus.CounterVec
 	rewardBalance                   *prometheus.GaugeVec
 	rewardBalanceBelowThreshold     *prometheus.GaugeVec
 	rewardUnclaimed                 *prometheus.GaugeVec
 	rewardClaimSubmittedCount       *prometheus.CounterVec
+	rewardClaimConfirmedCount       *prometheus.CounterVec
 	rewardClaimFailureCount         *prometheus.CounterVec
 	rewardClaimMaxFeeExceededCount  *prometheus.CounterVec
 	lastRewardClaimTimestamp        *prometheus.GaugeVec
@@ -130,6 +135,13 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			},
 			[]string{networkLabel},
 		),
+		balanceCheckFailureCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_balance_check_failure_count",
+				Help: "The total number of balance checks that could not read the account balance since startup, by account (signer or reward)",
+			},
+			[]string{networkLabel, accountLabel},
+		),
 		rewardBalance: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_reward_balance",
@@ -155,6 +167,13 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			prometheus.CounterOpts{
 				Name: "validator_attestation_reward_claim_submitted_count",
 				Help: "The total number of reward claim transactions submitted by the validator since startup",
+			},
+			[]string{networkLabel},
+		),
+		rewardClaimConfirmedCount: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "validator_attestation_reward_claim_confirmed_count",
+				Help: "The total number of reward claim transactions accepted on L2 with a successful execution since startup",
 			},
 			[]string{networkLabel},
 		),
@@ -194,10 +213,12 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		m.attestationConfirmedCount,
 		m.signerBalance,
 		m.signerBalanceBelowThreshold,
+		m.balanceCheckFailureCount,
 		m.rewardBalance,
 		m.rewardBalanceBelowThreshold,
 		m.rewardUnclaimed,
 		m.rewardClaimSubmittedCount,
+		m.rewardClaimConfirmedCount,
 		m.rewardClaimFailureCount,
 		m.rewardClaimMaxFeeExceededCount,
 		m.lastRewardClaimTimestamp,
@@ -209,7 +230,7 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
-			m.logger.Errorf("Failed to write health check response: %v", err)
+			m.logger.Error("failed to write health check response", zap.Error(err))
 		}
 	})
 	//nolint:exhaustruct_v5 // Using default values
@@ -251,7 +272,9 @@ func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
 func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {
 	m.logger.Debug(
 		"UpdateEpochInfo",
-		zap.Any("epochInfo", epochInfo),
+		zap.Uint64("epochID", epochInfo.EpochID),
+		zap.Uint64("epochLength", epochInfo.EpochLen),
+		zap.Uint64("epochStartingBlock", epochInfo.StartingBlock.Uint64()),
 		zap.Uint64("targetBlock", targetBlock),
 	)
 	m.currentEpochID.WithLabelValues(m.network).Set(float64(epochInfo.EpochID))
@@ -262,10 +285,9 @@ func (m *Metrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64
 	m.currentEpochAssignedBlockNumber.WithLabelValues(m.network).Set(float64(targetBlock))
 }
 
-// UpdateSignerBalance set's the signer account balance. If it is too big a default max value is set
-// instead
+// UpdateSignerBalance sets the signer account balance
 func (m *Metrics) UpdateSignerBalance(balance float64) {
-	m.logger.Debug("UpdateSignerBalancer", zap.Float64("balance", balance))
+	m.logger.Debug("UpdateSignerBalance", zap.Float64("balance", balance))
 	m.signerBalance.WithLabelValues(m.network).Set(balance)
 }
 
@@ -300,8 +322,12 @@ func (m *Metrics) RecordSignerBalanceBelowThreshold() {
 	m.signerBalanceBelowThreshold.WithLabelValues(m.network).Set(1)
 }
 
-// UpdateRewardBalance set's the reward account balance. If it is too big a default max value is set
-// instead
+func (m *Metrics) RecordBalanceCheckFailure(account string) {
+	m.logger.Debug("RecordBalanceCheckFailure", zap.String("account", account))
+	m.balanceCheckFailureCount.WithLabelValues(m.network, account).Inc()
+}
+
+// UpdateRewardBalance sets the reward account balance
 func (m *Metrics) UpdateRewardBalance(balance float64) {
 	m.logger.Debug("UpdateRewardBalance", zap.Float64("balance", balance))
 	m.rewardBalance.WithLabelValues(m.network).Set(balance)
@@ -330,6 +356,11 @@ func (m *Metrics) RecordRewardClaimSubmitted() {
 	m.logger.Debug("RecordRewardClaimSubmitted")
 	m.rewardClaimSubmittedCount.WithLabelValues(m.network).Inc()
 	m.lastRewardClaimTimestamp.WithLabelValues(m.network).Set(float64(time.Now().Unix()))
+}
+
+func (m *Metrics) RecordRewardClaimConfirmed() {
+	m.logger.Debug("RecordRewardClaimConfirmed")
+	m.rewardClaimConfirmedCount.WithLabelValues(m.network).Inc()
 }
 
 // RecordRewardClaimFailure increments the reward claim failure counter

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
+	"sync/atomic"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -32,6 +35,16 @@ const (
 	strkDecimals = 18
 	// Decimals used when logging STRK amounts
 	strkLoggedDecimals = 2
+)
+
+const (
+	claimLogPrefix = "Auto-Claiming Rewards: "
+	rewardAccount  = "reward"
+	claimTimeout   = 30 * time.Second
+	claimMaxBlocks = constants.MinAttestationWindow - 3
+
+	claimTrackingTimeout = 2 * time.Minute
+	claimStatusInterval  = 2 * time.Second
 )
 
 var (
@@ -62,6 +75,11 @@ type rewardSigner struct {
 	claimMaxFee felt.Felt
 	// Amount of unclaimed rewards, in STRK, that triggers a claim
 	claimThreshold uint64
+	claimTimeout   time.Duration
+	claiming       atomic.Bool
+
+	claimTrackingTimeout time.Duration
+	claimStatusInterval  time.Duration
 }
 
 var _ RewardSigner = (*rewardSigner)(nil)
@@ -86,12 +104,13 @@ func NewRewardSigner(
 	isExternal bool,
 ) (RewardSigner, error) {
 	signerConf := makeSignerConfFromRewardConf(rewardConfig)
+	signerLogger := withAccountField(logger, rewardAccount)
 
 	var signer Signer
 
 	if isExternal {
 		externalSigner, err := NewExternalSigner(
-			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+			ctx, provider, signerLogger, &signerConf, contractAddresses, braavos,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create external signer: %w", err)
@@ -99,7 +118,7 @@ func NewRewardSigner(
 		signer = &externalSigner
 	} else {
 		internalSigner, err := NewInternalSigner(
-			ctx, provider, logger, &signerConf, contractAddresses, braavos,
+			ctx, provider, signerLogger, &signerConf, contractAddresses, braavos,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create internal signer: %w", err)
@@ -114,6 +133,11 @@ func NewRewardSigner(
 		stakerAddress:  stakerAddress,
 		claimMaxFee:    felt.FromUint64[felt.Felt](rewardConfig.ClaimMaxFee),
 		claimThreshold: rewardConfig.ClaimThreshold,
+		claimTimeout:   claimTimeout,
+		claiming:       atomic.Bool{},
+
+		claimTrackingTimeout: claimTrackingTimeout,
+		claimStatusInterval:  claimStatusInterval,
 	}
 
 	if err := rs.checkRewardAddress(ctx); err != nil {
@@ -127,6 +151,14 @@ func NewRewardSigner(
 	}
 
 	return rs, nil
+}
+
+func withAccountField(logger log.Logger, accountName string) log.Logger {
+	if zapLogger, ok := logger.(*log.ZapLogger); ok {
+		return zapLogger.WithOptions(zap.Fields(zap.String("account", accountName)))
+	}
+
+	return logger
 }
 
 func makeSignerConfFromRewardConf(rewardConfig *config.Reward) config.Signer {
@@ -151,13 +183,11 @@ func (rs *rewardSigner) checkRewardAddress(ctx context.Context) error {
 	address := rs.Address().Felt()
 	if !address.Equal(rs.stakerAddress.Felt()) && !address.Equal(&info.rewardAddress) {
 		return fmt.Errorf(
-			"the configured reward account is not the real reward address nor the staker address:\n"+
-				"configured reward account: %s\n"+
-				"real reward address: %s\n"+
-				"staker address: %s",
+			"the configured reward account %s is neither the staker address %s "+
+				"nor its reward address %s",
 			address.String(),
-			&info.rewardAddress,
 			rs.stakerAddress,
+			&info.rewardAddress,
 		)
 	}
 
@@ -176,7 +206,31 @@ func (rs *rewardSigner) checkExternalSigner(ctx context.Context) error {
 // All errors and state changes are logged and recorded in the tracer, the feature does not
 // stop the flow.
 func (rs *rewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer) {
-	pref := "Auto-Claiming Rewards: "
+	if !rs.claiming.CompareAndSwap(false, true) {
+		rs.logger.Warn(claimLogPrefix + "the previous claim is still running; skipping claim...")
+
+		return
+	}
+	defer rs.claiming.Store(false)
+	defer func() {
+		if r := recover(); r != nil {
+			rs.logger.Error(
+				claimLogPrefix+"claim aborted by an unexpected error", zap.Any("error", r),
+			)
+			tracer.RecordRewardClaimFailure()
+		}
+	}()
+
+	claimCtx, cancel := context.WithTimeout(ctx, rs.claimTimeout)
+	defer cancel()
+
+	if hash := rs.claimRewards(claimCtx, tracer); hash != nil {
+		rs.trackClaim(ctx, hash, tracer)
+	}
+}
+
+func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer) *felt.Felt {
+	pref := claimLogPrefix
 	rs.logger.Debug(pref + "starting claim rewards")
 
 	info, err := rs.fetchStakerInfo(ctx)
@@ -184,33 +238,49 @@ func (rs *rewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer)
 		rs.logger.Error(pref+"failed to get unclaimed rewards amount", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
-	tracer.UpdateRewardUnclaimed(utils.FRIToSTRK(&info.unclaimedRewards))
+	tracer.UpdateRewardUnclaimed(friToStrkFloor(&info.unclaimedRewards))
 
 	// The contract returns the unclaimed rewards in FRI
 	unclaimedRewardsStrk := friToStrkString(&info.unclaimedRewards)
 	if utils.STRKToFRI(float64(rs.claimThreshold)).Cmp(&info.unclaimedRewards) > 0 {
-		rs.logger.Debug(
+		rs.logger.Info(
 			pref+"unclaimed rewards amount is below claim threshold; skipping claim...",
-			zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
-			zap.Uint64("claim threshold (STRK)", rs.claimThreshold),
+			zap.String("unclaimedRewardsSTRK", unclaimedRewardsStrk),
+			zap.String("unclaimedRewardsFRI", info.unclaimedRewards.Text(decimalBase)),
+			zap.Uint64("claimThresholdSTRK", rs.claimThreshold),
 		)
 
-		return
+		return nil
 	}
 
 	rs.logger.Info(
 		pref+"rewards amount reached claim threshold; claiming rewards...",
-		zap.String("unclaimed rewards (STRK)", unclaimedRewardsStrk),
+		zap.String("unclaimedRewardsSTRK", unclaimedRewardsStrk),
+		zap.String("unclaimedRewardsFRI", info.unclaimedRewards.Text(decimalBase)),
 	)
+
+	return rs.sendClaim(ctx, tracer)
+}
+
+func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *felt.Felt {
+	pref := claimLogPrefix
+
+	startBlock, err := rs.provider.BlockNumber(ctx)
+	if err != nil {
+		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
+
+		return nil
+	}
 
 	txn, err := rs.buildClaimRewardTransaction(ctx)
 	if err != nil {
 		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 
 	overallFee, err := rs.populateFees(ctx, &txn)
@@ -218,17 +288,37 @@ func (rs *rewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer)
 		if errors.Is(err, errFeeExceedsClaimMaxFee) {
 			rs.logger.Warn(
 				pref+"estimated fee exceeds claim max fee; skipping claim...",
-				zap.String("overall fee (FRI)", overallFee.Text(decimalBase)),
-				zap.String("claim max fee (FRI)", rs.claimMaxFee.Text(decimalBase)),
+				zap.String("overallFeeFRI", overallFee.Text(decimalBase)),
+				zap.String("claimMaxFeeFRI", rs.claimMaxFee.Text(decimalBase)),
 			)
 			tracer.RecordRewardClaimMaxFeeExceeded()
 
-			return
+			return nil
 		}
 		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
+	}
+
+	latestBlock, err := rs.provider.BlockNumber(ctx)
+	if err != nil {
+		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
+		tracer.RecordRewardClaimFailure()
+
+		return nil
+	}
+	if latestBlock > startBlock+claimMaxBlocks {
+		rs.logger.Warn(
+			pref+"claim not ready within the block limit; skipping claim so it can't take "+
+				"the nonce of the next attestation...",
+			zap.Uint64("startBlockNumber", startBlock),
+			zap.Uint64("latestBlockNumber", latestBlock),
+			zap.Uint64("blockLimit", claimMaxBlocks),
+		)
+		tracer.RecordRewardClaimFailure()
+
+		return nil
 	}
 
 	resp, err := rs.provider.AddInvokeTransaction(ctx, &txn)
@@ -236,14 +326,90 @@ func (rs *rewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer)
 		rs.logger.Error(pref+"failed to send reward claim transaction", zap.Error(err))
 		tracer.RecordRewardClaimFailure()
 
-		return
+		return nil
 	}
 	tracer.RecordRewardClaimSubmitted()
 
 	rs.logger.Info(
 		pref+"reward claim transaction sent successfully",
-		zap.String("transaction hash", resp.Hash.String()),
+		zap.String("transactionHash", resp.Hash.String()),
 	)
+
+	return resp.Hash
+}
+
+func (rs *rewardSigner) trackClaim(ctx context.Context, hash *felt.Felt, tracer metrics.Tracer) {
+	trackCtx, cancel := context.WithTimeout(ctx, rs.claimTrackingTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(rs.claimStatusInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-trackCtx.Done():
+			if ctx.Err() == nil {
+				rs.logger.Warn(
+					claimLogPrefix+"reward claim transaction not accepted on L2 in time; "+
+						"check its status manually",
+					zap.String("transactionHash", hash.String()),
+					zap.Duration("waited", rs.claimTrackingTimeout),
+				)
+			}
+
+			return
+		case <-ticker.C:
+		}
+
+		status, err := rs.provider.TransactionStatus(trackCtx, hash)
+		if err != nil {
+			rs.logger.Debug(
+				claimLogPrefix+"reward claim transaction status not available yet",
+				zap.String("transactionHash", hash.String()),
+				zap.Error(err),
+			)
+
+			continue
+		}
+
+		if status.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
+			rs.logger.Error(
+				claimLogPrefix+"reward claim transaction REVERTED",
+				zap.String("transactionHash", hash.String()),
+				zap.String("failureReason", status.FailureReason),
+			)
+			tracer.RecordRewardClaimFailure()
+
+			return
+		}
+
+		accepted := status.FinalityStatus == rpc.TxnStatusAcceptedOnL2 ||
+			status.FinalityStatus == rpc.TxnStatusAcceptedOnL1
+		if accepted {
+			rs.logger.Info(
+				claimLogPrefix+"reward claim transaction accepted",
+				zap.String("transactionHash", hash.String()),
+				zap.String("finalityStatus", string(status.FinalityStatus)),
+			)
+			tracer.RecordRewardClaimConfirmed()
+			rs.refreshUnclaimed(trackCtx, tracer)
+
+			return
+		}
+	}
+}
+
+func (rs *rewardSigner) refreshUnclaimed(ctx context.Context, tracer metrics.Tracer) {
+	info, err := rs.fetchStakerInfo(ctx)
+	if err != nil {
+		rs.logger.Warn(
+			claimLogPrefix+"failed to refresh the unclaimed rewards amount after the claim",
+			zap.Error(err),
+		)
+
+		return
+	}
+	tracer.UpdateRewardUnclaimed(friToStrkFloor(&info.unclaimedRewards))
 }
 
 func (rs *rewardSigner) fetchStakerInfo(ctx context.Context) (stakerInfo, error) {
@@ -324,6 +490,19 @@ func friToStrkString(fri *felt.Felt) string {
 	strk := new(big.Rat).SetFrac(truncated, pow10(strkLoggedDecimals))
 
 	return strk.FloatString(strkLoggedDecimals)
+}
+
+func friToStrkFloor(fri *felt.Felt) float64 {
+	strk := new(big.Rat).SetFrac(
+		fri.BigInt(new(big.Int)),
+		new(big.Int).Exp(big.NewInt(decimalBase), big.NewInt(strkDecimals), nil),
+	)
+	value, _ := strk.Float64()
+	if new(big.Rat).SetFloat64(value).Cmp(strk) > 0 {
+		value = math.Nextafter(value, 0)
+	}
+
+	return value
 }
 
 // Returns whether a serialised Cairo `Option` variant is `Some` (0) or `None` (1)

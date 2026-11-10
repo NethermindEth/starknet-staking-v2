@@ -60,7 +60,7 @@ The validator will make `POST` request with all the transaction data to sign:
 
 ### Response Format
 
-It will wait for ECDSA signature values `r` and `s` in an array:
+It will wait for ECDSA signature values `r` and `s` in an array, which must hold exactly these two values. The validator waits up to 15 seconds for the answer, and treats any other answer as an error:
 
 ```json
 {
