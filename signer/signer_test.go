@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"testing"
@@ -50,6 +51,41 @@ func listenAddress(t *testing.T, logs *observer.ObservedLogs) string {
 	return address
 }
 
+func newTestSigner(t *testing.T) (logs *observer.ObservedLogs, serverURL string) {
+	t.Helper()
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	testSigner, err := signer.New("0x123", log.NewZapLoggerWithCore(core))
+	require.NoError(t, err)
+
+	listenErr := make(chan error, 1)
+	go func() {
+		listenErr <- testSigner.Listen(t.Context(), "127.0.0.1:0")
+	}()
+	t.Cleanup(func() { require.NoError(t, <-listenErr) })
+
+	return logs, "http://" + listenAddress(t, logs)
+}
+
+func sendSignRequest(
+	t *testing.T, serverURL, method, body string,
+) (statusCode int, respBody string) {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), method, serverURL+signer.SignEndpoint, bytes.NewBufferString(body),
+	)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, resp.Body.Close()) }()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return resp.StatusCode, string(respBytes)
+}
+
 func validSignRequest(t *testing.T) string {
 	t.Helper()
 
@@ -79,6 +115,68 @@ func validSignRequest(t *testing.T) string {
 	require.NoError(t, err)
 
 	return string(body)
+}
+
+func TestSignHandler(t *testing.T) {
+	t.Run("Valid request is signed", func(t *testing.T) {
+		_, serverURL := newTestSigner(t)
+
+		statusCode, body := sendSignRequest(t, serverURL, http.MethodPost, validSignRequest(t))
+		require.Equal(t, http.StatusOK, statusCode, body)
+
+		var resp signer.Response
+		require.NoError(t, json.Unmarshal([]byte(body), &resp))
+		require.NotNil(t, resp.Signature[0])
+		require.NotNil(t, resp.Signature[1])
+	})
+
+	t.Run("Request without transaction or chain id gets a 400 response", func(t *testing.T) {
+		_, serverURL := newTestSigner(t)
+
+		for _, body := range []string{
+			`{}`,
+			`{"chain_id": "0x534e5f5345504f4c4941"}`,
+			`{"transaction": {"type": "INVOKE"}}`,
+		} {
+			statusCode, respBody := sendSignRequest(t, serverURL, http.MethodPost, body)
+			require.Equal(t, http.StatusBadRequest, statusCode, body)
+			require.Contains(t, respBody, "both `transaction` and `chain_id` are required")
+		}
+	})
+
+	t.Run("Malformed JSON gets a 400 response", func(t *testing.T) {
+		_, serverURL := newTestSigner(t)
+
+		statusCode, respBody := sendSignRequest(t, serverURL, http.MethodPost, "not json")
+		require.Equal(t, http.StatusBadRequest, statusCode)
+		require.Contains(t, respBody, "failed to decode request body")
+	})
+
+	t.Run("Methods other than POST get a 405 response", func(t *testing.T) {
+		_, serverURL := newTestSigner(t)
+
+		for _, method := range []string{http.MethodGet, http.MethodPut} {
+			statusCode, _ := sendSignRequest(t, serverURL, method, validSignRequest(t))
+			require.Equal(t, http.StatusMethodNotAllowed, statusCode, method)
+		}
+	})
+
+	t.Run("Request is logged at debug level", func(t *testing.T) {
+		logs, serverURL := newTestSigner(t)
+		body := validSignRequest(t)
+
+		statusCode, _ := sendSignRequest(t, serverURL, http.MethodPost, body)
+		require.Equal(t, http.StatusOK, statusCode)
+
+		entries := logs.FilterMessage("receiving http request").AllUntimed()
+		require.Len(t, entries, 1)
+		fields := entries[0].ContextMap()
+		require.Equal(t, http.MethodPost, fields["method"])
+		require.Equal(t, signer.SignEndpoint, fields["path"])
+		require.NotEmpty(t, fields["remoteAddress"])
+		require.Equal(t, int64(len(body)), fields["contentLength"])
+		require.NotContains(t, fields, "requestError")
+	})
 }
 
 func TestListen(t *testing.T) {
