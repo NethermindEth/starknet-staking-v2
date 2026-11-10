@@ -1,0 +1,12 @@
+name: Set up Go
+description: Installs the newest patch release of the Go minor version declared in go.mod
+runs:
+  using: composite
+  steps:
+    - id: go
+      shell: bash
+      run: echo "minor=$(sed -nE 's/^go ([0-9]+\.[0-9]+).*/\1/p' go.mod)" >> "$GITHUB_OUTPUT"
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ steps.go.outputs.minor }}
+        check-latest: true

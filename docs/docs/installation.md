@@ -28,7 +28,7 @@ The easiest way to get started is by downloading pre-compiled binaries from our 
 
 ### Prerequisites
 
-- [Go compiler](https://go.dev/doc/install) version `1.25` or above
+- [Go compiler](https://go.dev/doc/install) version `1.27.3` or above
 
 ### Build Steps
 

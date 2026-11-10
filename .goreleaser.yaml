@@ -48,6 +48,7 @@ changelog:
 kos:
   - id: validator-image
     build: validator
+    base_image: cgr.dev/chainguard/static:latest
     bare: true
     platforms:
       - linux/amd64

@@ -29,6 +29,7 @@ go.work.sum
 
 # binary location
 build
+dist/
 # config file
 config.json
 config-mainnet.json
