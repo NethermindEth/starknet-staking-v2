@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	main "github.com/NethermindEth/starknet-staking-v2/cmd/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
@@ -387,4 +390,48 @@ func newTestNode(t *testing.T) (ctx context.Context, httpURL, wsURL string) {
 	})
 
 	return ctx, server.URL, "ws" + strings.TrimPrefix(server.URL, "http")
+}
+
+const (
+	runMainEnvVar  = "VALIDATOR_TEST_RUN_MAIN"
+	processTimeout = 30 * time.Second
+)
+
+func newMainProcess(t *testing.T, args ...string) (cmd *exec.Cmd, output *bytes.Buffer) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(t.Context(), processTimeout)
+	t.Cleanup(cancel)
+	cmd = exec.CommandContext(ctx, os.Args[0], args...)
+	cmd.Env = []string{runMainEnvVar + "=1"}
+	output = new(bytes.Buffer)
+	cmd.Stdout = output
+	cmd.Stderr = output
+
+	return cmd, output
+}
+
+func exitCode(t *testing.T, err error) int {
+	t.Helper()
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	require.NoError(t, err)
+
+	return 0
+}
+
+func TestFatalErrorIsLoggedWithoutStackTrace(t *testing.T) {
+	server := validator.MockRPCServer(t, validator.MockRPC{})
+
+	cmd, output := newMainProcess(t, validFlags(
+		server.URL, "ws"+strings.TrimPrefix(server.URL, "http"), "--max-retries", "1",
+	)...)
+
+	require.Equal(t, 1, exitCode(t, cmd.Run()), output.String())
+	require.Contains(t, output.String(), "validator stopped with error")
+	require.NotContains(t, output.String(), "errorVerbose")
+	require.NotContains(t, output.String(), "\n\t")
 }

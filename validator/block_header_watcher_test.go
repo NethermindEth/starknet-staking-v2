@@ -109,7 +109,7 @@ func recordSleeps(t *testing.T) func() []time.Duration {
 }
 
 func runWatcher(
-	t *testing.T, wsURL string, logger log.Logger, retries string,
+	t *testing.T, wsURL string, signer *mocks.MockSigner, logger log.Logger, retries string,
 ) error {
 	t.Helper()
 
@@ -122,7 +122,7 @@ func runWatcher(
 	done := make(chan error, 1)
 	go func() {
 		done <- validator.RunBlockHeaderWatcher(
-			t.Context(), wsURL, logger, newEpochSigner(t), &dispatcher, maxRetries, wg,
+			t.Context(), wsURL, logger, signer, &dispatcher, maxRetries, wg,
 			metrics.NewNoOpMetrics(),
 		)
 	}()
@@ -147,7 +147,7 @@ func TestRunBlockHeaderWatcherResubscriptions(t *testing.T) {
 		sleeps := recordSleeps(t)
 		wsURL, subscriptions := newWSNode(t, 100, func(int32, *websocket.Conn) {})
 
-		err := runWatcher(t, wsURL, log.NewNopZapLogger(), "3")
+		err := runWatcher(t, wsURL, newEpochSigner(t), log.NewNopZapLogger(), "3")
 
 		require.ErrorContains(t, err, "ended 4 times in a row without a new block header")
 		require.Equal(t, int32(4), subscriptions.Load())
@@ -166,7 +166,7 @@ func TestRunBlockHeaderWatcherResubscriptions(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = runWatcher(t, wsURL, logger, "1")
+		err = runWatcher(t, wsURL, newEpochSigner(t), logger, "1")
 
 		require.ErrorContains(t, err, "bad handshake")
 		require.Equal(t, int32(3), subscriptions.Load())
@@ -176,4 +176,28 @@ func TestRunBlockHeaderWatcherResubscriptions(t *testing.T) {
 		require.Contains(t, out, `cannot connect to ws provider	{"wsProviderURL": "`+wsURL+`"`)
 		require.Contains(t, out, "websocket: bad handshake")
 	})
+}
+
+func TestRunBlockHeaderWatcherProcessingError(t *testing.T) {
+	recordSleeps(t)
+	wsURL, _ := newWSNode(t, 1, func(_ int32, conn *websocket.Conn) {
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	})
+	buf := new(syncBuffer)
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+
+	err = runWatcher(t, wsURL, newFailingEpochSigner(t, 2), logger, "1")
+
+	require.ErrorContains(
+		t, err, "processing block headers: failed to fetch epoch info after 1 retries",
+	)
+	require.ErrorContains(t, err, "injected outage")
+	require.NotContains(t, buf.String(), "processing block headers", buf.String())
 }

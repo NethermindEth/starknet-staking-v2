@@ -90,7 +90,7 @@ func NewCommand() cobra.Command {
 			return err
 		}
 
-		logger = loadedLogger
+		logger = loadedLogger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 		return nil
 	}
@@ -110,7 +110,7 @@ func NewCommand() cobra.Command {
 			braavosAccount,
 		)
 		if err != nil {
-			logger.Error("couldn't start validator", zap.Error(err))
+			logger.Error("couldn't start validator", errorField(err))
 
 			return err
 		}
@@ -166,7 +166,7 @@ func NewCommand() cobra.Command {
 
 			return nil
 		case err := <-errCh:
-			logger.Error("validator stopped with error", zap.Error(err))
+			logger.Error("validator stopped with error", errorField(err))
 
 			return err
 		}
@@ -306,6 +306,10 @@ func NewCommand() cobra.Command {
 	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels+".")
 
 	return cmd
+}
+
+func errorField(err error) zap.Field {
+	return zap.String("error", err.Error())
 }
 
 // Completes the config, which already holds the values from flags, with the
