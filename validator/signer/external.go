@@ -24,7 +24,6 @@ var _ Signer = (*ExternalSigner)(nil)
 
 // Used as a wrapper around an exgernal signer implementation
 type ExternalSigner struct {
-	ctx                 context.Context
 	Provider            rpc.RPCProvider
 	operationalAddress  types.Address
 	chainID             felt.Felt
@@ -61,7 +60,6 @@ func NewExternalSigner(
 	}
 
 	return ExternalSigner{
-		ctx:                 ctx,
 		Provider:            provider,
 		operationalAddress:  operationalAddress,
 		url:                 sig.ExternalURL,
@@ -72,6 +70,7 @@ func NewExternalSigner(
 }
 
 func (s *ExternalSigner) BuildAttestTransaction(
+	ctx context.Context,
 	blockhash *types.BlockHash,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	invokeCall := []rpc.InvokeFunctionCall{{
@@ -84,7 +83,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 	defaultResources := makeDefaultResources()
 
 	nonce, err := s.Provider.Nonce(
-		s.ctx,
+		ctx,
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
 		s.Address().Felt(),
 	)
@@ -92,7 +91,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := rpc.EstimateTip(s.ctx, s.Provider, constants.TipMultiplier)
+	tip, err := rpc.EstimateTip(ctx, s.Provider, constants.TipMultiplier)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
@@ -119,6 +118,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 }
 
 func (s *ExternalSigner) EstimateFee(
+	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (rpc.FeeEstimation, error) {
 	if s.braavos {
@@ -126,14 +126,14 @@ func (s *ExternalSigner) EstimateFee(
 		// The query bit txn version is used for custom validation logic from wallets/accounts
 		// when estimating fee/simulating txns
 		txn.Version = rpc.TransactionV3WithQueryBit
-		_, err := s.SignTransaction(txn)
+		_, err := s.SignTransaction(ctx, txn)
 		if err != nil {
 			return rpc.FeeEstimation{}, err
 		}
 	}
 
 	estimateFee, err := s.Provider.EstimateFee(
-		s.ctx,
+		ctx,
 		[]rpc.BroadcastTxn{txn},
 		[]rpc.EstimateFeeFlag{},
 		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
@@ -151,31 +151,37 @@ func (s *ExternalSigner) EstimateFee(
 }
 
 func (s *ExternalSigner) SignTransaction(
+	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (*rpc.BroadcastInvokeTxnV3, error) {
-	return txn, SignInvokeTx(txn, &s.chainID, s.url)
+	return txn, SignInvokeTx(ctx, txn, &s.chainID, s.url)
 }
 
 func (s *ExternalSigner) InvokeTransaction(
+	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (rpc.AddInvokeTransactionResponse, error) {
-	return s.Provider.AddInvokeTransaction(s.ctx, txn)
+	return s.Provider.AddInvokeTransaction(ctx, txn)
 }
 
-func (s *ExternalSigner) TransactionStatus(transactionHash *felt.Felt) (
+func (s *ExternalSigner) TransactionStatus(
+	ctx context.Context, transactionHash *felt.Felt,
+) (
 	*rpc.TxnStatusResult, error,
 ) {
-	return s.Provider.TransactionStatus(s.ctx, transactionHash)
+	return s.Provider.TransactionStatus(ctx, transactionHash)
 }
 
-func (s *ExternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
-	return s.Provider.BlockWithTxHashes(s.ctx, blockID)
+func (s *ExternalSigner) BlockWithTxHashes(
+	ctx context.Context, blockID rpc.BlockID,
+) (any, error) {
+	return s.Provider.BlockWithTxHashes(ctx, blockID)
 }
 
 func (s *ExternalSigner) Call(
-	call rpc.FunctionCall, blockID rpc.BlockID,
+	ctx context.Context, call rpc.FunctionCall, blockID rpc.BlockID,
 ) ([]*felt.Felt, error) {
-	return s.Provider.Call(s.ctx, call, blockID)
+	return s.Provider.Call(ctx, call, blockID)
 }
 
 func (s *ExternalSigner) Address() *types.Address {
@@ -186,16 +192,17 @@ func (s *ExternalSigner) ValidationContracts() *types.ValidationContracts {
 	return &s.validationContracts
 }
 
-func (s *ExternalSigner) Nonce() (*felt.Felt, error) {
-	return s.Provider.Nonce(s.ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
+func (s *ExternalSigner) Nonce(ctx context.Context) (*felt.Felt, error) {
+	return s.Provider.Nonce(ctx, rpc.WithBlockTag(rpc.BlockTagPreConfirmed), s.Address().Felt())
 }
 
 func SignInvokeTx(
+	ctx context.Context,
 	invokeTxnV3 *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 	externalSignerURL string,
 ) error {
-	signResp, err := HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
+	signResp, err := HashAndSignTx(ctx, invokeTxnV3, chainID, externalSignerURL)
 	if err != nil {
 		return err
 	}
@@ -209,6 +216,7 @@ func SignInvokeTx(
 }
 
 func HashAndSignTx(
+	ctx context.Context,
 	bTx *rpc.BroadcastInvokeTxnV3,
 	chainID *felt.Felt,
 	externalSignerURL string,
@@ -221,8 +229,15 @@ func HashAndSignTx(
 	}
 
 	signEndpoint := externalSignerURL + signer.SignEndpoint
-	//nolint:gosec,noctx // Trusting the configured external signer URL // TODO: Context not configured
-	resp, err := http.Post(signEndpoint, "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodPost, signEndpoint, bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return signer.Response{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return signer.Response{}, err
 	}

@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	metrics "github.com/NethermindEth/starknet-staking-v2/validator/metrics"
@@ -56,13 +57,13 @@ func (mr *MockRewardSignerMockRecorder) Address() *gomock.Call {
 }
 
 // ClaimRewards mocks base method.
-func (m *MockRewardSigner) ClaimRewards(tracer metrics.Tracer) {
+func (m *MockRewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ClaimRewards", tracer)
+	m.ctrl.Call(m, "ClaimRewards", ctx, tracer)
 }
 
 // ClaimRewards indicates an expected call of ClaimRewards.
-func (mr *MockRewardSignerMockRecorder) ClaimRewards(tracer any) *gomock.Call {
+func (mr *MockRewardSignerMockRecorder) ClaimRewards(ctx, tracer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimRewards", reflect.TypeOf((*MockRewardSigner)(nil).ClaimRewards), tracer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimRewards", reflect.TypeOf((*MockRewardSigner)(nil).ClaimRewards), ctx, tracer)
 }
