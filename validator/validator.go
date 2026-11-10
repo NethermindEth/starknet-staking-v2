@@ -11,6 +11,7 @@ import (
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
+	"github.com/NethermindEth/starknet.go/client"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
 	"github.com/sourcegraph/conc"
@@ -19,6 +20,17 @@ import (
 
 // The current version of the validator tool.  This is set at build time
 var Version string = "dev"
+
+const (
+	wsDialRetryDelay    = 5 * time.Second
+	resubscribeMinDelay = time.Second
+	resubscribeMaxDelay = 30 * time.Second
+)
+
+var (
+	errReorg             = errors.New("reorg notification")
+	errSubscriptionEnded = errors.New("WS subscription ended")
+)
 
 type Validator struct {
 	provider *rpc.Provider
@@ -195,7 +207,9 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		close(headersFeed)
 	}
 
+	shownWSURL := redactURL(wsProviderURL)
 	retries := maxRetries
+	failedSubscriptions := 0
 	for {
 		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(
 			ctx, wsProviderURL, logger,
@@ -206,16 +220,18 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			}
 			logger.Error(
 				"cannot connect to ws provider",
+				zap.String("wsProviderURL", shownWSURL),
+				zap.Error(redactErrorURLs(err)),
 				zap.String("retriesLeft", retries.String()),
 			)
-			logger.Debug(redactErrorURLs(err).Error())
 			retries.Sub()
-			Sleep(5 * time.Second) //nolint:mnd // Number of seconds to sleep
+			Sleep(wsDialRetryDelay)
 
 			continue
 		}
-		retries = maxRetries
 
+		highestBefore, processedBefore := dispatcher.progress.highestBlock()
+		var endErr error
 		stopProcessingHeaders := make(chan error)
 		wg.Go(func() {
 			err := ProcessBlockHeaders(
@@ -237,15 +253,21 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			wg.Wait()
 
 			return nil
-		case err := <-clientSubscription.Err():
-			logger.Error("client subscription error", zap.Error(redactErrorURLs(err)))
+		case endErr = <-clientSubscription.Err():
+			logSubscriptionError(logger, shownWSURL, endErr)
 			cleanUp(wsProvider, headersFeed)
-		case reorgEvent := <-clientSubscription.Reorg():
-			logger.Info(
-				"reorg detected. Restarting WS subscription...",
-				zap.Uint64("startBlock", reorgEvent.StartBlockNum),
-				zap.Uint64("endBlock", reorgEvent.EndBlockNum),
-			)
+		case reorgEvent, ok := <-clientSubscription.Reorg():
+			if ok {
+				logger.Info(
+					"reorg detected. Restarting WS subscription...",
+					zap.Uint64("startBlock", reorgEvent.StartBlockNum),
+					zap.Uint64("endBlock", reorgEvent.EndBlockNum),
+				)
+				endErr = errReorg
+			} else {
+				endErr = subscriptionEndError(clientSubscription)
+				logSubscriptionError(logger, shownWSURL, endErr)
+			}
 			cleanUp(wsProvider, headersFeed)
 		case err := <-stopProcessingHeaders:
 			logger.Error("processing block headers", zap.Error(redactErrorURLs(err)))
@@ -253,7 +275,63 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 
 			return err
 		}
+
+		highestAfter, processedAfter := dispatcher.progress.highestBlock()
+		if processedAfter && (!processedBefore || highestAfter > highestBefore) {
+			retries = maxRetries
+			failedSubscriptions = 0
+
+			continue
+		}
+		if retries.IsZero() {
+			return errors.Errorf(
+				"WS subscription to %s ended %d times in a row without a new block header: %w",
+				shownWSURL, failedSubscriptions+1, endErr,
+			)
+		}
+		failedSubscriptions++
+		delay := resubscribeDelay(failedSubscriptions)
+		logger.Warn(
+			"WS subscription ended without a new block header. Resubscribing in "+
+				delay.String(),
+			zap.String("wsProviderURL", shownWSURL),
+			zap.String("retriesLeft", retries.String()),
+		)
+		retries.Sub()
+		Sleep(delay)
 	}
+}
+
+func logSubscriptionError(logger log.Logger, wsProviderURL string, err error) {
+	logger.Error(
+		"client subscription error",
+		zap.String("wsProviderURL", wsProviderURL),
+		zap.Error(redactErrorURLs(err)),
+	)
+}
+
+func subscriptionEndError(clientSubscription *client.ClientSubscription) error {
+	select {
+	case err := <-clientSubscription.Err():
+		if err != nil {
+			return err
+		}
+	default:
+	}
+
+	return errSubscriptionEnded
+}
+
+func resubscribeDelay(failedSubscriptions int) time.Duration {
+	delay := resubscribeMinDelay
+	for range failedSubscriptions - 1 {
+		delay *= 2
+		if delay >= resubscribeMaxDelay {
+			return resubscribeMaxDelay
+		}
+	}
+
+	return delay
 }
 
 func ProcessBlockHeaders[Account signerP.Signer](
@@ -275,10 +353,19 @@ func ProcessBlockHeaders[Account signerP.Signer](
 
 	SetTargetBlockHashIfExists(ctx, account, logger, &attestInfo)
 
-	logNewEpoch(&epochInfo, &attestInfo, logger)
+	if dispatcher.progress.newEpoch(epochInfo.EpochID) {
+		logNewEpoch(&epochInfo, &attestInfo, logger)
+	}
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	for block := range headersFeed {
+		if !dispatcher.progress.addBlock(block.Number) {
+			logger.Debug("block header already processed, skipping it",
+				zap.Uint64("blockNumber", block.Number),
+			)
+
+			continue
+		}
 		tracer.UpdateLatestBlockNumber(block.Number)
 
 		// todo(rdr): look for some nice way of refactoring this if/else blocks
@@ -297,7 +384,9 @@ func ProcessBlockHeaders[Account signerP.Signer](
 			if err != nil {
 				return err
 			}
-			logNewEpoch(&epochInfo, &attestInfo, logger)
+			if dispatcher.progress.newEpoch(epochInfo.EpochID) {
+				logNewEpoch(&epochInfo, &attestInfo, logger)
+			}
 			// Update epoch info metrics
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 		}

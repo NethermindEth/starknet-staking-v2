@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -183,6 +184,8 @@ type EventDispatcher[S signerP.Signer] struct {
 	EndOfWindow   chan struct{}
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
+
+	progress *headerProgress
 }
 
 func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
@@ -191,7 +194,49 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 		DoAttest:      make(chan types.DoAttest),
 		PrepareAttest: make(chan types.PrepareAttest),
 		EndOfWindow:   make(chan struct{}),
+		progress:      new(headerProgress),
 	}
+}
+
+type headerProgress struct {
+	mu            sync.Mutex
+	processed     bool
+	highest       uint64
+	epochLogged   bool
+	loggedEpochID uint64
+}
+
+func (p *headerProgress) addBlock(blockNumber uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.processed && blockNumber <= p.highest {
+		return false
+	}
+	p.processed = true
+	p.highest = blockNumber
+
+	return true
+}
+
+func (p *headerProgress) highestBlock() (uint64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.highest, p.processed
+}
+
+func (p *headerProgress) newEpoch(epochID uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.epochLogged && p.loggedEpochID == epochID {
+		return false
+	}
+	p.epochLogged = true
+	p.loggedEpochID = epochID
+
+	return true
 }
 
 //nolint:gocyclo,funlen // Refactor in another time
