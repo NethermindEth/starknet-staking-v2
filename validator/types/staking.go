@@ -52,6 +52,9 @@ type ValidationContracts struct {
 func ValidationContractsFromAddresses(
 	ca *config.ContractAddresses,
 ) (ValidationContracts, error) {
+	if err := ca.Check(); err != nil {
+		return ValidationContracts{}, err
+	}
 	attest, err := AddressFromString(ca.Attest)
 	if err != nil {
 		return ValidationContracts{}, fmt.Errorf("invalid attest contract address: %w", err)

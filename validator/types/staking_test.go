@@ -38,4 +38,12 @@ func TestValidationContractsFromAddresses(t *testing.T) {
 		require.ErrorContains(t, err, "invalid staking contract address")
 		require.ErrorContains(t, err, malformedAddress)
 	})
+
+	t.Run("Unknown chain without addresses names the chain and the flags", func(t *testing.T) {
+		_, err := types.ValidationContractsFromAddresses(
+			new(config.ContractAddresses).SetDefaults("SN_GOERLI"),
+		)
+		require.ErrorContains(t, err, `chain id "SN_GOERLI"`)
+		require.ErrorContains(t, err, "--staking-contract-address and --attest-contract-address")
+	})
 }
