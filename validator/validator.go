@@ -50,6 +50,10 @@ func newValidator(
 	logger log.Logger,
 	braavos bool,
 ) (Validator, error) {
+	if err := checkWSProviderURL(conf.Provider.WS); err != nil {
+		return Validator{}, err
+	}
+
 	provider, err := NewProvider(ctx, conf.Provider.HTTP, logger)
 	if err != nil {
 		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
