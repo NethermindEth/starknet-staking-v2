@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -89,8 +88,8 @@ func NewRewardSigner(
 ) (RewardSigner, error) {
 	signerConf := makeSignerConfFromRewardConf(rewardConfig)
 	// The reward signer never builds attestation transactions, and the claim
-	// transaction has no tip, so the max tip isn't used
-	const maxTip = math.MaxUint64
+	// transaction has no tip
+	const maxTip = 0
 
 	var signer Signer
 
