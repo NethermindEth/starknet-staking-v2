@@ -98,7 +98,7 @@ jobs:
           scan-type: fs
           scan-ref: .
           scanners: vuln,secret
-          skip-dirs: docs
+          skip-files: docs/package-lock.json
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
