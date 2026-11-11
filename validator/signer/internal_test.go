@@ -528,9 +528,9 @@ func TestFetchAttestWindow(t *testing.T) {
 		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(0), window)
-		require.EqualError(
-			t, err, "Error when calling entrypoint `attestation_window`: some contract error",
-		)
+		require.EqualError(t, err, "calling attestation_window on the attestation contract "+
+			"0x3f32e152b9637c31bfcf73e434f78591067a01ba070505ff6ee195642c9acfb failed: "+
+			"some contract error")
 	})
 
 	t.Run("Return error: wrong contract response length", func(t *testing.T) {
@@ -758,9 +758,9 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
-		require.EqualError(
-			t, err, "Error when calling entrypoint `attestation_window`: some contract error",
-		)
+		require.EqualError(t, err, "calling attestation_window on the attestation contract "+
+			"0x3f32e152b9637c31bfcf73e434f78591067a01ba070505ff6ee195642c9acfb failed: "+
+			"some contract error")
 	})
 
 	t.Run("Successfully fetch & compute info", func(t *testing.T) {

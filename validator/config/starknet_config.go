@@ -71,6 +71,10 @@ func (ca *ContractAddresses) SetDefaults(chainIDStr string) *ContractAddresses {
 	return ca
 }
 
+func (ca *ContractAddresses) ChainID() string {
+	return ca.chainID
+}
+
 func (ca *ContractAddresses) Check() error {
 	var missingFlags []string
 	if isZero(ca.Staking) {

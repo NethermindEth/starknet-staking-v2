@@ -323,7 +323,10 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 
 	resp, err := rs.provider.AddInvokeTransaction(ctx, &txn)
 	if err != nil {
-		rs.logger.Error(pref+"failed to send reward claim transaction", zap.Error(err))
+		rs.logger.Error(
+			pref+"failed to send reward claim transaction",
+			zap.Error(ReadableContractError(err)),
+		)
 		tracer.RecordRewardClaimFailure()
 
 		return nil
@@ -414,16 +417,14 @@ func (rs *rewardSigner) refreshUnclaimed(ctx context.Context, tracer metrics.Tra
 
 func (rs *rewardSigner) fetchStakerInfo(ctx context.Context) (stakerInfo, error) {
 	functionCall := rpc.FunctionCall{
-		ContractAddress: rs.signer.ValidationContracts().Staking.Felt(),
-		EntryPointSelector: utils.GetSelectorFromNameFelt(
-			"get_staker_info_v1",
-		),
-		Calldata: []*felt.Felt{rs.stakerAddress.Felt()},
+		ContractAddress:    rs.signer.ValidationContracts().Staking.Felt(),
+		EntryPointSelector: utils.GetSelectorFromNameFelt(stakerInfoEntrypoint),
+		Calldata:           []*felt.Felt{rs.stakerAddress.Felt()},
 	}
 
 	resp, err := rs.signer.Call(ctx, functionCall, rpc.WithBlockTag(rpc.BlockTagLatest))
 	if err != nil {
-		return stakerInfo{}, fmt.Errorf("calling 'get_staker_info_v1': %w", err)
+		return stakerInfo{}, contractCallError(stakingContractName, &functionCall, err)
 	}
 
 	result, err := rs.decodeGetStakerInfoV1(resp)
@@ -578,7 +579,7 @@ func (rs *rewardSigner) populateFees(
 ) (felt.Felt, error) {
 	estimate, err := rs.signer.EstimateFee(ctx, txn)
 	if err != nil {
-		return felt.Felt{}, fmt.Errorf("failed to estimate fee: %w", err)
+		return felt.Felt{}, fmt.Errorf("failed to estimate fee: %w", ReadableContractError(err))
 	}
 	overallFee := *estimate.OverallFee
 

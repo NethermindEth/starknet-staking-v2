@@ -47,6 +47,7 @@ func (e *EpochInfo) String() string {
 type ValidationContracts struct {
 	Staking Address
 	Attest  Address
+	ChainID string
 }
 
 func ValidationContractsFromAddresses(
@@ -67,6 +68,7 @@ func ValidationContractsFromAddresses(
 	return ValidationContracts{
 		Attest:  attest,
 		Staking: staking,
+		ChainID: ca.ChainID(),
 	}, nil
 }
 
