@@ -61,12 +61,12 @@ With command line flags:
 <TabItem value="docker" label="Docker" default>
 
 ```bash
-docker run \
+docker run --network host \
   -v /path/to/config.json:/app/config/config.json \
   nethermind/starknet-staking-v2 \
   --config /app/config/config.json \
   --reward-address "0x789" \
-  --reward-signer-url "http://host.docker.internal:8081" \
+  --reward-signer-url "http://localhost:8081" \
   --reward-claim-threshold 100 \
   --reward-claim-max-fee 1000000000000000000
 ```
@@ -92,7 +92,7 @@ With environment variables:
 <TabItem value="docker" label="Docker" default>
 
 ```bash
-docker run \
+docker run --network host \
   -v /path/to/config.json:/app/config/config.json \
   -e REWARD_ADDRESS="0x789" \
   -e REWARD_PRIVATE_KEY="0xabc" \
