@@ -66,7 +66,7 @@ func newValidator(
 
 	provider, err := NewProvider(ctx, conf.Provider.HTTP, logger)
 	if err != nil {
-		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
+		return Validator{}, err
 	}
 
 	var signer signerP.Signer

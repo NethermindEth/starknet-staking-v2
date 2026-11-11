@@ -27,8 +27,10 @@ import (
 var supportedSpecVersions = []string{"0.10.2", "0.10.3", "0.10.4"}
 
 const (
-	specVersionTimeout  = 30 * time.Second
-	headersFeedCapacity = 16
+	specVersionTimeout     = 30 * time.Second
+	headersFeedCapacity    = 16
+	requiredRPCVersion     = "v0.10"
+	requiredRPCPathSegment = "v0_10"
 )
 
 var ErrTransient = errors.New("transient error")
@@ -269,17 +271,66 @@ func describeNetError(err error) string {
 func checkSpecVersion(rawProviderURL, nodeSpecVersion string) error {
 	providerURL := redactURL(rawProviderURL)
 	version, err := semver.StrictNewVersion(strings.TrimPrefix(nodeSpecVersion, "v"))
-	if err == nil {
-		release := fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch())
-		if slices.Contains(supportedSpecVersions, release) {
-			return nil
-		}
+	if err != nil {
+		return errors.Errorf(
+			"the node at %s reports an RPC version the validator cannot read (%q). "+
+				"The validator needs RPC %s",
+			providerURL, nodeSpecVersion, requiredRPCVersion,
+		)
+	}
+
+	release := fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch())
+	if slices.Contains(supportedSpecVersions, release) {
+		return nil
+	}
+
+	nodeRPCVersion := fmt.Sprintf("v%d.%d", version.Major(), version.Minor())
+	if nodeRPCVersion == requiredRPCVersion {
+		return errors.Errorf(
+			"the node at %s uses RPC v%s, which the validator does not support. "+
+				"To fix it, update the node and the validator to their latest releases",
+			providerURL, version,
+		)
 	}
 
 	return errors.Errorf(
-		"node at %s implements JSON-RPC specification %s, this tool requires %s",
-		providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
+		"the node at %s uses RPC %s, but the validator needs RPC %s. To fix it, %s",
+		providerURL, nodeRPCVersion, requiredRPCVersion, rpcURLFix(providerURL, version),
 	)
+}
+
+func rpcURLFix(providerURL string, nodeVersion *semver.Version) string {
+	genericFix := fmt.Sprintf(
+		"point both provider URLs (HTTP and WS) at the node's RPC %s endpoint", requiredRPCVersion,
+	)
+	parsedURL, err := url.Parse(providerURL)
+	if err != nil || parsedURL.Host == "" {
+		return genericFix
+	}
+	parsedURL.RawPath = ""
+
+	nodePathSegment := fmt.Sprintf("v%d_%d", nodeVersion.Major(), nodeVersion.Minor())
+	segments := strings.Split(parsedURL.Path, "/")
+	if i := slices.Index(segments, nodePathSegment); i >= 0 {
+		segments[i] = requiredRPCPathSegment
+		parsedURL.Path = strings.Join(segments, "/")
+
+		return fmt.Sprintf(
+			"change %s to %s in both provider URLs (HTTP and WS), for example %s",
+			nodePathSegment, requiredRPCPathSegment, parsedURL,
+		)
+	}
+
+	if strings.Trim(parsedURL.Path, "/") == "" {
+		parsedURL.Path = "/rpc/" + requiredRPCPathSegment
+
+		return fmt.Sprintf(
+			"add %s to the end of both provider URLs (HTTP and WS), for example %s",
+			parsedURL.Path, parsedURL,
+		)
+	}
+
+	return genericFix
 }
 
 func checkWSProviderURL(wsProviderURL string) error {

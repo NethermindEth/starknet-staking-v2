@@ -107,11 +107,127 @@ func TestNewProvider(t *testing.T) {
 		}
 	})
 
-	t.Run("Unsupported spec version", func(t *testing.T) {
+	t.Run("Node serving another RPC version", func(t *testing.T) {
+		const (
+			v09SpecVersion = "0.9.0"
+			needsV010      = " uses RPC v0.9, but the validator needs RPC v0.10. To fix it, "
+			addRPCPath     = "add /rpc/v0_10 to the end of both provider URLs (HTTP and WS), "
+			changeV09      = "change v0_9 to v0_10 in both provider URLs (HTTP and WS), "
+			genericFix     = "point both provider URLs (HTTP and WS) at the node's RPC v0.10 endpoint"
+		)
+		apiKey := strings.Repeat("a1", 16)
+		testCases := []struct {
+			name        string
+			specVersion string
+			path        string
+			expectedErr string
+		}{
+			{
+				name:        "v0.9 at the root path",
+				specVersion: v09SpecVersion,
+				expectedErr: "the node at %[1]s" + needsV010 + addRPCPath + "for example %[1]s/rpc/v0_10",
+			},
+			{
+				name:        "v0.9 at the root path with a trailing slash",
+				specVersion: v09SpecVersion,
+				path:        "/",
+				expectedErr: "the node at %[1]s/" + needsV010 + addRPCPath +
+					"for example %[1]s/rpc/v0_10",
+			},
+			{
+				name:        "v0.9 at the root path with an API key in the query",
+				specVersion: v09SpecVersion,
+				path:        "?apikey=" + apiKey,
+				expectedErr: "the node at %[1]s?apikey=REDACTED" + needsV010 + addRPCPath +
+					"for example %[1]s/rpc/v0_10?apikey=REDACTED",
+			},
+			{
+				name:        "v0.9 at the v0_9 path",
+				specVersion: v09SpecVersion,
+				path:        "/rpc/v0_9",
+				expectedErr: "the node at %[1]s/rpc/v0_9" + needsV010 + changeV09 +
+					"for example %[1]s/rpc/v0_10",
+			},
+			{
+				name:        "v0.9 at a path holding an API key",
+				specVersion: v09SpecVersion,
+				path:        "/v0_9/" + apiKey,
+				expectedErr: "the node at %[1]s/v0_9/REDACTED" + needsV010 + changeV09 +
+					"for example %[1]s/v0_10/REDACTED",
+			},
+			{
+				name:        "v0.9 at a path holding another RPC version first",
+				specVersion: v09SpecVersion,
+				path:        "/v0_8/rpc/v0_9",
+				expectedErr: "the node at %[1]s/v0_8/rpc/v0_9" + needsV010 + changeV09 +
+					"for example %[1]s/v0_8/rpc/v0_10",
+			},
+			{
+				name:        "v0.9 at a path without an RPC version",
+				specVersion: v09SpecVersion,
+				path:        "/v3/" + apiKey,
+				expectedErr: "the node at %[1]s/v3/REDACTED" + needsV010 + genericFix,
+			},
+			{
+				name:        "v0.8 at the v0_8 path",
+				specVersion: "0.8.1",
+				path:        "/v0_8",
+				expectedErr: "the node at %[1]s/v0_8 uses RPC v0.8, but the validator needs " +
+					"RPC v0.10. To fix it, change v0_8 to v0_10 in both provider URLs " +
+					"(HTTP and WS), for example %[1]s/v0_10",
+			},
+			{
+				name:        "v0.11 pre-release at the v0_11 path",
+				specVersion: "0.11.0-rc.0",
+				path:        "/rpc/v0_11",
+				expectedErr: "the node at %[1]s/rpc/v0_11 uses RPC v0.11, but the validator " +
+					"needs RPC v0.10. To fix it, change v0_11 to v0_10 in both provider URLs " +
+					"(HTTP and WS), for example %[1]s/rpc/v0_10",
+			},
+			{
+				name:        "v1.10 at the v0_10 path",
+				specVersion: "1.10.3",
+				path:        "/rpc/v0_10",
+				expectedErr: "the node at %[1]s/rpc/v0_10 uses RPC v1.10, but the validator " +
+					"needs RPC v0.10. To fix it, " + genericFix,
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				server := mockNodeWithSpecVersion(t, tc.specVersion)
+
+				provider, err := validator.NewProvider(t.Context(), server.URL+tc.path, logger)
+
+				require.Nil(t, provider)
+				require.EqualError(t, err, fmt.Sprintf(tc.expectedErr, server.URL))
+				require.NotContains(t, err.Error(), apiKey)
+				require.NotErrorIs(t, err, validator.ErrTransient)
+			})
+		}
+	})
+
+	t.Run("Node serving an unsupported RPC v0.10 release", func(t *testing.T) {
+		for _, specVersion := range []string{"0.10.1", "0.10.5", "0.10.5-rc.0", "v0.10.1-rc.1"} {
+			t.Run(specVersion, func(t *testing.T) {
+				server := mockNodeWithSpecVersion(t, specVersion)
+
+				provider, err := validator.NewProvider(t.Context(), server.URL, logger)
+
+				require.Nil(t, provider)
+				require.EqualError(t, err, fmt.Sprintf(
+					"the node at %s uses RPC v%s, which the validator does not support. "+
+						"To fix it, update the node and the validator to their latest releases",
+					server.URL, strings.TrimPrefix(specVersion, "v"),
+				))
+				require.NotErrorIs(t, err, validator.ErrTransient)
+			})
+		}
+	})
+
+	t.Run("Node reporting a malformed RPC version", func(t *testing.T) {
 		for _, specVersion := range []string{
-			"0.9.0", "0.10.1", "0.10.5", "0.11.0", "1.10.3",
-			"0.10.5-rc.0", "0.10.1-rc.1", "0.11.0-rc.0", "0.10.3-", "0.10.3-rc.01",
-			"0.10.03", "0.10", "V0.10.3", " 0.10.3", "garbage", "",
+			"0.10.3-", "0.10.3-rc.01", "0.10.03", "0.10", "V0.10.3", " 0.10.3", "garbage", "",
 		} {
 			t.Run(specVersion, func(t *testing.T) {
 				server := mockNodeWithSpecVersion(t, specVersion)
@@ -119,8 +235,11 @@ func TestNewProvider(t *testing.T) {
 				provider, err := validator.NewProvider(t.Context(), server.URL, logger)
 
 				require.Nil(t, provider)
-				require.ErrorContains(t, err, "implements JSON-RPC specification "+specVersion)
-				require.ErrorContains(t, err, "this tool requires 0.10.2 or 0.10.3 or 0.10.4")
+				require.EqualError(t, err, fmt.Sprintf(
+					"the node at %s reports an RPC version the validator cannot read (%q). "+
+						"The validator needs RPC v0.10",
+					server.URL, specVersion,
+				))
 				require.NotErrorIs(t, err, validator.ErrTransient)
 			})
 		}
