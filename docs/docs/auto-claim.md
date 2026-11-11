@@ -62,6 +62,7 @@ With command line flags:
 
 ```bash
 docker run --network host \
+  --user "$(id -u):$(id -g)" \
   -v /path/to/config.json:/app/config/config.json \
   nethermind/starknet-staking-v2 \
   --config /app/config/config.json \
@@ -93,6 +94,7 @@ With environment variables:
 
 ```bash
 docker run --network host \
+  --user "$(id -u):$(id -g)" \
   -v /path/to/config.json:/app/config/config.json \
   -e REWARD_ADDRESS="0x789" \
   -e REWARD_PRIVATE_KEY="0xabc" \
