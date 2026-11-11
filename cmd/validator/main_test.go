@@ -545,6 +545,18 @@ func TestFatalErrorIsLoggedWithoutStackTrace(t *testing.T) {
 	require.NotContains(t, output.String(), "\n\t")
 }
 
+func TestLogsHaveNoColourCodesWithoutATerminal(t *testing.T) {
+	server := validator.MockRPCServer(t, validator.MockRPC{})
+
+	cmd, output := newMainProcess(t, validFlags(
+		server.URL, "ws"+strings.TrimPrefix(server.URL, "http"), "--max-retries", "1",
+	)...)
+
+	require.Equal(t, 1, exitCode(t, cmd.Run()), output.String())
+	require.Contains(t, output.String(), "ERROR")
+	require.NotContains(t, output.String(), "\x1b[")
+}
+
 func TestShutdownSignalDuringStartup(t *testing.T) {
 	for _, signal := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
