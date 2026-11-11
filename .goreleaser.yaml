@@ -72,6 +72,14 @@ kos:
       - "{{ .Tag }}"
       - "{{ if not .Prerelease }}latest{{ end }}"
 
+docker_signs:
+  - artifacts: manifests
+    output: true
+    args:
+      - sign
+      - "${artifact}@${digest}"
+      - --yes
+
 release:
   github:
     owner: NethermindEth
