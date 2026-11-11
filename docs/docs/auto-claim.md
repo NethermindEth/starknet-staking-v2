@@ -4,51 +4,23 @@ sidebar_position: 7
 
 # Auto-Claim Rewards
 
-The validator can optionally claim your staking rewards automatically. Once the unclaimed rewards of the staker reach a configured threshold, the validator sends a `claim_rewards` transaction to the staking contract, which transfers them to the staker's reward address.
+The validator can claim your staking rewards automatically. Once the unclaimed rewards reach a configured threshold, the validator sends a `claim_rewards` transaction to the staking contract.
+This transaction will transfer the rewards to the designated reward address.
+which transfers them to the staker's reward address.
 
-The feature is disabled by default. It is enabled as soon as any reward option is set.
+To configure this, 5 new flags are made available. Full description available  in [Configuartion Options](https://nethermindeth.github.io/starknet-staking-v2/configuration-options):
+* **`reward-address`** sets the adress to which the rewards will be transfered to
+* **`reward-priv-key`** (or **`reward-signer-url`**) to sign for the `claim_rewards` transactions.
+* **`reward-claim-threshold`** is the amount after which a `claim_reward` transaction will trigger.
+* `reward-claim-max-fee` what's the maximum amount your willing to pay to execute this transaction.
+* `reward-braavos-account` if the reward account is a Braavos account.
 
-## How It Works
 
-1. **At startup**, the validator fetches the staker address linked to your operational address and checks that the configured reward account is allowed to claim its rewards. The staking contract only accepts claims sent by the **staker address** or by the staker's **reward address**. Any other account makes the validator fail to start. When using an [external signer](#external-signing), the validator also asks it to sign a claim transaction, without sending it, and fails to start if the signer can't be reached, doesn't answer within 15 seconds or doesn't answer with a two-value signature.
-2. **After every attestation window ends**, the validator reads the staker's unclaimed rewards from the staking contract and logs them at `info` level when they are below the claim threshold. If they reach the claim threshold, it:
-   1. builds a `claim_rewards` transaction signed by the reward account,
-   2. estimates its fee and skips the claim with a warning if the fee is higher than the configured max fee,
-   3. sends the transaction, unless more than 8 blocks have passed since the claim started: a later claim could take the nonce of the next attestation, so it is skipped with a warning and retried after the next window. With an external signer, the whole claim, including two signing requests (three for a Braavos reward account), must fit in those 8 blocks, so a signer that takes several seconds per request makes every claim skipped,
-   4. follows the transaction until it is accepted on L2 (for up to 2 minutes), and logs whether it was accepted or reverted.
+There are [Metrics](http://localhost:3000/starknet-staking-v2/metrics) endpoints made available for this feature.
 
-   Only one claim runs at a time, and a claim is abandoned after 30 seconds if the node or the signer doesn't answer.
+You can add this new flags to your current config:
 
-Every claim error is logged, and none of them stops the validator: attestations keep running normally. Claims sent, claims accepted on L2, failures and claims skipped due to the max fee are also reported through the [`validator_attestation_reward_*` metrics](./metrics#available-metrics), along with the staker's unclaimed rewards.
-
-:::info Delegation pools
-Only the staker's own rewards are claimed, which include its commission on the delegated stake. Rewards of the delegation pool members are sent directly to the pool contracts by the staking protocol and claimed by the members themselves, so they are not affected by this feature.
-:::
-
-:::tip Reward account balance
-The reward account pays the fee of the claim transactions, so it needs enough STRK to cover it. When the feature is enabled, the balance of the reward account is checked against [`--balance-threshold`](./configuration-options#additional-configuration-details) at startup and after every attestation window, just like the operational account, and reported through the [`validator_attestation_reward_balance` and `validator_attestation_reward_below_threshold` metrics](./metrics#available-metrics).
-:::
-
-## Configuration
-
-| Option | Environment Variable | Config File | Default | Description |
-|--------|---------------------|-------------|---------|-------------|
-| `--reward-address` | `REWARD_ADDRESS` | `reward.address` | - | Address of the reward account, which signs and sends the claim transactions. Must be either the staker address or the staker's reward address |
-| `--reward-priv-key` | `REWARD_PRIVATE_KEY` | `reward.privateKey` | - | Private key of the reward account, for internal signing |
-| `--reward-signer-url` | `REWARD_EXTERNAL_URL` | `reward.url` | - | URL of an external signer holding the reward account key, for external signing |
-| `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | Amount of unclaimed rewards, in STRK (whole units), that triggers a claim |
-| `--reward-claim-max-fee` | `REWARD_CLAIM_MAX_FEE` | `reward.claimMaxFee` | Unlimited | Max fee, in FRI, to pay for a claim transaction. If not set, no limit is applied (max uint64, ~18.4 STRK) |
-| `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | Set it if the reward account is a Braavos account. Independent of `--braavos-account`, which only applies to the operational account |
-
-If any of these options is set, even `--reward-braavos-account=false`, the reward configuration must be complete:
-
-- `--reward-address` is required.
-- Exactly one signing method is required: either `--reward-priv-key` or `--reward-signer-url`. As for the operational signer, setting both is an error.
-- `--reward-claim-threshold` is required and must be greater than zero.
-
-The options follow the same [precedence](./setup) as the rest of the configuration: command line flags, then environment variables, then the configuration file.
-
-### Examples
+#todo group not only by docker/binary but also by CLI/Flags and Configs
 
 ```mdx-code-block
 import Tabs from "@theme/Tabs";
@@ -136,6 +108,15 @@ With a configuration file:
   }
 }
 ```
+
+
+:::info Delegation pools
+Only the staker's own rewards are claimed, which include its commission on the delegated stake. Rewards of the delegation pool members are sent directly to the pool contracts by the staking protocol and claimed by the members themselves, so they are not affected by this feature.
+:::
+
+:::tip Reward account balance
+The reward account pays the fee of the claim transactions, so it needs enough STRK to cover it. When the feature is enabled, the balance of the reward account is checked against [`--balance-threshold`](./configuration-options#additional-configuration-details) at startup and after every attestation window, just like the operational account, and reported through the [`validator_attestation_reward_balance` and `validator_attestation_reward_below_threshold` metrics](./metrics#available-metrics).
+:::
 
 ## External Signing
 
