@@ -26,7 +26,10 @@ import (
 
 var supportedSpecVersions = []string{"0.10.2", "0.10.3", "0.10.4"}
 
-const specVersionTimeout = 30 * time.Second
+const (
+	specVersionTimeout  = 30 * time.Second
+	headersFeedCapacity = 16
+)
 
 var ErrTransient = errors.New("transient error")
 
@@ -316,7 +319,7 @@ func SubscribeToBlockHeaders(
 	}
 
 	logger.Debug("Subscribing to new block headers...")
-	headersFeed := make(chan *rpc.BlockHeader)
+	headersFeed := make(chan *rpc.BlockHeader, headersFeedCapacity)
 	clientSubscription, err := wsProvider.SubscribeNewHeads(
 		ctx, headersFeed, new(rpc.SubscriptionBlockID).WithLatestTag(),
 	)

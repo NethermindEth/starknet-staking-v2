@@ -232,9 +232,9 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 
 		highestBefore, processedBefore := dispatcher.progress.highestBlock()
 		var endErr error
-		stopProcessingHeaders := make(chan error)
+		processingDone := make(chan error, 1)
 		wg.Go(func() {
-			err := ProcessBlockHeaders(
+			processingDone <- ProcessBlockHeaders(
 				ctx,
 				headersFeed,
 				signer,
@@ -243,9 +243,6 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				maxRetries,
 				tracer,
 			)
-			if err != nil {
-				stopProcessingHeaders <- err
-			}
 		})
 
 		select {
@@ -255,7 +252,6 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			return nil
 		case endErr = <-clientSubscription.Err():
 			logSubscriptionError(logger, shownWSURL, endErr)
-			cleanUp(wsProvider, headersFeed)
 		case reorgEvent, ok := <-clientSubscription.Reorg():
 			if ok {
 				logger.Info(
@@ -268,11 +264,14 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				endErr = subscriptionEndError(clientSubscription)
 				logSubscriptionError(logger, shownWSURL, endErr)
 			}
-			cleanUp(wsProvider, headersFeed)
-		case err := <-stopProcessingHeaders:
+		case err := <-processingDone:
 			cleanUp(wsProvider, headersFeed)
 
 			return fmt.Errorf("processing block headers: %w", err)
+		}
+		cleanUp(wsProvider, headersFeed)
+		if stop, err := waitForProcessing(ctx, wg, processingDone); stop {
+			return err
 		}
 
 		highestAfter, processedAfter := dispatcher.progress.highestBlock()
@@ -298,6 +297,23 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		)
 		retries.Sub()
 		Sleep(delay)
+	}
+}
+
+func waitForProcessing(
+	ctx context.Context, wg *conc.WaitGroup, processingDone <-chan error,
+) (bool, error) {
+	select {
+	case <-ctx.Done():
+		wg.Wait()
+
+		return true, nil
+	case err := <-processingDone:
+		if err != nil {
+			return true, fmt.Errorf("processing block headers: %w", err)
+		}
+
+		return false, nil
 	}
 }
 
