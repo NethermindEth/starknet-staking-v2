@@ -10,9 +10,32 @@ The validator includes a built-in metrics server that exposes various metrics ab
 
 By default, metrics are disabled. You can enable metrics tracking and customize the host and port with the following flags:
 
+```mdx-code-block
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+```
+
+<Tabs groupId="install">
+<TabItem value="docker" label="Docker" default>
+
+```bash
+docker run --network host \
+  --user "$(id -u):$(id -g)" \
+  -v /path/to/config.json:/app/config/config.json \
+  nethermind/starknet-staking-v2 \
+  --config /app/config/config.json \
+  --metrics --metrics-host "0.0.0.0" --metrics-port "9090"
+```
+
+</TabItem>
+<TabItem value="binary" label="Binary">
+
 ```bash
 ./build/validator --metrics --metrics-host "0.0.0.0" --metrics-port "9090"  # Listen on all interfaces, port 9090
 ```
+
+</TabItem>
+</Tabs>
 
 If the metrics server can't listen on that host and port (an invalid port, a port already in use), the validator exits with an error at startup.
 
