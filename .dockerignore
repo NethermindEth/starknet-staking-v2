@@ -1,0 +1,17 @@
+**/.env*
+**/config*.json
+**/.vscode
+**/.idea
+go.work
+go.work.sum
+dist
+build
+coverage
+**/*.test
+**/*.out
+**/node_modules
+docs/build
+docs/.docusaurus
+docs/.cache-loader
+!.git/**
+.git/config
