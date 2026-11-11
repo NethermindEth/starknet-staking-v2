@@ -13,6 +13,7 @@ function cleanBody(body, dir) {
   body = body
     .replace(/<TabItem\b[^>]*\b(?:label|value)="([^"]+)"[^>]*>/g, "\n### $1\n")
     .replace(/<\/?Tabs\b[^>]*>/g, "")
+    .replace(/<\/?ExpandableTable\b[^>]*>/g, "")
     .replace(/<\/TabItem>/g, "");
   const lines = [];
   let inMdx = false;

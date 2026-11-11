@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+hide_table_of_contents: true
 ---
 
 # Configuration Options
@@ -20,8 +21,11 @@ Flags take priority over environment variables, which take priority over the con
 
 ```mdx-code-block
 import ConfigOptions from "./_config-options.md";
+import ExpandableTable from "@site/src/components/ExpandableTable";
 
+<ExpandableTable>
 <ConfigOptions />
+</ExpandableTable>
 ```
 
 ## Additional Configuration Details

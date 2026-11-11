@@ -7,7 +7,7 @@
 | `--reward-claim-max-fee` | `REWARD_CLAIM_MAX_FEE` | `reward.claimMaxFee` | Unlimited | (Optional) Max fee, in FRI, to pay for the claim transaction. Defaults to 'unlimited' (\~18.4 STRK) |
 | `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | Claim threshold, in STRK |
 | `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | Set it for a Braavos reward account |
-| `--attest-contract-address` | - | - | Auto-detected on Mainnet and Sepolia | Attestation contract address |
+| `--attest-contract-address` | - | - | auto | Attestation contract address |
 | `--metrics` | - | - | `false` | Enable metric tracking via Prometheus |
 | `--balance-threshold` | - | - | `100.5` | Fee estimation uses version 1\<\<128 + 0x3 for \*Braavos\* \| \{x\} \[y\] \`z\` a\_b |
 | `--log-level` | - | - | `info` | Options: trace, debug, info. |
