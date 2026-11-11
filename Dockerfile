@@ -1,5 +1,5 @@
 # ---- Builder Stage ----
-FROM golang:1.27-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 
 WORKDIR /app
 
@@ -11,9 +11,11 @@ RUN go mod download
 
 COPY . .
 
+ARG TARGETOS
+ARG TARGETARCH
 ARG VERSION
 
-RUN make validator VERSION="$VERSION"
+RUN CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" make validator VERSION="$VERSION"
 
 
 # ---- Final Stage ----
