@@ -2,7 +2,7 @@
 
 DOCS_SRC ?= .
 GIT_VERSION = $(shell git describe --tags | sed 's/^v//')
-GO_LDFLAGS = -X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(or $(VERSION),$(GIT_VERSION),dev)
+GO_LDFLAGS = -s -w -X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(or $(VERSION),$(GIT_VERSION),dev)
 
 validator:
 	mkdir -p build
