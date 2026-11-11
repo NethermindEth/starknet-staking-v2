@@ -54,9 +54,6 @@ var urlInText = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"'\\]+`)
 func URLsIn(text string) string {
 	return urlInText.ReplaceAllStringFunc(text, func(match string) string {
 		trimmed := strings.TrimRight(match, ":,.;)]")
-		if _, err := url.Parse(trimmed); err != nil {
-			return match
-		}
 
 		return URL(trimmed) + match[len(trimmed):]
 	})
