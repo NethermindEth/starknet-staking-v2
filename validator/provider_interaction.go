@@ -5,11 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"maps"
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -17,6 +15,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/NethermindEth/juno/utils/log"
+	"github.com/NethermindEth/starknet-staking-v2/validator/redact"
 	"github.com/NethermindEth/starknet.go/client"
 	"github.com/NethermindEth/starknet.go/client/rpcerr"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -176,75 +175,11 @@ func isTLSError(err error) bool {
 		errors.As(err, &invalidErr)
 }
 
-const (
-	redactedText            = "REDACTED"
-	minSecretPathSegmentLen = 16
-)
+func redactURL(rawURL string) string { return redact.URL(rawURL) }
 
-func redactURL(rawURL string) string {
-	parsedURL, err := url.Parse(rawURL)
-	if err != nil {
-		return "<invalid URL>"
-	}
+func redactURLsIn(text string) string { return redact.URLsIn(text) }
 
-	redacted := false
-	if parsedURL.User != nil {
-		parsedURL.User = url.User(redactedText)
-		redacted = true
-	}
-	if parsedURL.RawQuery != "" {
-		keys := slices.Sorted(maps.Keys(parsedURL.Query()))
-		for i, key := range keys {
-			keys[i] = key + "=" + redactedText
-		}
-		parsedURL.RawQuery = strings.Join(keys, "&")
-		redacted = true
-	}
-	segments := strings.Split(parsedURL.Path, "/")
-	for i, segment := range segments {
-		if len(segment) >= minSecretPathSegmentLen {
-			segments[i] = redactedText
-			redacted = true
-		}
-	}
-	if !redacted {
-		return rawURL
-	}
-	parsedURL.Path = strings.Join(segments, "/")
-	parsedURL.RawPath = ""
-	parsedURL.Fragment = ""
-
-	return parsedURL.String()
-}
-
-var urlInText = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"'\\]+`)
-
-func redactURLsIn(text string) string {
-	return urlInText.ReplaceAllStringFunc(text, func(match string) string {
-		trimmed := strings.TrimRight(match, ":,.;)]")
-		if _, err := url.Parse(trimmed); err != nil {
-			return match
-		}
-
-		return redactURL(trimmed) + match[len(trimmed):]
-	})
-}
-
-type redactedURLsError struct {
-	err error
-}
-
-func (e redactedURLsError) Error() string { return redactURLsIn(e.err.Error()) }
-
-func (e redactedURLsError) Unwrap() error { return e.err }
-
-func redactErrorURLs(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	return redactedURLsError{err: err}
-}
+func redactErrorURLs(err error) error { return redact.ErrorURLs(err) }
 
 func isRetryableHTTPStatus(statusCode int) bool {
 	return statusCode >= http.StatusInternalServerError ||
