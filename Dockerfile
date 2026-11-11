@@ -1,5 +1,5 @@
 # ---- Builder Stage ----
-FROM golang:1.27-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 
 WORKDIR /app
 
@@ -11,25 +11,29 @@ RUN go mod download
 
 COPY . .
 
-RUN make validator
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION
+
+RUN CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" make validator VERSION="$VERSION"
 
 
 # ---- Final Stage ----
 FROM alpine:3.24 AS final
 
-RUN apk upgrade --no-cache && apk add --no-cache ca-certificates
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -S -g 65532 nonroot && adduser -S -D -u 65532 -G nonroot -h /home/nonroot nonroot
 
 WORKDIR /app
 
 # Copy only the built binary from the builder
-COPY --from=builder --chown=appuser:appgroup /app/build/validator /app/validator
+COPY --from=builder /app/build/validator /app/validator
 
 # Create config dir
-RUN mkdir -p /app/config && chown appuser:appgroup /app/config
+RUN mkdir -p /app/config && chown 65532:65532 /app/config
 
 # Run as non-root user
-USER appuser
+USER 65532:65532
 
 ENTRYPOINT ["/app/validator"]

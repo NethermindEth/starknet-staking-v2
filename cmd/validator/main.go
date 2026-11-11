@@ -100,7 +100,7 @@ func NewCommand() cobra.Command {
 			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
 		}
 
-		loadedLogger, err := log.NewZapLogger(logLevel, log.WithColour(true))
+		loadedLogger, err := log.NewZapLogger(logLevel, log.WithColour(isTerminal(os.Stderr)))
 		if err != nil {
 			return err
 		}
@@ -379,6 +379,12 @@ func startValidator(
 
 func errorField(err error) zap.Field {
 	return zap.String("error", err.Error())
+}
+
+func isTerminal(file *os.File) bool {
+	info, err := file.Stat()
+
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 func checkThresholdFlags(

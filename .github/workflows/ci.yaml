@@ -91,6 +91,9 @@ jobs:
       - name: Build the Docker image
         run: docker build --pull --tag starknet-staking-v2:vulncheck .
 
+      - name: Check that the Docker image reports a version
+        run: docker run --rm starknet-staking-v2:vulncheck --version
+
       - name: Scan the repository with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
