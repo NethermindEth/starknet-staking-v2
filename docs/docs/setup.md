@@ -150,9 +150,12 @@ To run the validator with a configuration file, use the `--config` option:
 
 ```bash
 docker run --network host \
+  --user "$(id -u):$(id -g)" \
   -v /path/to/config.json:/app/config/config.json \
   nethermind/starknet-staking-v2 --config /app/config/config.json
 ```
+
+The image runs as a non-root user. `--user` runs the validator as your own user instead, so it can read a file that only you can read, such as one holding a private key with mode `600`.
 
 </TabItem>
 <TabItem value="binary" label="Binary">
