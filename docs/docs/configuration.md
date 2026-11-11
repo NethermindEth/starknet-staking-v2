@@ -167,10 +167,6 @@ docker run --network host \
 </TabItem>
 </Tabs>
 
-:::warning Signing Method Required
-You must provide exactly one signing method: either a private key for internal signing (`--signer-priv-key`, `SIGNER_PRIVATE_KEY` or `privateKey`) or an external signer URL (`--signer-url`, `SIGNER_EXTERNAL_URL` or `url`). If both are provided, the validator won't start.
-:::
-
 ## Mixed Configuration
 
 You can combine multiple configuration methods. Values set by command line flags will override environment variables, and environment variables will override configuration file settings.
@@ -187,18 +183,72 @@ PROVIDER_HTTP_URL="http://localhost:6060/v0_10" ./validator \
 
 The validator supports two signing approaches:
 
-### Internal Signing
-- Provide your private key directly to the validator
-- The validator signs transactions internally
-- **⚠️ Security Note**: Only use this in secure environments
+1. **[Internal signing](?signing-method=internal#signing-methods)** where you provide your private key to the validator and it signs on your behalf.
+2. **[External signing](?signing-method=external#signing-methods)** where the validator requests a remote service for your signature.
+**[Read more](./external-signer)** about the remote signer's HTTP protocol.
 
-### External Signing  
-- Provide a URL to an external signing service
-- The validator requests signatures from the external service
-- **✅ Recommended**: For mainnet and cloud deployments
+<Tabs groupId="signing-method" queryString>
+<TabItem value="internal" label="Internal signing" default>
 
-:::tip One Signing Method
-Only one of `privateKey` and `url` can be set. Since the configuration sources are merged field by field, this also applies across sources: e.g. a `url` in the configuration file together with a `--signer-priv-key` flag is an error as well.
+<Tabs groupId="install">
+<TabItem value="docker" label="Docker" default>
+
+```bash
+docker run --network host nethermind/starknet-staking-v2 \
+  --provider-http "http://localhost:6060/v0_10" \
+  --provider-ws "ws://localhost:6061/v0_10" \
+  --signer-op-address "0x123" \
+  --signer-priv-key "0x456"
+```
+
+</TabItem>
+<TabItem value="binary" label="Binary">
+
+```bash
+./validator \
+  --provider-http "http://localhost:6060/v0_10" \
+  --provider-ws "ws://localhost:6061/v0_10" \
+  --signer-op-address "0x123" \
+  --signer-priv-key "0x456"
+```
+
+</TabItem>
+</Tabs>
+
+</TabItem>
+<TabItem value="external" label="External signing">
+
+<Tabs groupId="install">
+<TabItem value="docker" label="Docker" default>
+
+```bash
+docker run --network host nethermind/starknet-staking-v2 \
+  --provider-http "http://localhost:6060/v0_10" \
+  --provider-ws "ws://localhost:6061/v0_10" \
+  --signer-op-address "0x123" \
+  --signer-url "http://localhost:8080"
+```
+
+</TabItem>
+<TabItem value="binary" label="Binary">
+
+```bash
+./validator \
+  --provider-http "http://localhost:6060/v0_10" \
+  --provider-ws "ws://localhost:6061/v0_10" \
+  --signer-op-address "0x123" \
+  --signer-url "http://localhost:8080"
+```
+
+</TabItem>
+</Tabs>
+
+
+</TabItem>
+</Tabs>
+
+:::warning Signing Method Required
+You must provide exactly one signing method: either a private key for internal signing (`--signer-priv-key`, `SIGNER_PRIVATE_KEY` or `privateKey`) or an external signer URL (`--signer-url`, `SIGNER_EXTERNAL_URL` or `url`). If both are provided, the validator won't start.
 :::
 
 ## What's Next?
