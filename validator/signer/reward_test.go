@@ -1682,7 +1682,7 @@ func expectBuildClaimTxn(t *testing.T, provider *mocks.MockRPCProvider, nonce *f
 		Nonce(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagPreConfirmed), rewardAddress.Felt()).
 		Return(nonce, nil)
 	provider.EXPECT().
-		BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), gomock.Nil()).
+		BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
 		Return(&rpc.Block{}, nil)
 }
 

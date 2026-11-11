@@ -7,7 +7,6 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
-	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
@@ -100,7 +99,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 
 	defaultResources := makeDefaultResources()
 
-	tip, err := rpc.EstimateTip(ctx, s.Account.Provider, constants.TipMultiplier)
+	tip, err := estimateTip(ctx, s.Account.Provider)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}

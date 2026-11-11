@@ -269,7 +269,7 @@ func describeNetError(err error) string {
 func checkSpecVersion(rawProviderURL, nodeSpecVersion string) error {
 	providerURL := redactURL(rawProviderURL)
 	version, err := semver.StrictNewVersion(strings.TrimPrefix(nodeSpecVersion, "v"))
-	if err == nil && version.Prerelease() == "" {
+	if err == nil {
 		release := fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch())
 		if slices.Contains(supportedSpecVersions, release) {
 			return nil
