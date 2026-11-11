@@ -49,20 +49,6 @@ The configuration file properties for internal signing will look like:
 }
 ```
 
-### Example with Pathfinder
-
-A [Pathfinder](https://github.com/software-mansion/pathfinder) node serves HTTP and WebSocket on the same port, 9545 by default. Its WebSocket is disabled by default: start it with the `--rpc.websocket.enabled` flag (it takes no value) or `PATHFINDER_WEBSOCKET_ENABLED=true`. Use the `/rpc/v0_10` path in both URLs, not the root path `/`, which serves JSON-RPC 0.9 by default. See the [Pathfinder documentation](https://docs.swmansion.com/pathfinder/) to set up the node.
-
-The `provider` properties of the configuration file will look like:
-```json
-{
-  "provider": {
-      "http": "http://localhost:9545/rpc/v0_10",
-      "ws": "ws://localhost:9545/rpc/v0_10"
-  }
-}
-```
-
 ## 2. Stake STRK tokens
 
 Register as a validator by staking STRK tokens through the Starknet staking contract. Check out the [Becoming a Validator](https://docs.starknet.io/staking/entering-staking/) guide for complete instructions. The staking process includes:

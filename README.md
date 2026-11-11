@@ -7,7 +7,6 @@ Validator software written in Go for Starknet staking v2 as specified in [SNIP 2
 
 - A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) with support for the JSON-RPC 0.10.2 or 0.10.3 API specification. For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/eqlabs/pathfinder).
 - An account with enough funds to pay for the attestation transactions.
-- With a Pathfinder node, enable its WebSocket and use its RPC port (9545 by default) with the `/rpc/v0_10` path for both URLs (see [Example with Pathfinder](https://nethermindeth.github.io/starknet-staking-v2/becoming-validator#example-with-pathfinder)).
 
 ## Installation
 
