@@ -1,4 +1,6 @@
-.PHONY: validator signer
+.PHONY: validator signer docs-gen
+
+DOCS_SRC ?= .
 
 validator:
 	mkdir -p build
@@ -32,3 +34,6 @@ lint: lint-diff
 
 lint-diff:
 	go tool -modfile=golangci-lint.mod golangci-lint run --config=./.golangci_diff.yaml --new-from-rev=origin/main
+
+docs-gen:
+	go run ./tools/docsgen -src $(DOCS_SRC) -out docs/docs
