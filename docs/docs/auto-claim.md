@@ -6,28 +6,26 @@ sidebar_position: 7
 
 The validator can claim your staking rewards automatically. Once the unclaimed rewards reach a configured threshold, the validator sends a `claim_rewards` transaction to the staking contract.
 This transaction will transfer the rewards to the designated reward address.
-which transfers them to the staker's reward address.
 
-To configure this, 5 new flags are made available. Full description available  in [Configuartion Options](https://nethermindeth.github.io/starknet-staking-v2/configuration-options):
-* **`reward-address`** sets the adress to which the rewards will be transfered to
+To configure this, 6 new flags are made available. Full descriptions are available in [Configuration Options](./configuration-options):
+* **`reward-address`** sets the account that sends the `claim_rewards` transactions. It must be either the staker address or the staker's reward address.
 * **`reward-priv-key`** (or **`reward-signer-url`**) to sign for the `claim_rewards` transactions.
-* **`reward-claim-threshold`** is the amount after which a `claim_reward` transaction will trigger.
-* `reward-claim-max-fee` what's the maximum amount your willing to pay to execute this transaction.
-* `reward-braavos-account` if the reward account is a Braavos account.
+* **`reward-claim-threshold`** is the amount after which a `claim_rewards` transaction will trigger.
+* `reward-claim-max-fee` is the maximum fee you're willing to pay to execute this transaction.
+* `reward-braavos-account` is set if the reward account is a Braavos account.
 
 
-There are [Metrics](http://localhost:3000/starknet-staking-v2/metrics) endpoints made available for this feature.
+There are [Metrics](./metrics) endpoints made available for this feature.
 
-You can add this new flags to your current config:
-
-#todo group not only by docker/binary but also by CLI/Flags and Configs
+You can add these new flags to your current config:
 
 ```mdx-code-block
 import Tabs from "@theme/Tabs";
 import TabItem from "@theme/TabItem";
 ```
 
-With command line flags:
+<Tabs groupId="config-method">
+<TabItem value="flags" label="CLI flags" default>
 
 <Tabs groupId="install">
 <TabItem value="docker" label="Docker" default>
@@ -59,7 +57,8 @@ docker run --network host \
 </TabItem>
 </Tabs>
 
-With environment variables:
+</TabItem>
+<TabItem value="env" label="Environment variables">
 
 <Tabs groupId="install">
 <TabItem value="docker" label="Docker" default>
@@ -87,7 +86,8 @@ REWARD_CLAIM_THRESHOLD=100 \
 </TabItem>
 </Tabs>
 
-With a configuration file:
+</TabItem>
+<TabItem value="config" label="Config file">
 
 ```json
 {
@@ -108,6 +108,29 @@ With a configuration file:
   }
 }
 ```
+
+<Tabs groupId="install">
+<TabItem value="docker" label="Docker" default>
+
+```bash
+docker run --network host \
+  --user "$(id -u):$(id -g)" \
+  -v /path/to/config.json:/app/config/config.json \
+  nethermind/starknet-staking-v2 --config /app/config/config.json
+```
+
+</TabItem>
+<TabItem value="binary" label="Binary">
+
+```bash
+./build/validator --config config.json
+```
+
+</TabItem>
+</Tabs>
+
+</TabItem>
+</Tabs>
 
 
 :::info Delegation pools
