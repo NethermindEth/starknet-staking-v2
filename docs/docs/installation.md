@@ -110,5 +110,5 @@ docker run --rm starknet-staking-v2 --help
 </Tabs>
 
 :::tip
-To learn how to set up the validator, check out the [Configuration](./configuration) guide.
+To learn how to set up the validator, check out the [Setup](./setup) guide.
 :::

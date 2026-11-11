@@ -2,7 +2,7 @@
 sidebar_position: 3
 ---
 
-# Configuration
+# Setup
 
 The Starknet Staking v2 validator can be configured using several methods, with the following order of precedence:
 

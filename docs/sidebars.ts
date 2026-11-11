@@ -23,7 +23,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'becoming-validator',
         'installation',
-        'configuration',
+        'setup',
         'configuration-options',
       ],
     },

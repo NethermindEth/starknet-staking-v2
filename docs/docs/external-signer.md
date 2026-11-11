@@ -153,4 +153,4 @@ You should immediately get the following answer. Signature should match given th
 
 This shows that the signer is working correctly. 
 
-You can now start the validator with the signer URL and operational address so it signs attestation transactions remotely. See the **[external signing example](./configuration?signing-method=external#signing-methods)** for the Docker and binary commands.
+You can now start the validator with the signer URL and operational address so it signs attestation transactions remotely. See the **[external signing example](./setup?signing-method=external#signing-methods)** for the Docker and binary commands.
