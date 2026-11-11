@@ -306,7 +306,9 @@ func TestStartupRetries(t *testing.T) {
 				name:        "unsupported spec version",
 				specVersion: "0.9.0",
 				fault:       noFault,
-				expectedErr: "serves RPC v0.9, but the validator needs RPC v0.10",
+				expectedErr: " uses RPC v0.9, but the validator needs RPC v0.10. To fix it, " +
+					"add /rpc/v0_10 to the end of both provider URLs (HTTP and WS), " +
+					"for example http://127.0.0.1:",
 			},
 			{
 				name:        "wrong URL path",
