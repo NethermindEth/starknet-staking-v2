@@ -538,7 +538,7 @@ func (rs *rewardSigner) buildClaimRewardTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to get nonce: %w", err)
 	}
 
-	tip, err := rpc.EstimateTip(ctx, rs.provider, constants.TipMultiplier)
+	tip, err := estimateTip(ctx, rs.provider)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}

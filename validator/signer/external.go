@@ -18,7 +18,6 @@ import (
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
-	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -115,7 +114,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := rpc.EstimateTip(ctx, s.Provider, constants.TipMultiplier)
+	tip, err := estimateTip(ctx, s.Provider)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
 	}
