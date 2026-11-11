@@ -306,7 +306,7 @@ func TestStartupRetries(t *testing.T) {
 				name:        "unsupported spec version",
 				specVersion: "0.9.0",
 				fault:       noFault,
-				expectedErr: "implements JSON-RPC specification 0.9.0",
+				expectedErr: "serves RPC v0.9, but the validator needs RPC v0.10",
 			},
 			{
 				name:        "wrong URL path",

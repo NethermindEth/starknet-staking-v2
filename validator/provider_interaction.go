@@ -27,9 +27,13 @@ import (
 var supportedSpecVersions = []string{"0.10.2", "0.10.3", "0.10.4"}
 
 const (
-	specVersionTimeout  = 30 * time.Second
-	headersFeedCapacity = 16
+	specVersionTimeout     = 30 * time.Second
+	headersFeedCapacity    = 16
+	requiredRPCVersion     = "v0.10"
+	requiredRPCPathSegment = "v0_10"
 )
+
+var rpcVersionPathSegment = regexp.MustCompile(`^v\d+_\d+$`)
 
 var ErrTransient = errors.New("transient error")
 
@@ -269,16 +273,67 @@ func describeNetError(err error) string {
 func checkSpecVersion(rawProviderURL, nodeSpecVersion string) error {
 	providerURL := redactURL(rawProviderURL)
 	version, err := semver.StrictNewVersion(strings.TrimPrefix(nodeSpecVersion, "v"))
-	if err == nil {
-		release := fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch())
-		if slices.Contains(supportedSpecVersions, release) {
-			return nil
-		}
+	if err != nil {
+		return errors.Errorf(
+			"the node at %s reports RPC version %q, but the validator needs RPC %s",
+			providerURL, nodeSpecVersion, requiredRPCVersion,
+		)
 	}
 
-	return errors.Errorf(
-		"node at %s implements JSON-RPC specification %s, this tool requires %s",
-		providerURL, nodeSpecVersion, strings.Join(supportedSpecVersions, " or "),
+	release := fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch())
+	if slices.Contains(supportedSpecVersions, release) {
+		return nil
+	}
+
+	nodeRPCVersion := fmt.Sprintf("v%d.%d", version.Major(), version.Minor())
+	if nodeRPCVersion == requiredRPCVersion {
+		return errors.Errorf(
+			"the node at %s serves RPC v%s, which this validator does not support: "+
+				"update the node and the validator to their latest releases",
+			providerURL, version,
+		)
+	}
+
+	message := fmt.Sprintf(
+		"the node at %s serves RPC %s, but the validator needs RPC %s",
+		providerURL, nodeRPCVersion, requiredRPCVersion,
+	)
+	if hint := rpcPathHint(providerURL); hint != "" {
+		message += ": " + hint
+	}
+
+	return errors.New(message)
+}
+
+func rpcPathHint(providerURL string) string {
+	parsedURL, err := url.Parse(providerURL)
+	if err != nil || parsedURL.Host == "" {
+		return ""
+	}
+	parsedURL.RawPath = ""
+
+	segments := strings.Split(parsedURL.Path, "/")
+	for i, segment := range segments {
+		if !rpcVersionPathSegment.MatchString(segment) {
+			continue
+		}
+		if segment == requiredRPCPathSegment {
+			return ""
+		}
+		segments[i] = requiredRPCPathSegment
+		parsedURL.Path = strings.Join(segments, "/")
+
+		return fmt.Sprintf(
+			"change %s to %s in both provider URLs (HTTP and WS), e.g. %s",
+			segment, requiredRPCPathSegment, parsedURL,
+		)
+	}
+
+	suffix := "/rpc/" + requiredRPCPathSegment
+	parsedURL.Path = strings.TrimSuffix(parsedURL.Path, "/") + suffix
+
+	return fmt.Sprintf(
+		"add %s to the end of both provider URLs (HTTP and WS), e.g. %s", suffix, parsedURL,
 	)
 }
 
