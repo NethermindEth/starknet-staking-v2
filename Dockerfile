@@ -11,7 +11,9 @@ RUN go mod download
 
 COPY . .
 
-RUN make validator
+ARG VERSION
+
+RUN make validator VERSION="$VERSION"
 
 
 # ---- Final Stage ----
