@@ -51,8 +51,8 @@ A full configuration file looks like this:
 ```json
 {
   "provider": {
-      "http": "http://localhost:6060/v0_10",
-      "ws": "ws://localhost:6061/v0_10"
+      "http": "http://localhost:6060/rpc/v0_10",
+      "ws": "ws://localhost:6061/rpc/v0_10"
   },
   "signer": {
       "url": "http://localhost:8080",
@@ -68,8 +68,8 @@ Note that only one signing method can be set, either `url` or `privateKey`. Sinc
 Alternatively, similarly as described as the previous section, the validator can be configured using environment vars. The following example using a `.env` file with the following content:
 
 ```bash
-export PROVIDER_HTTP_URL="http://localhost:6060/v0_10"
-export PROVIDER_WS_URL="ws://localhost:6061/v0_10"
+export PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10"
+export PROVIDER_WS_URL="ws://localhost:6061/rpc/v0_10"
 
 export SIGNER_EXTERNAL_URL="http://localhost:8080"
 export SIGNER_OPERATIONAL_ADDRESS="0x123"
@@ -89,8 +89,8 @@ Finally, as a third alternative, you can specify the necessary validation config
 
 ```bash
 ./build/validator \
-    --provider-http "http://localhost:6060/v0_10" \
-    --provider-ws "ws://localhost:6061/v0_10" \
+    --provider-http "http://localhost:6060/rpc/v0_10" \
+    --provider-ws "ws://localhost:6061/rpc/v0_10" \
     --signer-url "http://localhost:8080" \
     --signer-op-address "0x123"
 ```
@@ -101,9 +101,9 @@ Finally, as a third alternative, you can specify the necessary validation config
 Using a combination of both approaches is also valid. Values set by flags will override values set by enviroment flags and values set by enviroment flags will override values set in a configuration file.
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v0_10" ./build/validator \
+PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10" ./build/validator \
     --config <path_to_config_file> \
-    --provider-ws "ws://localhost:6061/v0_10" \
+    --provider-ws "ws://localhost:6061/rpc/v0_10" \
     --signer-url "http://localhost:8080" \
     --signer-op-address "0x123"
 ```

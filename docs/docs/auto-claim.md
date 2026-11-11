@@ -91,8 +91,8 @@ REWARD_CLAIM_THRESHOLD=100 \
 ```json
 {
   "provider": {
-    "http": "http://localhost:6060/v0_10",
-    "ws": "ws://localhost:6061/v0_10"
+    "http": "http://localhost:6060/rpc/v0_10",
+    "ws": "ws://localhost:6061/rpc/v0_10"
   },
   "signer": {
     "operationalAddress": "0x123",

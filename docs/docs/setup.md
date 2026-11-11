@@ -33,8 +33,8 @@ The validator can be configured directly on the command line:
 
 ```bash
 docker run --network host nethermind/starknet-staking-v2 \
-  --provider-http "http://localhost:6060/v0_10" \
-  --provider-ws "ws://localhost:6061/v0_10" \
+  --provider-http "http://localhost:6060/rpc/v0_10" \
+  --provider-ws "ws://localhost:6061/rpc/v0_10" \
   --signer-op-address "0x123" \
   --signer-url "http://localhost:8080"
 ```
@@ -44,8 +44,8 @@ docker run --network host nethermind/starknet-staking-v2 \
 
 ```bash
 ./validator \
-  --provider-http "http://localhost:6060/v0_10" \
-  --provider-ws "ws://localhost:6061/v0_10" \
+  --provider-http "http://localhost:6060/rpc/v0_10" \
+  --provider-ws "ws://localhost:6061/rpc/v0_10" \
   --signer-op-address "0x123" \
   --signer-url "http://localhost:8080"
 ```
@@ -67,8 +67,8 @@ The validator can be configured through environment variables using specific var
 
 ```bash
 docker run --network host \
-  -e PROVIDER_HTTP_URL="http://localhost:6060/v0_10" \
-  -e PROVIDER_WS_URL="ws://localhost:6061/v0_10" \
+  -e PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10" \
+  -e PROVIDER_WS_URL="ws://localhost:6061/rpc/v0_10" \
   -e SIGNER_OPERATIONAL_ADDRESS="0x123" \
   -e SIGNER_EXTERNAL_URL="http://localhost:8080" \
   nethermind/starknet-staking-v2
@@ -78,8 +78,8 @@ docker run --network host \
 <TabItem value="binary" label="Binary">
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v0_10" \
-PROVIDER_WS_URL="ws://localhost:6061/v0_10" \
+PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10" \
+PROVIDER_WS_URL="ws://localhost:6061/rpc/v0_10" \
 SIGNER_OPERATIONAL_ADDRESS="0x123" \
 SIGNER_EXTERNAL_URL="http://localhost:8080" \
 ./validator
@@ -91,8 +91,8 @@ SIGNER_EXTERNAL_URL="http://localhost:8080" \
 You can also keep them in a `.env` file. Leave the values unquoted, because `docker run --env-file` keeps quotes as part of the value:
 
 ```bash title=".env"
-PROVIDER_HTTP_URL=http://localhost:6060/v0_10
-PROVIDER_WS_URL=ws://localhost:6061/v0_10
+PROVIDER_HTTP_URL=http://localhost:6060/rpc/v0_10
+PROVIDER_WS_URL=ws://localhost:6061/rpc/v0_10
 SIGNER_OPERATIONAL_ADDRESS=0x123
 SIGNER_EXTERNAL_URL=http://localhost:8080
 ```
@@ -133,8 +133,8 @@ The validator can be configured using a JSON file:
 ```json title="config.json"
 {
   "provider": {
-    "http": "http://localhost:6060/v0_10",
-    "ws": "ws://localhost:6061/v0_10"
+    "http": "http://localhost:6060/rpc/v0_10",
+    "ws": "ws://localhost:6061/rpc/v0_10"
   },
   "signer": {
     "operationalAddress": "0x123",
@@ -175,9 +175,9 @@ The image runs as a non-root user. `--user` runs the validator as your own user 
 You can combine multiple configuration methods. Values set by command line flags will override environment variables, and environment variables will override configuration file settings.
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v0_10" ./validator \
+PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10" ./validator \
     --config config.json \
-    --provider-ws "ws://localhost:6061/v0_10" \
+    --provider-ws "ws://localhost:6061/rpc/v0_10" \
     --signer-url "http://localhost:8080" \
     --log-level debug
 ```
@@ -198,8 +198,8 @@ The validator supports two signing approaches:
 
 ```bash
 docker run --network host nethermind/starknet-staking-v2 \
-  --provider-http "http://localhost:6060/v0_10" \
-  --provider-ws "ws://localhost:6061/v0_10" \
+  --provider-http "http://localhost:6060/rpc/v0_10" \
+  --provider-ws "ws://localhost:6061/rpc/v0_10" \
   --signer-op-address "0x123" \
   --signer-priv-key "0x456"
 ```
@@ -209,8 +209,8 @@ docker run --network host nethermind/starknet-staking-v2 \
 
 ```bash
 ./validator \
-  --provider-http "http://localhost:6060/v0_10" \
-  --provider-ws "ws://localhost:6061/v0_10" \
+  --provider-http "http://localhost:6060/rpc/v0_10" \
+  --provider-ws "ws://localhost:6061/rpc/v0_10" \
   --signer-op-address "0x123" \
   --signer-priv-key "0x456"
 ```
@@ -226,8 +226,8 @@ docker run --network host nethermind/starknet-staking-v2 \
 
 ```bash
 docker run --network host nethermind/starknet-staking-v2 \
-  --provider-http "http://localhost:6060/v0_10" \
-  --provider-ws "ws://localhost:6061/v0_10" \
+  --provider-http "http://localhost:6060/rpc/v0_10" \
+  --provider-ws "ws://localhost:6061/rpc/v0_10" \
   --signer-op-address "0x123" \
   --signer-url "http://localhost:8080"
 ```
@@ -237,8 +237,8 @@ docker run --network host nethermind/starknet-staking-v2 \
 
 ```bash
 ./validator \
-  --provider-http "http://localhost:6060/v0_10" \
-  --provider-ws "ws://localhost:6061/v0_10" \
+  --provider-http "http://localhost:6060/rpc/v0_10" \
+  --provider-ws "ws://localhost:6061/rpc/v0_10" \
   --signer-op-address "0x123" \
   --signer-url "http://localhost:8080"
 ```
