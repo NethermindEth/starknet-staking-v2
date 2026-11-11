@@ -211,9 +211,13 @@ func TestRunBlockHeaderWatcherResubscriptions(t *testing.T) {
 
 	t.Run("Subscriptions with new headers resubscribe at once", func(t *testing.T) {
 		sleeps := recordSleeps(t)
+		tracer := newProcessingTracer(nil)
 		wsURL, subscriptions := newWSNode(t, 3, func(n int32, conn *websocket.Conn) {
 			sendHeader(conn, n, testEpochStart+uint64(n))
-			time.Sleep(50 * time.Millisecond)
+			select {
+			case <-tracer.processed:
+			case <-t.Context().Done():
+			}
 		})
 		buf := new(syncBuffer)
 		logger, err := log.NewZapLogger(
@@ -221,7 +225,7 @@ func TestRunBlockHeaderWatcherResubscriptions(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = runWatcher(t, wsURL, newEpochSigner(t), logger, "1", metrics.NewNoOpMetrics())
+		err = runWatcher(t, wsURL, newEpochSigner(t), logger, "1", tracer)
 
 		require.ErrorContains(t, err, "bad handshake")
 		require.Equal(t, int32(3), subscriptions.Load())
