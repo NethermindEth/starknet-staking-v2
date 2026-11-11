@@ -57,8 +57,6 @@ func NewCommand() cobra.Command {
 	var metricsF bool
 	var metricsHostF string
 	var metricsPortF string
-	var braavosAccount bool
-	var rewardBraavosF bool
 
 	var config configP.Config
 	var maxRetries types.Retries
@@ -71,10 +69,6 @@ func NewCommand() cobra.Command {
 		// errors are not about the command usage and it shouldn't be printed
 		cmd.SilenceUsage = true
 
-		// Only set when passed, so an unset flag doesn't override the other config sources
-		if cmd.Flags().Changed("reward-braavos-account") {
-			config.Reward.Braavos = &rewardBraavosF
-		}
 		if err := checkThresholdFlags(cmd, &config, balanceThreshold); err != nil {
 			return err
 		}
@@ -126,7 +120,6 @@ func NewCommand() cobra.Command {
 			snConfig:         &snConfig,
 			maxRetries:       maxRetries,
 			balanceThreshold: balanceThreshold,
-			braavosAccount:   braavosAccount,
 			metricsAddress:   metricsAddress,
 			logger:           logger,
 		})
@@ -206,13 +199,6 @@ func NewCommand() cobra.Command {
 		"(Optional) Reward signer url address, used for external signing of the reward account.\n"+
 			"Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag.",
 	)
-	cmd.Flags().BoolVar(
-		&rewardBraavosF,
-		"reward-braavos-account",
-		false,
-		"(Optional) Same as 'braavos-account', but for the reward account.\n"+
-			"Set it if the reward account is a Braavos account.",
-	)
 
 	// Config starknet flags
 	cmd.Flags().StringVar(
@@ -255,14 +241,6 @@ func NewCommand() cobra.Command {
 			"is configured, the reward account balance is checked as well.\n"+
 			"The threshold is in STRK (1 STRK = 1e18 FRI).",
 	)
-	cmd.Flags().BoolVar(
-		&braavosAccount,
-		"braavos-account",
-		false,
-		"Set it if the operational account is a Braavos account. Fee estimation then uses the\n"+
-			"query-bit transaction version (1<<128 + 0x3) that Braavos accounts require.\n"+
-			"Applies to both internal and external signing.",
-	)
 	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels+".")
 
 	return cmd
@@ -273,7 +251,6 @@ type runOptions struct {
 	snConfig         *configP.StarknetConfig
 	maxRetries       types.Retries
 	balanceThreshold float64
-	braavosAccount   bool
 	metricsAddress   string
 	logger           *log.ZapLogger
 }
@@ -290,7 +267,7 @@ func run(ctx context.Context, opts *runOptions) error {
 
 	v, stopped, err := startValidator(ctx, signalCh, logger, func() (validator.Validator, error) {
 		return tryNewValidator(
-			ctx, opts.config, opts.snConfig, opts.maxRetries, logger, opts.braavosAccount,
+			ctx, opts.config, opts.snConfig, opts.maxRetries, logger,
 		)
 	})
 	if stopped {

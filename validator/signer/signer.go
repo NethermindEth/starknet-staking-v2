@@ -154,36 +154,31 @@ func FetchEpochAndAttestInfo[S Signer](
 	return epochInfo, attestInfo, nil
 }
 
-func BuildAttest[S Signer](
-	ctx context.Context, signer S, blockHash *types.BlockHash, multiplier float64,
-) (
-	rpc.BroadcastInvokeTxnV3, error,
-) {
-	txn, err := signer.BuildAttestTransaction(ctx, blockHash)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
+func estimateFee(
+	ctx context.Context,
+	signer Signer,
+	provider rpc.RPCProvider,
+	txn *rpc.BroadcastInvokeTxnV3,
+) (rpc.FeeEstimation, error) {
+	query := *txn
+	if query.Version != rpc.TransactionV3WithQueryBit {
+		query.Version = rpc.TransactionV3WithQueryBit
+		if _, err := signer.SignTransaction(ctx, &query); err != nil {
+			return rpc.FeeEstimation{}, err
+		}
 	}
 
-	_, err = signer.SignTransaction(ctx, &txn)
+	estimates, err := provider.EstimateFee(
+		ctx,
+		[]rpc.BroadcastTxn{&query},
+		[]rpc.EstimateFeeFlag{},
+		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
+	)
 	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
+		return rpc.FeeEstimation{}, err
 	}
 
-	estimate, err := signer.EstimateFee(ctx, &txn)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
-	}
-	txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, multiplier)
-
-	// patch for making sure txn.Version is correct
-	txn.Version = rpc.TransactionV3
-
-	_, err = signer.SignTransaction(ctx, &txn)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
-	}
-
-	return txn, nil
+	return singleFeeEstimate(estimates)
 }
 
 func singleFeeEstimate(estimates []rpc.FeeEstimation) (rpc.FeeEstimation, error) {

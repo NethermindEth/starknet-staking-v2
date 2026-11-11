@@ -100,7 +100,6 @@ func NewRewardSigner(
 	rewardConfig *config.Reward,
 	contractAddresses *config.ContractAddresses,
 	stakerAddress *types.Address,
-	braavos bool,
 	isExternal bool,
 ) (RewardSigner, error) {
 	signerConf := makeSignerConfFromRewardConf(rewardConfig)
@@ -110,7 +109,7 @@ func NewRewardSigner(
 
 	if isExternal {
 		externalSigner, err := NewExternalSigner(
-			ctx, provider, signerLogger, &signerConf, contractAddresses, braavos,
+			ctx, provider, signerLogger, &signerConf, contractAddresses,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create external signer: %w", err)
@@ -118,7 +117,7 @@ func NewRewardSigner(
 		signer = &externalSigner
 	} else {
 		internalSigner, err := NewInternalSigner(
-			ctx, provider, signerLogger, &signerConf, contractAddresses, braavos,
+			ctx, provider, signerLogger, &signerConf, contractAddresses,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create internal signer: %w", err)
@@ -549,7 +548,7 @@ func (rs *rewardSigner) buildClaimRewardTransaction(
 		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         rs.Address().Felt(),
 		Calldata:              calldata,
-		Version:               rpc.TransactionV3,
+		Version:               rpc.TransactionV3WithQueryBit,
 		Signature:             []*felt.Felt{},
 		Nonce:                 nonce,
 		ResourceBounds:        &defaultResources,

@@ -63,6 +63,7 @@ type MockRPC struct {
 	CallErrors  map[string]string
 	// Called on a websocket upgrade request, which is always refused
 	OnWSUpgrade func()
+	OnRequest   func(method string, params []json.RawMessage)
 }
 
 // Starts a JSON-RPC server answering with the results configured in `mock`, closed on
@@ -105,6 +106,9 @@ func MockRPCServer(t *testing.T, mock MockRPC) *httptest.Server {
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
+		}
+		if mock.OnRequest != nil {
+			mock.OnRequest(req.Method, req.Params)
 		}
 
 		result, ok := results[req.Method]

@@ -7,12 +7,11 @@ sidebar_position: 7
 The validator can claim your staking rewards automatically. Once the unclaimed rewards reach a configured threshold, the validator sends a `claim_rewards` transaction to the staking contract.
 This transaction will transfer the rewards to the designated reward address.
 
-To configure this, 6 new flags are made available. Full descriptions are available in [Configuration Options](./configuration-options):
+To configure this, 5 new flags are made available. Full descriptions are available in [Configuration Options](./configuration-options):
 * **`reward-address`** sets the account that sends the `claim_rewards` transactions. It must be either the staker address or the staker's reward address.
 * **`reward-priv-key`** (or **`reward-signer-url`**) to sign for the `claim_rewards` transactions.
 * **`reward-claim-threshold`** is the amount after which a `claim_rewards` transaction will trigger.
 * `reward-claim-max-fee` is the maximum fee you're willing to pay to execute this transaction.
-* `reward-braavos-account` is set if the reward account is a Braavos account.
 
 
 There are [Metrics](./metrics) endpoints made available for this feature.
@@ -103,8 +102,7 @@ REWARD_CLAIM_THRESHOLD=100 \
     "address": "0x789",
     "url": "http://localhost:8081",
     "claimThreshold": 100,
-    "claimMaxFee": 1000000000000000000,
-    "braavos": false
+    "claimMaxFee": 1000000000000000000
   }
 }
 ```

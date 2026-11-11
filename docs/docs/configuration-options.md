@@ -38,6 +38,4 @@ import ExpandableTable from "@site/src/components/ExpandableTable";
 
 4. **Log Level**: `--log-level` sets the tool logging level. Defaults to `info`.
 
-5. **Braavos Account**: `--braavos-account` makes fee estimation use the query-bit transaction version `1<<128 + 0x3` that Braavos accounts require, with both internal and external signing. _Note that this is still an experimental feature_. It only applies to the operational account: use `--reward-braavos-account` for the reward account.
-
-6. **Auto-Claim Rewards**: the `--reward-*` options configure the optional automatic claiming of the staking rewards. If any of them is set, `--reward-address`, `--reward-claim-threshold` and exactly one of `--reward-priv-key` or `--reward-signer-url` are required. See [Auto-Claim Rewards](./auto-claim) for the details.
+5. **Auto-Claim Rewards**: the `--reward-*` options configure the optional automatic claiming of the staking rewards. If any of them is set, `--reward-address`, `--reward-claim-threshold` and exactly one of `--reward-priv-key` or `--reward-signer-url` are required. See [Auto-Claim Rewards](./auto-claim) for the details.

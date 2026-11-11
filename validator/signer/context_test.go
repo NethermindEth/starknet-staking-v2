@@ -39,7 +39,6 @@ func TestSignersUseTheCallContext(t *testing.T) {
 				log.NewNopZapLogger(),
 				&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
 				new(config.ContractAddresses),
-				false,
 			)
 			require.NoError(t, err)
 
@@ -57,7 +56,6 @@ func TestSignersUseTheCallContext(t *testing.T) {
 					OperationalAddress: "0x456",
 				},
 				new(config.ContractAddresses),
-				false,
 			)
 			require.NoError(t, err)
 
@@ -113,7 +111,9 @@ func TestSignersUseTheCallContext(t *testing.T) {
 			provider.EXPECT().
 				EstimateFee(ctx, gomock.Any(), gomock.Any(), gomock.Any()).
 				Return([]rpc.FeeEstimation{estimate}, nil)
-			_, err = testSigner.EstimateFee(ctx, txn)
+			_, err = testSigner.EstimateFee(
+				ctx, &rpc.BroadcastInvokeTxnV3{Version: rpc.TransactionV3WithQueryBit},
+			)
 			require.NoError(t, err)
 		})
 	}

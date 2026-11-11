@@ -257,7 +257,6 @@ func newMockedInternalSigner(t *testing.T, mock validator.MockRPC) *signer.Inter
 		log.NewNopZapLogger(),
 		&config.Signer{PrivKey: "0x1", OperationalAddress: "0x1234"},
 		new(config.ContractAddresses),
-		false,
 	)
 	require.NoError(t, err)
 
@@ -365,7 +364,6 @@ func newMockedRewardSigner(
 		new(config.ContractAddresses),
 		&stakerAddress,
 		false,
-		false,
 	)
 }
 
@@ -398,7 +396,7 @@ func TestRewardSignerContractRevert(t *testing.T) {
 					stakerAccountAddress + `", "0x1", "0x1", "0x1000000000000000000", "0x1"]`,
 			},
 			Errors: map[string]string{
-				"starknet_estimateFee": nodeErrorBody(
+				estimateFeeMethod: nodeErrorBody(
 					41, "Transaction execution error", `{"transaction_index": 0, `+
 						`"execution_error": `+frame(t, rewardAccountAddress, "__execute__", frame(
 						t, sepoliaStaking, "claim_rewards", quoted(t, byteArrayMagicHex+

@@ -70,7 +70,6 @@ func (t *AttestTransaction) Invoke(ctx context.Context, signer signerP.Signer) (
 	}
 	t.valid = false
 
-	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
 	estimate, err := signer.EstimateFee(ctx, &t.txn)
 	if err != nil {
 		return resp, fmt.Errorf(

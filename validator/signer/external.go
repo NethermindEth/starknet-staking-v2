@@ -57,8 +57,6 @@ type ExternalSigner struct {
 	chainID             felt.Felt
 	url                 string
 	validationContracts types.ValidationContracts
-	// If the account used represents a braavos account
-	braavos bool
 }
 
 func NewExternalSigner(
@@ -67,7 +65,6 @@ func NewExternalSigner(
 	logger log.Logger,
 	sig *config.Signer,
 	addresses *config.ContractAddresses,
-	braavos bool,
 ) (ExternalSigner, error) {
 	operationalAddress, err := types.AddressFromString(sig.OperationalAddress)
 	if err != nil {
@@ -93,7 +90,6 @@ func NewExternalSigner(
 		url:                 sig.ExternalURL,
 		chainID:             *chainID,
 		validationContracts: validationContracts,
-		braavos:             braavos,
 	}, nil
 }
 
@@ -129,7 +125,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         s.Address().Felt(),
 		Calldata:              calldata,
-		Version:               rpc.TransactionV3,
+		Version:               rpc.TransactionV3WithQueryBit,
 		Signature:             []*felt.Felt{},
 		Nonce:                 nonce,
 		ResourceBounds:        &defaultResources,
@@ -149,33 +145,7 @@ func (s *ExternalSigner) EstimateFee(
 	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (rpc.FeeEstimation, error) {
-	if s.braavos {
-		// Braavos require the use of the query bit txn version for fee estimation.
-		// The query bit txn version is used for custom validation logic from wallets/accounts
-		// when estimating fee/simulating txns
-		txn.Version = rpc.TransactionV3WithQueryBit
-		_, err := s.SignTransaction(ctx, txn)
-		if err != nil {
-			return rpc.FeeEstimation{}, err
-		}
-	}
-
-	estimateFee, err := s.Provider.EstimateFee(
-		ctx,
-		[]rpc.BroadcastTxn{txn},
-		[]rpc.EstimateFeeFlag{},
-		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
-	)
-	if s.braavos {
-		// Revert the transaction version back.
-		// No need to re-sign
-		txn.Version = rpc.TransactionV3
-	}
-	if err != nil {
-		return rpc.FeeEstimation{}, err
-	}
-
-	return singleFeeEstimate(estimateFee)
+	return estimateFee(ctx, s, s.Provider, txn)
 }
 
 func (s *ExternalSigner) SignTransaction(

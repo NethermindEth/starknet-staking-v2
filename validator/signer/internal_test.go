@@ -36,7 +36,6 @@ func TestNewInternalSigner(t *testing.T) {
 	loadedEnvVars := envVarsErr == nil
 
 	contractAddresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
-	braavosAccount := false
 
 	t.Run("Error: private key conversion", func(t *testing.T) {
 		for _, privKey := range []string{
@@ -49,7 +48,6 @@ func TestNewInternalSigner(t *testing.T) {
 				logger,
 				&config.Signer{PrivKey: privKey, OperationalAddress: "0x456"},
 				contractAddresses,
-				braavosAccount,
 			)
 
 			require.Equal(t, signer.InternalSigner{}, validatorAccount)
@@ -73,7 +71,6 @@ func TestNewInternalSigner(t *testing.T) {
 			logger,
 			&config.Signer{PrivKey: "0x123", OperationalAddress: malformedAddress},
 			contractAddresses,
-			braavosAccount,
 		)
 		require.ErrorContains(t, err, "invalid operational address")
 		require.ErrorContains(t, err, malformedAddress)
@@ -94,7 +91,7 @@ func TestNewInternalSigner(t *testing.T) {
 		// Test
 		logger := log.NewNopZapLogger()
 		internalSigner, err := signer.NewInternalSigner(
-			t.Context(), provider, logger, &configSigner, contractAddresses, braavosAccount,
+			t.Context(), provider, logger, &configSigner, contractAddresses,
 		)
 		require.NoError(t, err)
 
@@ -284,7 +281,7 @@ func TestEstimateFeeResponseValidation(t *testing.T) {
 		t.Helper()
 
 		mockRPC := validator.MockRPCServer(t, validator.MockRPC{
-			Results: map[string]string{"starknet_estimateFee": estimateResult},
+			Results: map[string]string{estimateFeeMethod: estimateResult},
 		})
 		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
 		require.NoError(t, err)
@@ -296,7 +293,6 @@ func TestEstimateFeeResponseValidation(t *testing.T) {
 			log.NewNopZapLogger(),
 			&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
 			addresses,
-			false,
 		)
 		require.NoError(t, err)
 		externalSigner, err := signer.NewExternalSigner(
@@ -305,7 +301,6 @@ func TestEstimateFeeResponseValidation(t *testing.T) {
 			log.NewNopZapLogger(),
 			&config.Signer{ExternalURL: "http://127.0.0.1:1", OperationalAddress: "0x456"},
 			addresses,
-			false,
 		)
 		require.NoError(t, err)
 
@@ -347,7 +342,7 @@ func TestEstimateFeeResponseValidation(t *testing.T) {
 	for _, tc := range errorCases {
 		for name, s := range newSigners(t, tc.result) {
 			t.Run("Error: "+tc.name+" with the "+name, func(t *testing.T) {
-				_, err := s.EstimateFee(t.Context(), newEstimateTestTxn())
+				_, err := s.EstimateFee(t.Context(), newEstimateTestTxn(true))
 				require.EqualError(t, err, tc.errorMsg)
 			})
 		}
@@ -355,20 +350,153 @@ func TestEstimateFeeResponseValidation(t *testing.T) {
 
 	for name, s := range newSigners(t, "["+validEstimate+"]") {
 		t.Run("Valid estimate with the "+name, func(t *testing.T) {
-			estimate, err := s.EstimateFee(t.Context(), newEstimateTestTxn())
+			estimate, err := s.EstimateFee(t.Context(), newEstimateTestTxn(true))
 			require.NoError(t, err)
 			require.Equal(t, felt.NewFromUint64[felt.Felt](0x70), estimate.OverallFee)
 		})
 	}
 }
 
-func newEstimateTestTxn() *rpc.BroadcastInvokeTxnV3 {
+func TestEstimateFeeUsesQueryVersion(t *testing.T) {
+	const estimateResult = `[{"l1_gas_consumed": "0x10", "l1_gas_price": "0x20", ` +
+		`"l2_gas_consumed": "0x30", "l2_gas_price": "0x40", "l1_data_gas_consumed": "0x50", ` +
+		`"l1_data_gas_price": "0x60", "overall_fee": "0x70", "unit": "FRI"}]`
+
+	type sentTxn struct {
+		Version   rpc.TransactionVersion `json:"version"`
+		Signature []*felt.Felt           `json:"signature"`
+	}
+
+	type setup struct {
+		signer    signer.Signer
+		estimated chan json.RawMessage
+		signed    chan rpc.TransactionVersion
+	}
+
+	newSetup := func(t *testing.T, external bool) setup {
+		t.Helper()
+
+		s := setup{
+			signer:    nil,
+			estimated: make(chan json.RawMessage, 1),
+			signed:    make(chan rpc.TransactionVersion, 2),
+		}
+		mockRPC := validator.MockRPCServer(t, validator.MockRPC{
+			Results: map[string]string{estimateFeeMethod: estimateResult},
+			OnRequest: func(method string, params []json.RawMessage) {
+				if method == estimateFeeMethod {
+					s.estimated <- params[0]
+				}
+			},
+		})
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
+		require.NoError(t, err)
+		addresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
+
+		if !external {
+			var internalSigner signer.InternalSigner
+			internalSigner, err = signer.NewInternalSigner(
+				t.Context(),
+				provider,
+				log.NewNopZapLogger(),
+				&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
+				addresses,
+			)
+			require.NoError(t, err)
+			s.signer = &internalSigner
+
+			return s
+		}
+
+		signServer := httptest.NewServer(http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				var req struct {
+					Transaction sentTxn `json:"transaction"`
+				}
+				if json.NewDecoder(r.Body).Decode(&req) == nil {
+					select {
+					case s.signed <- req.Transaction.Version:
+					default:
+					}
+				}
+				_, _ = w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
+			},
+		))
+		t.Cleanup(signServer.Close)
+
+		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
+			provider,
+			log.NewNopZapLogger(),
+			&config.Signer{ExternalURL: signServer.URL, OperationalAddress: "0x456"},
+			addresses,
+		)
+		require.NoError(t, err)
+		s.signer = &externalSigner
+
+		return s
+	}
+
+	estimatedTxn := func(t *testing.T, s *setup) sentTxn {
+		t.Helper()
+
+		var txns []sentTxn
+		require.NoError(t, json.Unmarshal(<-s.estimated, &txns))
+		require.Len(t, txns, 1)
+
+		return txns[0]
+	}
+
+	for name, external := range map[string]bool{"internal signer": false, "external signer": true} {
+		t.Run("V3 transaction is estimated signed as a query with the "+name, func(t *testing.T) {
+			s := newSetup(t, external)
+			txn := newEstimateTestTxn(false)
+
+			_, err := s.signer.EstimateFee(t.Context(), txn)
+			require.NoError(t, err)
+
+			require.Equal(t, newEstimateTestTxn(false), txn)
+			sent := estimatedTxn(t, &s)
+			require.Equal(t, rpc.TransactionV3WithQueryBit, sent.Version)
+			require.Len(t, sent.Signature, 2)
+			if external {
+				require.Len(t, s.signed, 1)
+				require.Equal(t, rpc.TransactionV3WithQueryBit, <-s.signed)
+			}
+		})
+
+		t.Run("Query transaction is estimated as given with the "+name, func(t *testing.T) {
+			s := newSetup(t, external)
+			txn := newEstimateTestTxn(true)
+			signature := []*felt.Felt{
+				felt.NewFromUint64[felt.Felt](1), felt.NewFromUint64[felt.Felt](2),
+			}
+			txn.Signature = signature
+
+			_, err := s.signer.EstimateFee(t.Context(), txn)
+			require.NoError(t, err)
+
+			sent := estimatedTxn(t, &s)
+			require.Equal(t, rpc.TransactionV3WithQueryBit, sent.Version)
+			require.Equal(t, signature, sent.Signature)
+			require.Empty(t, s.signed)
+		})
+	}
+}
+
+const estimateFeeMethod = "starknet_estimateFee"
+
+func newEstimateTestTxn(useQueryBit bool) *rpc.BroadcastInvokeTxnV3 {
 	return snGoUtils.BuildInvokeTxn(
 		felt.NewUnsafeFromString[felt.Felt]("0x456"),
 		new(felt.Felt).SetUint64(1),
-		[]*felt.Felt{},
-		&rpc.ResourceBoundsMapping{},
-		nil,
+		[]*felt.Felt{new(felt.Felt).SetUint64(1)},
+		&rpc.ResourceBoundsMapping{
+			L1Gas:     rpc.ResourceBounds{MaxAmount: "0x0", MaxPricePerUnit: "0x0"},
+			L1DataGas: rpc.ResourceBounds{MaxAmount: "0x0", MaxPricePerUnit: "0x0"},
+			L2Gas:     rpc.ResourceBounds{MaxAmount: "0x0", MaxPricePerUnit: "0x0"},
+		},
+		&snGoUtils.TxnOptions{UseQueryBit: useQueryBit},
 	)
 }
 

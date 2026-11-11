@@ -13,7 +13,6 @@
 | `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | (Optional) Amount of unclaimed rewards, in STRK, that triggers an automatic claim. Required for the auto-claim reward feature. |
 | `--reward-priv-key` | `REWARD_PRIVATE_KEY` | `reward.privateKey` | - | (Optional) Reward account private key, used for internal signing of the reward account. Required for the auto-claim reward feature. Can be replaced by the 'reward-signer-url' flag. |
 | `--reward-signer-url` | `REWARD_EXTERNAL_URL` | `reward.url` | - | (Optional) Reward signer url address, used for external signing of the reward account. Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag. |
-| `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | (Optional) Same as 'braavos-account', but for the reward account. Set it if the reward account is a Braavos account. |
 | `--attest-contract-address` | - | - | auto | Attestation contract address. Default values are provided for Sepolia and Mainnet |
 | `--staking-contract-address` | - | - | auto | Staking contract address. Default values are provided for Sepolia and Mainnet |
 | `--metrics` | - | - | `false` | Enable metric tracking via Prometheus |
@@ -21,5 +20,4 @@
 | `--metrics-port` | - | - | `9090` | Port for the metric server |
 | `--max-retries` | - | - | `infinite` | How many times to retry to get information required for attestation. It can be either a positive integer or the key word 'infinite' |
 | `--balance-threshold` | - | - | `100` | Triggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. If the auto-claim reward feature is configured, the reward account balance is checked as well. The threshold is in STRK (1 STRK = 1e18 FRI). |
-| `--braavos-account` | - | - | `false` | Set it if the operational account is a Braavos account. Fee estimation then uses the query-bit transaction version (1\<\<128 + 0x3) that Braavos accounts require. Applies to both internal and external signing. |
 | `--log-level` | - | - | `info` | Options: trace, debug, info, warn, error. |
