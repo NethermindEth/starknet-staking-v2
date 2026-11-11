@@ -114,6 +114,12 @@ func (p *processingTracer) UpdateEpochInfo(*types.EpochInfo, uint64) {
 	}
 }
 
+func (p *processingTracer) RecordEpochInfoFetchFailure() {
+	if p.resume != nil {
+		<-p.resume
+	}
+}
+
 func (p *processingTracer) UpdateLatestBlockNumber(blockNumber uint64) {
 	p.processed <- blockNumber
 }
@@ -186,7 +192,16 @@ func runWatcher(
 	case <-time.After(10 * time.Second):
 		require.FailNow(t, "the block header watcher did not stop")
 	}
-	wg.Wait()
+	processingStopped := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(processingStopped)
+	}()
+	select {
+	case <-processingStopped:
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "the block header processing did not stop")
+	}
 	close(dispatcher.DoAttest)
 	close(dispatcher.EndOfWindow)
 	close(dispatcher.PrepareAttest)
@@ -281,4 +296,24 @@ func TestRunBlockHeaderWatcherProcessingError(t *testing.T) {
 	)
 	require.ErrorContains(t, err, "injected outage")
 	require.NotContains(t, buf.String(), "processing block headers", buf.String())
+}
+
+func TestRunBlockHeaderWatcherProcessingErrorAfterSubscriptionEnd(t *testing.T) {
+	sleeps := recordSleeps(t)
+	subscriptionEnded := newLineWatcher("client subscription error")
+	tracer := newProcessingTracer(subscriptionEnded.seen)
+	wsURL, subscriptions := newWSNode(t, 1, func(int32, *websocket.Conn) {})
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(subscriptionEnded), log.WithColour(false),
+	)
+	require.NoError(t, err)
+
+	err = runWatcher(t, wsURL, newFailingEpochSigner(t, 2), logger, "1", tracer)
+
+	require.ErrorContains(
+		t, err, "processing block headers: failed to fetch epoch info after 1 retries",
+	)
+	require.ErrorContains(t, err, "injected outage")
+	require.Equal(t, int32(1), subscriptions.Load())
+	require.Equal(t, []time.Duration{time.Second}, sleeps())
 }
