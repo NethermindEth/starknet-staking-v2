@@ -21,11 +21,10 @@ func tryNewValidator(
 	snConfig *config.StarknetConfig,
 	maxRetries types.Retries,
 	logger log.Logger,
-	braavosAccount bool,
 ) (validator.Validator, error) {
 	retries := maxRetries
 	for {
-		v, err := validator.New(ctx, conf, snConfig, logger, braavosAccount)
+		v, err := validator.New(ctx, conf, snConfig, logger)
 		if err == nil {
 			return v, nil
 		}

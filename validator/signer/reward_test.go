@@ -114,7 +114,6 @@ func TestNewRewardSigner(t *testing.T) {
 			rewardConf,
 			new(config.ContractAddresses),
 			&stakerAddress,
-			rewardConf.IsBraavos(),
 			rewardConf.IsExternal(),
 		)
 	}
@@ -167,34 +166,6 @@ func TestNewRewardSigner(t *testing.T) {
 		require.Equal(t, &stakerAddress, rstype.stakerAddress)
 		require.Equal(t, felt.FromUint64[felt.Felt](claimMaxFee), rstype.claimMaxFee)
 		require.Equal(t, claimThreshold, rstype.claimThreshold)
-	})
-
-	t.Run("Braavos reward account", func(t *testing.T) {
-		internalConf := config.Reward{
-			PrivKey:        "0x123",
-			Address:        testRewardAddress,
-			ClaimThreshold: claimThreshold,
-			Braavos:        new(true),
-		}
-		rs, err := newRewardSigner(t, newProvider(t, stakerInfo), &internalConf)
-		require.NoError(t, err)
-		internalSigner, ok := rs.(*rewardSigner).signer.(*InternalSigner)
-		require.True(t, ok)
-		require.True(t, internalSigner.braavos)
-
-		externalConf := config.Reward{
-			ExternalURL:    newTestSignerServer(t),
-			Address:        testRewardAddress,
-			ClaimThreshold: claimThreshold,
-			Braavos:        new(true),
-		}
-		provider := newProvider(t, stakerInfo)
-		expectBuildClaimTxn(t, provider, felt.NewFromUint64[felt.Felt](5))
-		rs, err = newRewardSigner(t, provider, &externalConf)
-		require.NoError(t, err)
-		externalSigner, ok := rs.(*rewardSigner).signer.(*ExternalSigner)
-		require.True(t, ok)
-		require.True(t, externalSigner.braavos)
 	})
 
 	t.Run("Staker address as reward account", func(t *testing.T) {
@@ -595,7 +566,7 @@ func TestBuildClaimRewardTransaction(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, rpc.TransactionTypeInvoke, txn.Type)
-		require.Equal(t, rpc.TransactionV3, txn.Version)
+		require.Equal(t, rpc.TransactionV3WithQueryBit, txn.Version)
 		require.Equal(t, rewardAddress.Felt(), txn.SenderAddress)
 		require.Equal(t, nonce, txn.Nonce)
 		require.Equal(t, rpc.U64("0x0"), txn.Tip)
@@ -1104,7 +1075,6 @@ func TestClaimRewardsBounds(t *testing.T) {
 				chainID:             *new(felt.Felt).SetBytes([]byte("SN_SEPOLIA")),
 				url:                 newHungSigner(t),
 				validationContracts: *sepoliaContracts(t),
-				braavos:             false,
 			}
 			rs := newTestRewardSigner(t, externalSigner, provider, 1, claimMaxFee)
 			rs.claimTimeout = time.Second
@@ -1540,7 +1510,6 @@ func TestNewRewardSignerLogsAccount(t *testing.T) {
 		&config.Reward{PrivKey: "0x123", Address: testRewardAddress, ClaimThreshold: 1},
 		new(config.ContractAddresses),
 		&stakerAddress,
-		false,
 		false,
 	)
 	require.NoError(t, err)

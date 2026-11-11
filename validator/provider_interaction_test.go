@@ -292,7 +292,7 @@ func TestNewRejectsNonWebsocketURL(t *testing.T) {
 			conf := config.Config{Provider: config.Provider{HTTP: "http://localhost:1", WS: wsURL}}
 
 			_, err := validator.New(
-				t.Context(), &conf, new(config.StarknetConfig), log.NewNopZapLogger(), false,
+				t.Context(), &conf, new(config.StarknetConfig), log.NewNopZapLogger(),
 			)
 
 			require.ErrorContains(t, err, "WS provider URL must use ws:// or wss://")
@@ -301,7 +301,7 @@ func TestNewRejectsNonWebsocketURL(t *testing.T) {
 	}
 }
 
-func TestNewLogsBraavosMode(t *testing.T) {
+func TestNewStartupLogs(t *testing.T) {
 	server := validator.MockRPCServer(t, validator.MockRPC{
 		Results: nil,
 		CallResults: map[string]string{
@@ -310,27 +310,23 @@ func TestNewLogsBraavosMode(t *testing.T) {
 		},
 		OnWSUpgrade: nil,
 	})
-	rewardBraavos := true
 
 	testCases := []struct {
 		name         string
 		signer       config.Signer
-		braavos      bool
 		expectedLine string
 	}{
 		{
 			name:         "internal signer",
 			signer:       config.Signer{OperationalAddress: "0x456", PrivKey: "0x123"},
-			braavos:      true,
-			expectedLine: `using internal signer	{"braavosAccount": true}`,
+			expectedLine: "using internal signer\n",
 		},
 		{
 			name: "external signer",
 			signer: config.Signer{
 				OperationalAddress: "0x456", ExternalURL: "http://localhost:1",
 			},
-			expectedLine: `using external signer	{"externalSignerURL": ` +
-				`"http://localhost:1", "braavosAccount": false}`,
+			expectedLine: `using external signer	{"externalSignerURL": "http://localhost:1"}`,
 		},
 	}
 
@@ -345,12 +341,12 @@ func TestNewLogsBraavosMode(t *testing.T) {
 				Provider: config.Provider{HTTP: server.URL, WS: "ws://localhost:1"},
 				Signer:   tc.signer,
 				Reward: config.Reward{
-					Address: "0x789", PrivKey: "0xabc", ClaimThreshold: 1, Braavos: &rewardBraavos,
+					Address: "0x789", PrivKey: "0xabc", ClaimThreshold: 1,
 				},
 			}
 
 			_, err = validator.New(
-				t.Context(), &conf, new(config.StarknetConfig), logger, tc.braavos,
+				t.Context(), &conf, new(config.StarknetConfig), logger,
 			)
 
 			require.NoError(t, err)
@@ -361,7 +357,7 @@ func TestNewLogsBraavosMode(t *testing.T) {
 			require.Contains(t, buf.String(), `"stakingContractAddress": "0x`)
 			require.Contains(t, buf.String(), `"attestContractAddress": "0x`)
 			require.NotContains(t, buf.String(), "validationContracts")
-			require.Contains(t, buf.String(), `"rewardAddress": "0x789", "braavosAccount": true}`)
+			require.Contains(t, buf.String(), `"rewardAddress": "0x789"}`)
 		})
 	}
 }

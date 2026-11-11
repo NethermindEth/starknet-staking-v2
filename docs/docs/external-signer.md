@@ -59,6 +59,8 @@ will include all the transaction data required for signing. Request example:
 }
 ```
 
+Each transaction is sent to the signer twice. The first request has the query version `0x100000000000000000000000000000003`, which the validator uses only to estimate the fee: a transaction with this version can't be included in a block. The second request has version `0x3`, with the resource bounds set from that estimate, and its signature is the one sent to the network. The signer must hash the transaction with the version it receives, as the provided implementation does.
+
 ### Response Format
 
 The signer wil then respond with the ECDSA signature values `r` and `s`, any other response not matching this format will fail loudly on the Validator side.

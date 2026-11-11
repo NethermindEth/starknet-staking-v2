@@ -20,9 +20,7 @@ import (
 var _ Signer = (*InternalSigner)(nil)
 
 type InternalSigner struct {
-	Account account.Account
-	// If the account used represents a braavos account
-	braavos             bool
+	Account             account.Account
 	validationContracts types.ValidationContracts
 }
 
@@ -32,7 +30,6 @@ func NewInternalSigner(
 	logger log.Logger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
-	braavos bool,
 ) (InternalSigner, error) {
 	privateKey, err := types.PrivateKeyFromString(signer.PrivKey)
 	if err != nil {
@@ -70,7 +67,6 @@ func NewInternalSigner(
 
 	return InternalSigner{
 		Account:             *acc,
-		braavos:             braavos,
 		validationContracts: validationContracts,
 	}, nil
 }
@@ -114,7 +110,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         s.Account.Address,
 		Calldata:              calldata,
-		Version:               rpc.TransactionV3,
+		Version:               rpc.TransactionV3WithQueryBit,
 		Signature:             []*felt.Felt{},
 		Nonce:                 nonce,
 		ResourceBounds:        &defaultResources,
@@ -133,33 +129,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 func (s *InternalSigner) EstimateFee(
 	ctx context.Context, txn *rpc.BroadcastInvokeTxnV3,
 ) (rpc.FeeEstimation, error) {
-	if s.braavos {
-		// Braavos require the use of the query bit txn version for fee estimation.
-		// The query bit txn version is used for custom validation logic from wallets/accounts
-		// when estimating fee/simulating txns
-		txn.Version = rpc.TransactionV3WithQueryBit
-		_, err := s.SignTransaction(ctx, txn)
-		if err != nil {
-			return rpc.FeeEstimation{}, err
-		}
-	}
-
-	estimateFee, err := s.Account.Provider.EstimateFee(
-		ctx,
-		[]rpc.BroadcastTxn{txn},
-		[]rpc.EstimateFeeFlag{},
-		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
-	)
-	if s.braavos {
-		// Revert the transaction version back.
-		// No need to re-sign
-		txn.Version = rpc.TransactionV3
-	}
-	if err != nil {
-		return rpc.FeeEstimation{}, err
-	}
-
-	return singleFeeEstimate(estimateFee)
+	return estimateFee(ctx, s, s.Account.Provider, txn)
 }
 
 func (s *InternalSigner) SignTransaction(

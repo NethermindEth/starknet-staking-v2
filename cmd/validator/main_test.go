@@ -199,8 +199,7 @@ func TestNewCommand(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	// Any reward flag given, even `--reward-braavos-account=false`, requires the rest
-	// of the reward configuration
+	// Any reward flag given requires the rest of the reward configuration
 	t.Run("Reward flags require the full reward configuration", func(t *testing.T) {
 		const (
 			errAddressNotSet = "address is not set in reward configuration"
@@ -211,7 +210,6 @@ func TestNewCommand(t *testing.T) {
 			rewardSignerURLFlag = "--reward-signer-url"
 			rewardThresholdFlag = "--reward-claim-threshold"
 			rewardMaxFeeFlag    = "--reward-claim-max-fee"
-			rewardBraavosFlag   = "--reward-braavos-account"
 		)
 
 		// Returns the required reward flags followed by `optionalFlags`
@@ -254,34 +252,12 @@ func TestNewCommand(t *testing.T) {
 				expectedErr: errAddressNotSet,
 			},
 			{
-				name:        "Only reward braavos account",
-				rewardFlags: []string{rewardBraavosFlag},
-				expectedErr: errAddressNotSet,
-			},
-			{
-				name:        "Only reward braavos account explicitly false",
-				rewardFlags: []string{rewardBraavosFlag + "=false"},
-				expectedErr: errAddressNotSet,
-			},
-			{
 				name:        "Full reward configuration, without optional fields",
 				rewardFlags: fullRewardFlags(),
 			},
 			{
 				name:        "Full reward configuration, with claim max fee",
 				rewardFlags: fullRewardFlags(rewardMaxFeeFlag, "1000"),
-			},
-			{
-				name:        "Full reward configuration, with braavos account",
-				rewardFlags: fullRewardFlags(rewardBraavosFlag),
-			},
-			{
-				name:        "Full reward configuration, with braavos account explicitly false",
-				rewardFlags: fullRewardFlags(rewardBraavosFlag + "=false"),
-			},
-			{
-				name:        "Full reward configuration",
-				rewardFlags: fullRewardFlags(rewardMaxFeeFlag, "1000", rewardBraavosFlag),
 			},
 		}
 

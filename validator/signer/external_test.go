@@ -45,7 +45,6 @@ func TestExternalSignerAddress(t *testing.T) {
 				OperationalAddress: opAddress,
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-			false,
 		)
 		require.NoError(t, err)
 
@@ -65,7 +64,6 @@ func TestExternalSignerAddress(t *testing.T) {
 			logger,
 			&config.Signer{OperationalAddress: malformedAddress},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-			false,
 		)
 		require.ErrorContains(t, err, "invalid operational address")
 		require.ErrorContains(t, err, malformedAddress)

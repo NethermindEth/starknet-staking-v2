@@ -48,9 +48,8 @@ func New(
 	conf *config.Config,
 	snConfig *config.StarknetConfig,
 	logger log.Logger,
-	braavos bool,
 ) (Validator, error) {
-	v, err := newValidator(ctx, conf, snConfig, logger, braavos)
+	v, err := newValidator(ctx, conf, snConfig, logger)
 
 	return v, redactErrorURLs(err)
 }
@@ -60,7 +59,6 @@ func newValidator(
 	conf *config.Config,
 	snConfig *config.StarknetConfig,
 	logger log.Logger,
-	braavos bool,
 ) (Validator, error) {
 	if err := checkWSProviderURL(conf.Provider.WS); err != nil {
 		return Validator{}, err
@@ -79,7 +77,6 @@ func newValidator(
 			logger,
 			&conf.Signer,
 			&snConfig.ContractAddresses,
-			braavos,
 		)
 		if err != nil {
 			return Validator{}, markIfTransient(
@@ -90,7 +87,6 @@ func newValidator(
 		logger.Info(
 			"using external signer",
 			zap.String("externalSignerURL", redactURL(conf.Signer.ExternalURL)),
-			zap.Bool("braavosAccount", braavos),
 		)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
@@ -99,7 +95,6 @@ func newValidator(
 			logger,
 			&conf.Signer,
 			&snConfig.ContractAddresses,
-			braavos,
 		)
 		if err != nil {
 			return Validator{}, markIfTransient(
@@ -107,7 +102,7 @@ func newValidator(
 			)
 		}
 		signer = &internalSigner
-		logger.Info("using internal signer", zap.Bool("braavosAccount", braavos))
+		logger.Info("using internal signer")
 	}
 
 	logger.Info(
@@ -132,7 +127,6 @@ func newValidator(
 			&conf.Reward,
 			&snConfig.ContractAddresses,
 			&epochInfo.StakerAddress,
-			conf.Reward.IsBraavos(),
 			conf.Reward.IsExternal(),
 		)
 		if err != nil {
@@ -144,7 +138,6 @@ func newValidator(
 		logger.Info(
 			"Reward auto-claiming enabled",
 			zap.String("rewardAddress", rewardSigner.Address().String()),
-			zap.Bool("braavosAccount", conf.Reward.IsBraavos()),
 		)
 	}
 
