@@ -9,6 +9,7 @@ const config: Config = {
 
   future: {
     v4: true,
+    faster: true,
   },
 
   url: 'https://nethermindeth.github.io',
@@ -18,11 +19,20 @@ const config: Config = {
   projectName: 'starknet-staking-v2',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenAnchors: 'throw',
+
+  markdown: {
+    mdx1Compat: {
+      admonitions: true,
+    },
+    hooks: {
+      onBrokenMarkdownLinks: 'throw',
+    },
+  },
 
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en'],
+    defaultLocale: 'en-GB',
+    locales: ['en-GB'],
   },
 
   presets: [
@@ -32,6 +42,8 @@ const config: Config = {
         docs: {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
+          editUrl: 'https://github.com/NethermindEth/starknet-staking-v2/edit/main/docs/',
+          showLastUpdateTime: true,
         },
         blog: false,
         theme: {
@@ -41,20 +53,30 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    './plugins/llms-txt.js',
+    [
+      '@easyops-cn/docusaurus-search-local',
+      {
+        docsRouteBasePath: '/',
+        removeDefaultStopWordFilter: true,
+        highlightSearchTermsOnTargetPage: true,
+      },
+    ],
+  ],
+
   themeConfig: {
+    colorMode: {
+      defaultMode: 'dark',
+      respectPrefersColorScheme: true,
+    },
     navbar: {
       title: 'Starknet Staking v2',
       logo: {
         alt: 'Starknet Logo',
         src: 'img/logo.svg',
-        href: '/',
       },
       items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
-          position: 'left',
-        },
         {
           href: 'https://github.com/NethermindEth/starknet-staking-v2',
           label: 'GitHub',
@@ -63,7 +85,7 @@ const config: Config = {
       ],
     },
     footer: {
-      style: 'dark',
+      style: 'light',
       links: [
         {
           title: 'Docs',
@@ -117,11 +139,11 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Nethermind. Built with Docusaurus.`,
+      copyright: `Nethermind © ${new Date().getFullYear()}`,
     },
     prism: {
-      theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      theme: prismThemes.oneLight,
+      darkTheme: prismThemes.oneDark,
       additionalLanguages: ['bash', 'json', 'yaml', 'docker'],
     },
   } satisfies Preset.ThemeConfig,
