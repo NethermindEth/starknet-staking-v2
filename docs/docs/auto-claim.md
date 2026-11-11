@@ -46,7 +46,7 @@ If any of these options is set, even `--reward-braavos-account=false`, the rewar
 - Exactly one signing method is required: either `--reward-priv-key` or `--reward-signer-url`. As for the operational signer, setting both is an error.
 - `--reward-claim-threshold` is required and must be greater than zero.
 
-The options follow the same [precedence](./configuration) as the rest of the configuration: command line flags, then environment variables, then the configuration file.
+The options follow the same [precedence](./setup) as the rest of the configuration: command line flags, then environment variables, then the configuration file.
 
 ### Examples
 

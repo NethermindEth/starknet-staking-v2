@@ -6,7 +6,7 @@ sidebar_position: 4
 
 This page provides a complete reference of all configuration options available in the Starknet Staking v2 validator.
 
-In addition to the core configuration described in the [Configuration](./configuration) page, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag:
+In addition to the core configuration described in the [Setup](./setup) page, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag:
 
 ```bash
 # Standalone binary

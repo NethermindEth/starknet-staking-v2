@@ -103,8 +103,8 @@ const config: Config = {
               to: '/installation',
             },
             {
-              label: 'Configuration',
-              to: '/configuration',
+              label: 'Setup',
+              to: '/setup',
             },
           ],
         },

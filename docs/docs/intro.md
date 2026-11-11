@@ -26,7 +26,7 @@ Ready to get started? Here's what you need to do:
 
 1. **[Become a Validator](./becoming-validator)** - Complete guide from staking to running
 2. **[Install](./installation)** the validator software
-3. **[Configure](./configuration)** your validator and start running
+3. **[Set up](./setup)** your validator and start running
 
 ## Need Help?
 

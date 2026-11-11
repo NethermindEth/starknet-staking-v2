@@ -61,7 +61,7 @@ Register as a validator by staking STRK tokens through the Starknet staking cont
 Once your node is running and your STRK tokens are staked:
 
 1. **Install the validator**: Follow the [Installation](./installation) guide to install the validator software.
-2. **Configure and start the validator**: Use your operational address in the [Configuration](./configuration) guide.
+2. **Configure and start the validator**: Use your operational address in the [Setup](./setup) guide.
 3. Monitor your validator's status via dashboards like [Voyager](https://voyager.online/).
 
 :::info
