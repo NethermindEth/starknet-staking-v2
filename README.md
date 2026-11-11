@@ -5,7 +5,7 @@ Validator software written in Go for Starknet staking v2 as specified in [SNIP 2
 
 ## Requirements
 
-- A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) with support for the JSON-RPC 0.10.2 or 0.10.3 API specification. For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/eqlabs/pathfinder).
+- A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) with support for the JSON-RPC 0.10.2, 0.10.3 or 0.10.4 API specification. For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/software-mansion/pathfinder).
 - An account with enough funds to pay for the attestation transactions.
 
 ## Installation
@@ -37,7 +37,7 @@ The validator can be run with:
 ./build/validator --config <path_to_config_file>
 ```
 
-The config file is `.json` which specifies two main fields `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.10.2` or `0.10.3`. Those endpoints are used to listen information from the network.
+The config file is `.json` which specifies two main fields `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.10.2`, `0.10.3` or `0.10.4`. Those endpoints are used to listen information from the network.
 
 For the `signer`, you need to specify the *operational address* and a signing method. 
 The signing method can be either internal to the tool or asked externally, based on if you provide a *private key* or an external *url*:
