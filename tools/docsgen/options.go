@@ -26,7 +26,7 @@ type override struct {
 }
 
 func defaultOverrides() map[string]override {
-	const autoDetected = "Auto-detected on Mainnet and Sepolia"
+	const autoDetected = "auto"
 
 	return map[string]override{
 		"attest-contract-address":  {registered: []string{`""`}, shown: autoDetected},

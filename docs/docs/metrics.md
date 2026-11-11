@@ -52,8 +52,11 @@ The following metrics are available:
 
 ```mdx-code-block
 import Metrics from "./_metrics.md";
+import ExpandableTable from "@site/src/components/ExpandableTable";
 
+<ExpandableTable>
 <Metrics />
+</ExpandableTable>
 ```
 
 Every metric has a `network` label with the chain id of the provider's network, such as `SN_MAIN` or `SN_SEPOLIA`. Metrics with an `account` label report `signer` or `reward` in it. A scrape of `/metrics` returns lines such as:

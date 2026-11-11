@@ -76,6 +76,19 @@ test("splices an imported partial in at its tag, without its generated header", 
   assert.match(out, /After\./);
 });
 
+test("drops the ExpandableTable wrapper around an imported partial", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llms-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, "_table.md"), "| `--max-retries` | `infinite` |\n");
+  const out = cleanBody(
+    '```mdx-code-block\nimport Table from "./_table.md";\nimport ExpandableTable from "@site/src/components/ExpandableTable";\n\n<ExpandableTable>\n<Table />\n</ExpandableTable>\n```',
+    dir,
+  );
+  assert.match(out, /^\| `--max-retries` \| `infinite` \|$/m);
+  assert.ok(!/<\/?ExpandableTable\b/.test(out));
+  assert.ok(!out.includes("import ExpandableTable"));
+});
+
 test("leaves the tag when the imported partial is missing", () => {
   const out = cleanBody('import Gone from "./_gone.md";\n\n<Gone />', "/nonexistent");
   assert.match(out, /<Gone \/>/);

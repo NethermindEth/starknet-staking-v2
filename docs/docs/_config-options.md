@@ -14,8 +14,8 @@
 | `--reward-priv-key` | `REWARD_PRIVATE_KEY` | `reward.privateKey` | - | (Optional) Reward account private key, used for internal signing of the reward account. Required for the auto-claim reward feature. Can be replaced by the 'reward-signer-url' flag. |
 | `--reward-signer-url` | `REWARD_EXTERNAL_URL` | `reward.url` | - | (Optional) Reward signer url address, used for external signing of the reward account. Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag. |
 | `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | (Optional) Same as 'braavos-account', but for the reward account. Set it if the reward account is a Braavos account. |
-| `--attest-contract-address` | - | - | Auto-detected on Mainnet and Sepolia | Attestation contract address. Default values are provided for Sepolia and Mainnet |
-| `--staking-contract-address` | - | - | Auto-detected on Mainnet and Sepolia | Staking contract address. Default values are provided for Sepolia and Mainnet |
+| `--attest-contract-address` | - | - | auto | Attestation contract address. Default values are provided for Sepolia and Mainnet |
+| `--staking-contract-address` | - | - | auto | Staking contract address. Default values are provided for Sepolia and Mainnet |
 | `--metrics` | - | - | `false` | Enable metric tracking via Prometheus |
 | `--metrics-host` | - | - | `localhost` | Host for the metric server. An empty value listens on all interfaces |
 | `--metrics-port` | - | - | `9090` | Port for the metric server |
