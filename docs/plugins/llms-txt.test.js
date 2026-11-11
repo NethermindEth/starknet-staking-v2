@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const { cleanBody } = require("./llms-txt.js");
 
 test("strips MDX imports in prose", () => {
@@ -53,6 +56,30 @@ test("unwraps TabItems to headings and drops the Tabs wrapper", () => {
   assert.match(out, /^### docker$/m);
   assert.ok(!/<\/?(Tabs|TabItem)\b/.test(out));
   assert.match(out, /content/);
+});
+
+test("splices an imported partial in at its tag, without its generated header", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llms-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(
+    path.join(dir, "_table.md"),
+    "{/* Generated. Do not edit. */}\n\n| `--max-retries` | `infinite` |\n",
+  );
+  const out = cleanBody(
+    '```mdx-code-block\nimport Table from "./_table.md";\n\n<Table />\n```\n\nAfter.',
+    dir,
+  );
+  assert.match(out, /^\| `--max-retries` \| `infinite` \|$/m);
+  assert.ok(!out.includes("<Table />"));
+  assert.ok(!out.includes("Do not edit"));
+  assert.ok(!out.includes("import Table"));
+  assert.match(out, /After\./);
+});
+
+test("leaves the tag when the imported partial is missing", () => {
+  const out = cleanBody('import Gone from "./_gone.md";\n\n<Gone />', "/nonexistent");
+  assert.match(out, /<Gone \/>/);
+  assert.ok(!out.includes("import Gone"));
 });
 
 test("collapses runs of blank lines", () => {

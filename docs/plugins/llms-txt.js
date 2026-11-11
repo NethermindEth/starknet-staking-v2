@@ -1,7 +1,15 @@
 const fs = require("fs");
 const path = require("path");
 
-function cleanBody(body) {
+function cleanBody(body, dir) {
+  if (dir) {
+    for (const m of body.matchAll(/^import\s+(\w+)\s+from\s+["'](\.\/[\w./-]+\.md)["']/gm)) {
+      const file = path.join(dir, m[2]);
+      if (!fs.existsSync(file)) continue;
+      const partial = readBody(file).replace(/^\{\/\*[\s\S]*?\*\/\}\n/, "").trim();
+      body = body.replace(new RegExp(`<${m[1]}\\s*/>`, "g"), () => `\n${partial}\n`);
+    }
+  }
   body = body
     .replace(/<TabItem\b[^>]*\b(?:label|value)="([^"]+)"[^>]*>/g, "\n### $1\n")
     .replace(/<\/?Tabs\b[^>]*>/g, "")
@@ -79,7 +87,7 @@ module.exports = function llmsTxtPlugin() {
           const note = doc.description ? `: ${doc.description}` : "";
           index.push(`  - [${doc.title}](${url})${note}`);
           const file = path.join(siteDir, doc.source.replace(/^@site\//, ""));
-          const body = cleanBody(readBody(file)).trim();
+          const body = cleanBody(readBody(file), path.dirname(file)).trim();
           full.push(`# ${doc.title}\n\nSource: ${url}\n\n${body}\n`);
           const clean = body.startsWith("# ")
             ? `${body}\n`
