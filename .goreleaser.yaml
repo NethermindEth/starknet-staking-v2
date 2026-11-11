@@ -50,6 +50,19 @@ kos:
     build: validator
     base_image: cgr.dev/chainguard/static:latest
     bare: true
+    creation_time: "{{ .CommitTimestamp }}"
+    labels: &image-metadata
+      org.opencontainers.image.title: starknet-staking-v2
+      org.opencontainers.image.description: Validator program for Starknet stakers created by Nethermind
+      org.opencontainers.image.source: https://github.com/NethermindEth/starknet-staking-v2
+      org.opencontainers.image.url: https://nethermindeth.github.io/starknet-staking-v2/
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+      org.opencontainers.image.vendor: Nethermind
+      org.opencontainers.image.authors: Nethermind
+      org.opencontainers.image.licenses: MIT
+    annotations: *image-metadata
     platforms:
       - linux/amd64
       - linux/arm64
