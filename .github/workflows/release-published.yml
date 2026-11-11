@@ -54,7 +54,7 @@ jobs:
           DIGEST: ${{ steps.draft.outputs.digest }}
         run: |
           tags=(--tag "$OFFICIAL_IMAGE:$TAG")
-          if [ "$PRERELEASE" != "true" ]; then
+          if [ "$PRERELEASE" != "true" ] && [[ "$TAG" != *-* ]]; then
             tags+=(--tag "$OFFICIAL_IMAGE:latest")
           fi
           docker buildx imagetools create "${tags[@]}" "$DRAFT_IMAGE@$DIGEST"
