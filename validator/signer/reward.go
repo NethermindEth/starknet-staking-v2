@@ -14,6 +14,7 @@ import (
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/NethermindEth/starknet-staking-v2/validator/constants"
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
+	"github.com/NethermindEth/starknet-staking-v2/validator/redact"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/rpc"
@@ -214,7 +215,8 @@ func (rs *rewardSigner) ClaimRewards(ctx context.Context, tracer metrics.Tracer)
 	defer func() {
 		if r := recover(); r != nil {
 			rs.logger.Error(
-				claimLogPrefix+"claim aborted by an unexpected error", zap.Any("error", r),
+				claimLogPrefix+"claim aborted by an unexpected error",
+				zap.String("error", redact.URLsIn(fmt.Sprint(r))),
 			)
 			tracer.RecordRewardClaimFailure()
 		}
@@ -234,7 +236,9 @@ func (rs *rewardSigner) claimRewards(ctx context.Context, tracer metrics.Tracer)
 
 	info, err := rs.fetchStakerInfo(ctx)
 	if err != nil {
-		rs.logger.Error(pref+"failed to get unclaimed rewards amount", zap.Error(err))
+		rs.logger.Error(
+			pref+"failed to get unclaimed rewards amount", zap.Error(redact.ErrorURLs(err)),
+		)
 		tracer.RecordRewardClaimFailure()
 
 		return nil
@@ -268,7 +272,9 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 
 	startBlock, err := rs.provider.BlockNumber(ctx)
 	if err != nil {
-		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
+		rs.logger.Error(
+			pref+"failed to get the latest block number", zap.Error(redact.ErrorURLs(err)),
+		)
 		tracer.RecordRewardClaimFailure()
 
 		return nil
@@ -276,7 +282,9 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 
 	txn, err := rs.buildClaimRewardTransaction(ctx)
 	if err != nil {
-		rs.logger.Error(pref+"failed to build claim reward transaction", zap.Error(err))
+		rs.logger.Error(
+			pref+"failed to build claim reward transaction", zap.Error(redact.ErrorURLs(err)),
+		)
 		tracer.RecordRewardClaimFailure()
 
 		return nil
@@ -294,7 +302,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 
 			return nil
 		}
-		rs.logger.Error(pref+"failed to populate fees", zap.Error(err))
+		rs.logger.Error(pref+"failed to populate fees", zap.Error(redact.ErrorURLs(err)))
 		tracer.RecordRewardClaimFailure()
 
 		return nil
@@ -302,7 +310,9 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 
 	latestBlock, err := rs.provider.BlockNumber(ctx)
 	if err != nil {
-		rs.logger.Error(pref+"failed to get the latest block number", zap.Error(err))
+		rs.logger.Error(
+			pref+"failed to get the latest block number", zap.Error(redact.ErrorURLs(err)),
+		)
 		tracer.RecordRewardClaimFailure()
 
 		return nil
@@ -324,7 +334,7 @@ func (rs *rewardSigner) sendClaim(ctx context.Context, tracer metrics.Tracer) *f
 	if err != nil {
 		rs.logger.Error(
 			pref+"failed to send reward claim transaction",
-			zap.Error(ReadableContractError(err)),
+			zap.Error(redact.ErrorURLs(ReadableContractError(err))),
 		)
 		tracer.RecordRewardClaimFailure()
 
@@ -368,7 +378,7 @@ func (rs *rewardSigner) trackClaim(ctx context.Context, hash *felt.Felt, tracer 
 			rs.logger.Debug(
 				claimLogPrefix+"reward claim transaction status not available yet",
 				zap.String("transactionHash", hash.String()),
-				zap.Error(err),
+				zap.Error(redact.ErrorURLs(err)),
 			)
 
 			continue
@@ -406,7 +416,7 @@ func (rs *rewardSigner) refreshUnclaimed(ctx context.Context, tracer metrics.Tra
 	if err != nil {
 		rs.logger.Warn(
 			claimLogPrefix+"failed to refresh the unclaimed rewards amount after the claim",
-			zap.Error(err),
+			zap.Error(redact.ErrorURLs(err)),
 		)
 
 		return
