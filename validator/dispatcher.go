@@ -1,9 +1,11 @@
 package validator
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
@@ -24,6 +26,8 @@ var ErrTxnHashNotFound = rpc.ErrHashNotFound
 
 type AttestStatus uint8
 
+const maxUnknownStatusPolls = 5
+
 const (
 	Iddle AttestStatus = iota
 	Ongoing
@@ -36,16 +40,18 @@ type AttestTransaction struct {
 	valid bool
 }
 
-func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockHash) error {
+func (t *AttestTransaction) Build(
+	ctx context.Context, signer signerP.Signer, blockHash *types.BlockHash,
+) error {
 	t.valid = false
 
 	var err error
-	t.txn, err = signer.BuildAttestTransaction(blockHash)
+	t.txn, err = signer.BuildAttestTransaction(ctx, blockHash)
 	if err != nil {
 		return fmt.Errorf("signer failed building the transaction: %w", err)
 	}
 
-	_, err = signer.SignTransaction(&t.txn)
+	_, err = signer.SignTransaction(ctx, &t.txn)
 	if err != nil {
 		return fmt.Errorf("signer failed to sign the transaction: %w", err)
 	}
@@ -55,7 +61,7 @@ func (t *AttestTransaction) Build(signer signerP.Signer, blockHash *types.BlockH
 	return nil
 }
 
-func (t *AttestTransaction) Invoke(signer signerP.Signer) (
+func (t *AttestTransaction) Invoke(ctx context.Context, signer signerP.Signer) (
 	rpc.AddInvokeTransactionResponse, error,
 ) {
 	var resp rpc.AddInvokeTransactionResponse
@@ -64,41 +70,46 @@ func (t *AttestTransaction) Invoke(signer signerP.Signer) (
 	}
 	t.valid = false
 
-	// todo(rdr): make sure to estimate fee with query bit with Braavos Account
-	estimate, err := signer.EstimateFee(&t.txn)
+	estimate, err := signer.EstimateFee(ctx, &t.txn)
 	if err != nil {
-		return resp, fmt.Errorf("signer failed to estimate fee: %w", err)
+		return resp, fmt.Errorf(
+			"signer failed to estimate fee: %w", signerP.ReadableContractError(err),
+		)
 	}
 	t.txn.ResourceBounds = utils.FeeEstToResBoundsMap(estimate, constants.FeeEstimationMultiplier)
 
 	// patch for making sure txn.Version is correct
 	t.txn.Version = rpc.TransactionV3
 
-	_, err = signer.SignTransaction(&t.txn)
+	_, err = signer.SignTransaction(ctx, &t.txn)
 	if err != nil {
 		return resp, fmt.Errorf("signer failed to sign the transaction: %w", err)
 	}
 
-	resp, err = signer.InvokeTransaction(&t.txn)
+	resp, err = signer.InvokeTransaction(ctx, &t.txn)
 	if err != nil {
-		return resp, fmt.Errorf("signer failed to invoke the transaction: %w", err)
+		return resp, fmt.Errorf(
+			"signer failed to invoke the transaction: %w", signerP.ReadableContractError(err),
+		)
 	}
 
 	return resp, nil
 }
 
-func (t *AttestTransaction) UpdateNonce(signer signerP.Signer) error {
+func (t *AttestTransaction) UpdateNonce(ctx context.Context, signer signerP.Signer) error {
 	if !t.valid {
 		return errors.New("updating the transaction nonce before building the transaction")
 	}
-	newNonce, err := signer.Nonce()
+	newNonce, err := signer.Nonce(ctx)
 	if err != nil {
 		return fmt.Errorf("signer failed to get the nonce: %w", err)
 	}
 	if !t.txn.Nonce.Equal(newNonce) {
 		t.txn.Nonce = newNonce
-		_, err := signer.SignTransaction(&t.txn)
+		_, err := signer.SignTransaction(ctx, &t.txn)
 		if err != nil {
+			t.valid = false
+
 			return fmt.Errorf("signer failed to sign the transaction: %w", err)
 		}
 	}
@@ -115,6 +126,9 @@ type AttestTracker struct {
 	Transaction AttestTransaction
 	Hash        felt.Felt
 	Status      AttestStatus
+
+	unknownPolls   int
+	unresolvedHash felt.Felt
 }
 
 func NewAttestTracker() AttestTracker {
@@ -126,11 +140,30 @@ func NewAttestTracker() AttestTracker {
 }
 
 func (a *AttestTracker) UpdateStatus(
+	ctx context.Context,
 	signer signerP.Signer,
 	logger log.Logger,
 ) {
-	status := TrackAttest(signer, logger, &a.Hash)
+	status, known := trackAttest(ctx, signer, logger, &a.Hash)
+	if known {
+		a.unknownPolls = 0
+	} else {
+		a.unknownPolls++
+	}
 	a.setStatus(status)
+}
+
+func (a *AttestTracker) unresolvedTransaction() (*felt.Felt, bool) {
+	switch {
+	case a.Status == Successful:
+		return nil, false
+	case a.Status == Ongoing && a.unknownPolls > 0:
+		return &a.Hash, true
+	case !a.unresolvedHash.IsZero():
+		return &a.unresolvedHash, true
+	default:
+		return nil, false
+	}
 }
 
 func (a *AttestTracker) setStatus(status AttestStatus) {
@@ -139,6 +172,7 @@ func (a *AttestTracker) setStatus(status AttestStatus) {
 	case Ongoing, Successful:
 	case Failed:
 		a.Hash = felt.Zero
+		a.unknownPolls = 0
 	case Iddle:
 		panic("status cannot be change to iddle")
 	default:
@@ -153,6 +187,8 @@ type EventDispatcher[S signerP.Signer] struct {
 	EndOfWindow   chan struct{}
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
+
+	progress *headerProgress
 }
 
 func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
@@ -161,11 +197,54 @@ func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
 		DoAttest:      make(chan types.DoAttest),
 		PrepareAttest: make(chan types.PrepareAttest),
 		EndOfWindow:   make(chan struct{}),
+		progress:      new(headerProgress),
 	}
+}
+
+type headerProgress struct {
+	mu            sync.Mutex
+	processed     bool
+	highest       uint64
+	epochLogged   bool
+	loggedEpochID uint64
+}
+
+func (p *headerProgress) addBlock(blockNumber uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.processed && blockNumber <= p.highest {
+		return false
+	}
+	p.processed = true
+	p.highest = blockNumber
+
+	return true
+}
+
+func (p *headerProgress) highestBlock() (uint64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.highest, p.processed
+}
+
+func (p *headerProgress) newEpoch(epochID uint64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.epochLogged && p.loggedEpochID == epochID {
+		return false
+	}
+	p.epochLogged = true
+	p.loggedEpochID = epochID
+
+	return true
 }
 
 //nolint:gocyclo,funlen // Refactor in another time
 func (d *EventDispatcher[S]) Dispatch(
+	ctx context.Context,
 	signer S,
 	rewardSigner signerP.RewardSigner,
 	balanceThreshold float64,
@@ -180,7 +259,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				return
 			}
 			if d.CurrentAttest.Status != Iddle {
-				logger.Error("receiveing prepare attest info while doing attest")
+				logger.Debug("received a prepare attest event while attesting")
 			}
 			if d.CurrentAttest.Transaction.Valid() {
 				continue
@@ -189,11 +268,11 @@ func (d *EventDispatcher[S]) Dispatch(
 			targetBlockHash = attest.BlockHash
 			logger.Debug(
 				"building attest transaction for blockhash",
-				zap.String("blockhash", targetBlockHash.String()),
+				zap.String("targetBlockHash", targetBlockHash.String()),
 			)
-			err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+			err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash)
 			if err != nil {
-				logger.Error("failed to build attest transaction", zap.Error(err))
+				logger.Error("failed to build attest transaction", zap.Error(redactErrorURLs(err)))
 
 				continue
 			}
@@ -204,18 +283,24 @@ func (d *EventDispatcher[S]) Dispatch(
 				return
 			}
 
-			// if the attest event is already being tracked by the tool
-			if d.CurrentAttest.Status != Iddle && d.CurrentAttest.Status != Failed {
-				// If  status is still not successful, check for it
-				if d.CurrentAttest.Status != Successful {
-					d.CurrentAttest.UpdateStatus(signer, logger)
+			if d.CurrentAttest.Status == Successful {
+				continue
+			}
+			if d.CurrentAttest.Status == Ongoing {
+				d.CurrentAttest.UpdateStatus(ctx, signer, logger)
+				if d.CurrentAttest.unknownPolls >= maxUnknownStatusPolls {
+					logger.Warn(
+						"attest transaction status still unknown. Sending the attestation again",
+						zap.String("transactionHash", d.CurrentAttest.Hash.String()),
+						zap.Int("blocksUnknown", d.CurrentAttest.unknownPolls),
+					)
+					d.CurrentAttest.unresolvedHash = d.CurrentAttest.Hash
+					d.CurrentAttest.setStatus(Failed)
 				}
-				// If status is status is already successful or ongoing, do nothing.
-				if d.CurrentAttest.Status == Successful || d.CurrentAttest.Status == Ongoing {
+				if d.CurrentAttest.Status != Failed {
 					continue
 				}
 			}
-			d.CurrentAttest.setStatus(Ongoing)
 
 			// Case when the validator is initiated mid window and didn't have time to prepare
 			// or the transaction invoke failed.
@@ -223,11 +308,15 @@ func (d *EventDispatcher[S]) Dispatch(
 				targetBlockHash = attest.BlockHash
 				logger.Debug(
 					"building attest transaction (in `do` stage) for blockhash",
-					zap.String("blockhash", targetBlockHash.String()),
+					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
-				err := d.CurrentAttest.Transaction.Build(signer, &targetBlockHash)
+				err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash)
 				if err != nil {
-					logger.Error("failed to build attest transaction", zap.Error(err))
+					logger.Error(
+						"failed to build attest transaction. Will retry on the next block",
+						zap.Error(redactErrorURLs(err)),
+					)
+					d.CurrentAttest.setStatus(Failed)
 
 					continue
 				}
@@ -236,9 +325,13 @@ func (d *EventDispatcher[S]) Dispatch(
 				// Otherwise, the tx was prepared in advance. Update the transaction nonce
 				// since it was set some blocks ago
 				logger.Debug("updating attest transaction nonce")
-				err := d.CurrentAttest.Transaction.UpdateNonce(signer)
+				err := d.CurrentAttest.Transaction.UpdateNonce(ctx, signer)
 				if err != nil {
-					logger.Error("failed to update transaction nonce", zap.Error(err))
+					logger.Error(
+						"failed to update transaction nonce. Will retry on the next block",
+						zap.Error(redactErrorURLs(err)),
+					)
+					d.CurrentAttest.setStatus(Failed)
 
 					continue
 				}
@@ -246,9 +339,9 @@ func (d *EventDispatcher[S]) Dispatch(
 
 			logger.Info(
 				"invoking attest",
-				zap.String("target block hash", targetBlockHash.String()),
+				zap.String("targetBlockHash", targetBlockHash.String()),
 			)
-			resp, err := d.CurrentAttest.Transaction.Invoke(signer)
+			resp, err := d.CurrentAttest.Transaction.Invoke(ctx, signer)
 			if err != nil {
 				if strings.Contains(err.Error(), "Attestation is done for this epoch") {
 					logger.Info("attestation is already done for this epoch")
@@ -258,31 +351,43 @@ func (d *EventDispatcher[S]) Dispatch(
 				}
 
 				logger.Error(
-					"failed to attest",
-					zap.Error(err),
+					"failed to attest. Will retry on the next block",
+					zap.Error(redactErrorURLs(err)),
 				)
 				d.CurrentAttest.setStatus(Failed)
 
 				continue
 			}
 
-			logger.Debug("attest transaction sent", zap.String("hash", resp.Hash.String()))
+			logger.Debug(
+				"attest transaction sent", zap.String("transactionHash", resp.Hash.String()),
+			)
 			d.CurrentAttest.Hash = *resp.Hash
+			d.CurrentAttest.setStatus(Ongoing)
 			// Record attestation submission in metrics
 			tracer.RecordAttestationSubmitted()
 
 		case <-d.EndOfWindow:
 			logger.Info("end of window reached")
-			if d.CurrentAttest.Status != Successful {
-				d.CurrentAttest.UpdateStatus(signer, logger)
+			if d.CurrentAttest.Status == Ongoing {
+				d.CurrentAttest.UpdateStatus(ctx, signer, logger)
 			}
-			if d.CurrentAttest.Status == Successful {
+			unresolvedHash, unresolved := d.CurrentAttest.unresolvedTransaction()
+			switch {
+			case d.CurrentAttest.Status == Successful:
 				logger.Info(
 					"successfully attested to target block",
 					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
 				tracer.RecordAttestationConfirmed()
-			} else {
+			case unresolved:
+				logger.Warn(
+					"end of window reached without knowing if the attestation succeeded. "+
+						"Not counted as a failure, check the transaction on a block explorer",
+					zap.String("targetBlockHash", targetBlockHash.String()),
+					zap.String("transactionHash", unresolvedHash.String()),
+				)
+			default:
 				logger.Warn(
 					"failed to attest to target block",
 					zap.String("targetBlockHash", targetBlockHash.String()),
@@ -293,39 +398,55 @@ func (d *EventDispatcher[S]) Dispatch(
 			// clean slate for the next window
 			d.CurrentAttest = NewAttestTracker()
 			// check the accounts balances
-			go CheckBalance(signer, rewardSigner, balanceThreshold, logger, tracer)
+			go CheckBalance(ctx, signer, rewardSigner, balanceThreshold, logger, tracer)
 
 			// Claim rewards if the feature is enabled
 			if rewardSigner != nil {
-				go rewardSigner.ClaimRewards(tracer)
+				go rewardSigner.ClaimRewards(ctx, tracer)
 			}
 		}
 	}
 }
 
 func TrackAttest[S signerP.Signer](
+	ctx context.Context,
 	signer S,
 	logger log.Logger,
 	txHash *felt.Felt,
 ) AttestStatus {
-	txStatus, err := signer.TransactionStatus(txHash)
+	status, _ := trackAttest(ctx, signer, logger, txHash)
+
+	return status
+}
+
+func trackAttest[S signerP.Signer](
+	ctx context.Context,
+	signer S,
+	logger log.Logger,
+	txHash *felt.Felt,
+) (AttestStatus, bool) {
+	if txHash.IsZero() {
+		logger.Warn("no attest transaction to track. Will retry")
+
+		return Failed, true
+	}
+
+	txStatus, err := signer.TransactionStatus(ctx, txHash)
 	if err != nil {
 		if err.Error() == ErrTxnHashNotFound.Error() {
 			logger.Info(
-				"attest transaction status was not found. Will wait.",
+				"attest transaction status was not found. Will check again on the next block",
 				zap.String("transactionHash", txHash.String()),
 			)
-
-			return Ongoing
 		} else {
-			logger.Error(
-				"attest transaction FAILED. Will retry.",
+			logger.Warn(
+				"failed to get the attest transaction status. Will check again on the next block",
 				zap.String("transactionHash", txHash.String()),
-				zap.Error(err),
+				zap.Error(redactErrorURLs(err)),
 			)
-
-			return Failed
 		}
+
+		return Ongoing, false
 	}
 
 	if txStatus.ExecutionStatus == rpc.TxnExecutionStatusREVERTED {
@@ -335,7 +456,7 @@ func TrackAttest[S signerP.Signer](
 			zap.String("failureReason", txStatus.FailureReason),
 		)
 
-		return Failed
+		return Failed, true
 	}
 
 	switch txStatus.FinalityStatus {
@@ -346,7 +467,7 @@ func TrackAttest[S signerP.Signer](
 			zap.String("finalityStatus", string(txStatus.FinalityStatus)),
 		)
 
-		return Ongoing
+		return Ongoing, true
 	default:
 		logger.Info(
 			"attest transaction SUCCESSFUL.",
@@ -355,6 +476,6 @@ func TrackAttest[S signerP.Signer](
 			zap.String("executionStatus", string(txStatus.ExecutionStatus)),
 		)
 
-		return Successful
+		return Successful, true
 	}
 }

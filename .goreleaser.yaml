@@ -16,6 +16,8 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
     ldflags:
       - -s -w -X github.com/NethermindEth/starknet-staking-v2/validator.Version={{ .Version }}
 
@@ -46,15 +48,37 @@ changelog:
 kos:
   - id: validator-image
     build: validator
+    base_image: cgr.dev/chainguard/static:latest
     bare: true
+    creation_time: "{{ .CommitTimestamp }}"
+    labels: &image-metadata
+      org.opencontainers.image.title: starknet-staking-v2
+      org.opencontainers.image.description: Validator program for Starknet stakers created by Nethermind
+      org.opencontainers.image.source: https://github.com/NethermindEth/starknet-staking-v2
+      org.opencontainers.image.url: https://nethermindeth.github.io/starknet-staking-v2/
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+      org.opencontainers.image.vendor: Nethermind
+      org.opencontainers.image.authors: Nethermind
+      org.opencontainers.image.licenses: MIT
+    annotations: *image-metadata
     platforms:
       - linux/amd64
       - linux/arm64
     repositories:
-      - docker.io/nethermind/starknet-staking-v2
+      - docker.io/nethermindeth/starknet-staking-v2
     tags:
       - "{{ .Tag }}"
       - latest
+
+docker_signs:
+  - artifacts: manifests
+    output: true
+    args:
+      - sign
+      - "${artifact}@${digest}"
+      - --yes
 
 release:
   github:
@@ -62,9 +86,12 @@ release:
     name: starknet-staking-v2
   prerelease: auto
   draft: true
+  use_existing_draft: true
   footer: |-
     ## Docker Images
 
     - `nethermind/starknet-staking-v2:{{ .Tag }}`
+    {{- if not .Prerelease }}
     - `nethermind/starknet-staking-v2:latest`
+    {{- end }}
 

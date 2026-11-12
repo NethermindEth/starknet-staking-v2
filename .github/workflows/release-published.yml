@@ -1,0 +1,65 @@
+name: Release Published
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  official-image:
+    name: Push Official Docker Image
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      PRERELEASE: ${{ github.event.release.prerelease }}
+      DRAFT_IMAGE: nethermindeth/starknet-staking-v2
+      OFFICIAL_IMAGE: nethermind/starknet-staking-v2
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_RELEASE_OIDC_CONNECTIONID }}
+        with:
+          username: ${{ vars.DOCKERHUB_RELEASE_ORGANIZATION }}
+
+      - name: Resolve the draft image
+        id: draft
+        run: |
+          digest=$(docker buildx imagetools inspect "$DRAFT_IMAGE:$TAG" --format '{{json .Manifest}}' | jq -re .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the draft image signature
+        env:
+          DIGEST: ${{ steps.draft.outputs.digest }}
+          IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yaml@refs/tags/${{ github.event.release.tag_name }}
+        run: |
+          cosign verify \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$DRAFT_IMAGE@$DIGEST" > /dev/null
+
+      - name: Copy the image to the official repository
+        env:
+          DIGEST: ${{ steps.draft.outputs.digest }}
+        run: |
+          tags=(--tag "$OFFICIAL_IMAGE:$TAG")
+          if [ "$PRERELEASE" != "true" ] && [[ "$TAG" != *-* ]]; then
+            tags+=(--tag "$OFFICIAL_IMAGE:latest")
+          fi
+          docker buildx imagetools create "${tags[@]}" "$DRAFT_IMAGE@$DIGEST"
+
+      - name: Sign the official image
+        env:
+          DIGEST: ${{ steps.draft.outputs.digest }}
+        run: cosign sign --yes "$OFFICIAL_IMAGE@$DIGEST"

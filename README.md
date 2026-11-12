@@ -5,7 +5,7 @@ Validator software written in Go for Starknet staking v2 as specified in [SNIP 2
 
 ## Requirements
 
-- A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) with support for the JSON-RPC 0.10.2 or 0.10.3 API specification. For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/eqlabs/pathfinder).
+- A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) that serves RPC v0.10 (the `/rpc/v0_10` path on Juno and Pathfinder). For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/software-mansion/pathfinder).
 - An account with enough funds to pay for the attestation transactions.
 
 ## Installation
@@ -37,7 +37,7 @@ The validator can be run with:
 ./build/validator --config <path_to_config_file>
 ```
 
-The config file is `.json` which specifies two main fields `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that supports rpc version `0.10.2` or `0.10.3`. Those endpoints are used to listen information from the network.
+The config file is `.json` which specifies two main fields `provider` and `signer`. For the `provider`, it requires an *http* and *websocket* endpoints to a starknet node that serves RPC v0.10 (the `/rpc/v0_10` path on Juno and Pathfinder). Those endpoints are used to listen information from the network.
 
 For the `signer`, you need to specify the *operational address* and a signing method. 
 The signing method can be either internal to the tool or asked externally, based on if you provide a *private key* or an external *url*:
@@ -51,8 +51,8 @@ A full configuration file looks like this:
 ```json
 {
   "provider": {
-      "http": "http://localhost:6060/v0_10",
-      "ws": "ws://localhost:6061/v0_10"
+      "http": "http://localhost:6060/rpc/v0_10",
+      "ws": "ws://localhost:6061/rpc/v0_10"
   },
   "signer": {
       "url": "http://localhost:8080",
@@ -68,8 +68,8 @@ Note that only one signing method can be set, either `url` or `privateKey`. Sinc
 Alternatively, similarly as described as the previous section, the validator can be configured using environment vars. The following example using a `.env` file with the following content:
 
 ```bash
-export PROVIDER_HTTP_URL="http://localhost:6060/v0_10"
-export PROVIDER_WS_URL="ws://localhost:6061/v0_10"
+export PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10"
+export PROVIDER_WS_URL="ws://localhost:6061/rpc/v0_10"
 
 export SIGNER_EXTERNAL_URL="http://localhost:8080"
 export SIGNER_OPERATIONAL_ADDRESS="0x123"
@@ -89,8 +89,8 @@ Finally, as a third alternative, you can specify the necessary validation config
 
 ```bash
 ./build/validator \
-    --provider-http "http://localhost:6060/v0_10" \
-    --provider-ws "ws://localhost:6061/v0_10" \
+    --provider-http "http://localhost:6060/rpc/v0_10" \
+    --provider-ws "ws://localhost:6061/rpc/v0_10" \
     --signer-url "http://localhost:8080" \
     --signer-op-address "0x123"
 ```
@@ -101,9 +101,9 @@ Finally, as a third alternative, you can specify the necessary validation config
 Using a combination of both approaches is also valid. Values set by flags will override values set by enviroment flags and values set by enviroment flags will override values set in a configuration file.
 
 ```bash
-PROVIDER_HTTP_URL="http://localhost:6060/v0_10" ./build/validator \
+PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10" ./build/validator \
     --config <path_to_config_file> \
-    --provider-ws "ws://localhost:6061/v0_10" \
+    --provider-ws "ws://localhost:6061/rpc/v0_10" \
     --signer-url "http://localhost:8080" \
     --signer-op-address "0x123"
 ```
@@ -120,9 +120,7 @@ In addition to the configuration described above, the tool allows for other non-
 
 4. `--log-level` set's the tool logging level. Defaults to `info`.
 
-5. `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. It only applies to the operational account, use `--reward-braavos-account` for the reward account.
-
-6. `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. When the estimated tip is above it, the max tip is used instead and a warning is logged. Set it to 0 to never pay a tip. Defaults to unlimited.
+5. `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. When the estimated tip is above it, the max tip is used instead and a warning is logged. Set it to 0 to never pay a tip. Defaults to unlimited.
 
 ## Other features
 

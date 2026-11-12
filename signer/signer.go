@@ -6,21 +6,25 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
+	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/account"
 	"github.com/NethermindEth/starknet.go/curve"
 	"github.com/NethermindEth/starknet.go/hash"
 	"github.com/NethermindEth/starknet.go/rpc"
-	"github.com/cockroachdb/errors"
 	"go.uber.org/zap"
 )
 
-const SignEndpoint = "/sign"
+const (
+	SignEndpoint    = "/sign"
+	shutdownTimeout = 5 * time.Second
+)
 
 type Request struct {
 	*rpc.BroadcastInvokeTxnV3 `json:"transaction"`
@@ -46,9 +50,9 @@ type Signer struct {
 }
 
 func New(privateKey string, logger log.Logger) (Signer, error) {
-	privKey, ok := new(big.Int).SetString(privateKey, 0)
-	if !ok {
-		return Signer{}, errors.Errorf("cannot turn private key %s into a big int", privateKey)
+	privKey, err := types.PrivateKeyFromString(privateKey)
+	if err != nil {
+		return Signer{}, fmt.Errorf("invalid private key: %w", err)
 	}
 
 	publicKey, _ := curve.PrivateKeyToPoint(privKey)
@@ -62,32 +66,63 @@ func New(privateKey string, logger log.Logger) (Signer, error) {
 	}, nil
 }
 
+func (s *Signer) router() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(http.MethodPost+" "+SignEndpoint, s.handler)
+
+	return mux
+}
+
 // Listen for requests of the type `POST` at `<address>/sign`. The request
 // should include the hash of the transaction being signed.
-func (s *Signer) Listen(address string) error {
-	mux := http.NewServeMux()
-	mux.HandleFunc(SignEndpoint, s.handler)
+func (s *Signer) Listen(ctx context.Context, address string) error {
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(ctx, "tcp", address)
+	if err != nil {
+		return err
+	}
 
 	//nolint:exhaustruct_v5 // Only specifying used fields
 	server := &http.Server{
-		Addr:         address,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
-		Handler:      mux,
+		Handler:      s.router(),
 	}
 
 	s.logger.Info(
 		"server running",
-		zap.String("URL", address),
+		zap.String("URL", listener.Addr().String()),
 	)
 
-	return server.ListenAndServe()
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- server.Serve(listener)
+	}()
+
+	select {
+	case err := <-serveErr:
+		return err
+	case <-ctx.Done():
+		s.logger.Info("Shutting down the server")
+		shutdownCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), shutdownTimeout,
+		)
+		defer cancel()
+
+		return server.Shutdown(shutdownCtx)
+	}
 }
 
 // Decodes the request and returns ECDSA `r` and `s` signature values via http
 func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
-	s.logger.Debug("receiving http request", zap.Any("request", r))
+	s.logger.Debug(
+		"receiving http request",
+		zap.String("method", r.Method),
+		zap.String("path", r.URL.Path),
+		zap.String("remoteAddress", r.RemoteAddr),
+		zap.Int64("contentLength", r.ContentLength),
+	)
 
 	defer func() { _ = r.Body.Close() }()
 
@@ -102,6 +137,15 @@ func (s *Signer) handler(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(body, &req)
 	if err != nil {
 		http.Error(w, "failed to decode request body: "+err.Error(), http.StatusBadRequest)
+
+		return
+	}
+	if req.BroadcastInvokeTxnV3 == nil || req.ChainID == nil {
+		http.Error(
+			w,
+			"invalid request body: both `transaction` and `chain_id` are required",
+			http.StatusBadRequest,
+		)
 
 		return
 	}

@@ -47,11 +47,15 @@ func (e *EpochInfo) String() string {
 type ValidationContracts struct {
 	Staking Address
 	Attest  Address
+	ChainID string
 }
 
 func ValidationContractsFromAddresses(
 	ca *config.ContractAddresses,
 ) (ValidationContracts, error) {
+	if err := ca.Check(); err != nil {
+		return ValidationContracts{}, err
+	}
 	attest, err := AddressFromString(ca.Attest)
 	if err != nil {
 		return ValidationContracts{}, fmt.Errorf("invalid attest contract address: %w", err)
@@ -64,6 +68,7 @@ func ValidationContractsFromAddresses(
 	return ValidationContracts{
 		Attest:  attest,
 		Staking: staking,
+		ChainID: ca.ChainID(),
 	}, nil
 }
 

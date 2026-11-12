@@ -1,12 +1,16 @@
-.PHONY: validator signer
+.PHONY: validator signer docs-gen
+
+DOCS_SRC ?= .
+GIT_VERSION = $(shell git describe --tags | sed 's/^v//')
+GO_LDFLAGS = -s -w -X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(or $(patsubst v%,%,$(VERSION)),$(GIT_VERSION),dev)
 
 validator:
 	mkdir -p build
-	go build -ldflags "-X github.com/NethermindEth/starknet-staking-v2/validator.Version=$(shell git describe --tags | sed 's/^v//')" -o "./build/validator" "./cmd/validator/."
+	go build -trimpath -ldflags "$(GO_LDFLAGS)" -o "./build/validator" "./cmd/validator/."
 
 signer:
 	mkdir -p build
-	go build -o "./build/signer" "./cmd/signer/."
+	go build -trimpath -ldflags "$(GO_LDFLAGS)" -o "./build/signer" "./cmd/signer/."
 
 clean-testcache: ## Clean Go test cache
 	go clean -testcache
@@ -27,5 +31,11 @@ generate: ## Generate mocks
 	mkdir -p mocks
 	go generate ./...
 
-lint:
+lint: lint-diff
 	go tool -modfile=golangci-lint.mod golangci-lint run
+
+lint-diff:
+	go tool -modfile=golangci-lint.mod golangci-lint run --config=./.golangci_diff.yaml --new-from-rev=origin/main
+
+docs-gen:
+	go run ./tools/docsgen -src $(DOCS_SRC) -out docs/docs

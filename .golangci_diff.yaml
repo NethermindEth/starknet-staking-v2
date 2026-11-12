@@ -1,0 +1,140 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - exhaustruct_v5
+    - funlen
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - govet
+    - ineffassign
+    - intrange
+    - lll
+    - makezero
+    - misspell
+    - mnd
+    - nakedret
+    - nilerr
+    - nilnesserr
+    - noctx
+    - nolintlint
+    - prealloc
+    - staticcheck
+    - testpackage
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        logger:
+          deny:
+            - pkg: github.com/sirupsen/logrus
+              desc: use github.com/NethermindEth/juno/utils for logging
+        cbor:
+          deny:
+            - pkg: github.com/fxamacker/cbor/v2
+              desc: use github.com/NethermindEth/juno/utils/cbor, do not import any other CBOR library directly
+    funlen:
+      lines: 120
+      statements: 50
+    goconst:
+      min-len: 4
+      min-occurrences: 4
+    gocritic:
+      disabled-checks:
+        - sloppyReassign
+        - dupImport
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+        - unnamedResult
+        - importShadow
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 15
+    gosec:
+      excludes:
+        - G115
+    govet:
+      enable:
+        - nilness
+    lll:
+      line-length: 100
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - return
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "8"
+        - "16"
+        - "24"
+        - "32"
+    nolintlint:
+      allow-unused: true
+      require-explanation: true
+      require-specific: true
+    prealloc:
+      simple: true
+      range-loops: false
+      for-loops: false
+    staticcheck:
+      checks:
+        - "all"
+        - "-QF1003"
+        - "-QF1008"
+    testpackage:
+      skip-regexp: "^$"
+      allow-packages: [""]
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - exhaustruct_v5
+          - funlen
+          - gosec
+          - goconst
+          - mnd
+        path: _test\.go
+      - linters:
+          - lll
+        source: '^//go:generate |https?://'
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  exclusions:
+    generated: lax
+run:
+  timeout: 10m

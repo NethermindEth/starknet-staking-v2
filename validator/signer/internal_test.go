@@ -37,11 +37,25 @@ func TestNewInternalSigner(t *testing.T) {
 	loadedEnvVars := envVarsErr == nil
 
 	contractAddresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
-	braavosAccount := false
 
 	t.Run("Error: private key conversion", func(t *testing.T) {
-		if !loadedEnvVars {
-			t.Skipf("couldn't load env vars: %s", envVarsErr.Error())
+		for _, privKey := range []string{
+			"", "0x", "0x0", "zzz-dummy", "0xZZdummy", " 0x123abc", "0x123abc\n", "-0x123abc",
+			"123456", "0x800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",
+		} {
+			validatorAccount, err := signer.NewInternalSigner(
+				t.Context(),
+				nil,
+				logger,
+				&config.Signer{PrivKey: privKey, OperationalAddress: "0x456"},
+				contractAddresses,
+			)
+
+			require.Equal(t, signer.InternalSigner{}, validatorAccount)
+			require.ErrorContains(t, err, "invalid private key: it must be")
+			if len(privKey) > len("0x0") {
+				require.NotContains(t, err.Error(), privKey)
+			}
 		}
 
 		provider, providerErr := validator.NewProvider(t.Context(), envVars.HTTPProviderURL, logger)
@@ -77,7 +91,6 @@ func TestNewInternalSigner(t *testing.T) {
 			logger,
 			&config.Signer{PrivKey: "0x123", OperationalAddress: malformedAddress},
 			contractAddresses,
-			braavosAccount,
 			math.MaxUint64,
 		)
 		require.ErrorContains(t, err, "invalid operational address")
@@ -99,8 +112,7 @@ func TestNewInternalSigner(t *testing.T) {
 		// Test
 		logger := log.NewNopZapLogger()
 		internalSigner, err := signer.NewInternalSigner(
-			t.Context(), provider, logger, &configSigner, contractAddresses, braavosAccount,
-			math.MaxUint64,
+			t.Context(), provider, logger, &configSigner, contractAddresses, math.MaxUint64,
 		)
 		require.NoError(t, err)
 
@@ -212,7 +224,7 @@ func TestSignInvokeTx(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		err := signer.SignInvokeTx(&invokeTx, &felt.Felt{}, mockServer.URL)
+		err := signer.SignInvokeTx(t.Context(), &invokeTx, &felt.Felt{}, mockServer.URL)
 
 		require.Equal(t, []*felt.Felt{}, invokeTx.Signature)
 		expectedErrorMsg := fmt.Sprintf(
@@ -272,13 +284,241 @@ func TestSignInvokeTx(t *testing.T) {
 				}))
 		defer mockServer.Close()
 
-		err := signer.SignInvokeTx(&invokeTx, chainID, mockServer.URL)
+		err := signer.SignInvokeTx(t.Context(), &invokeTx, chainID, mockServer.URL)
 
 		expectedSignature := []*felt.Felt{sigR, sigS}
 		require.Equal(t, expectedSignature, invokeTx.Signature)
 
 		require.NoError(t, err)
 	})
+}
+
+func TestEstimateFeeResponseValidation(t *testing.T) {
+	const validEstimate = `{"l1_gas_consumed": "0x10", "l1_gas_price": "0x20", ` +
+		`"l2_gas_consumed": "0x30", "l2_gas_price": "0x40", "l1_data_gas_consumed": "0x50", ` +
+		`"l1_data_gas_price": "0x60", "overall_fee": "0x70", "unit": "FRI"}`
+
+	newSigners := func(t *testing.T, estimateResult string) map[string]signer.Signer {
+		t.Helper()
+
+		mockRPC := validator.MockRPCServer(t, validator.MockRPC{
+			Results: map[string]string{estimateFeeMethod: estimateResult},
+		})
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
+		require.NoError(t, err)
+
+		addresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
+		internalSigner, err := signer.NewInternalSigner(
+			t.Context(),
+			provider,
+			log.NewNopZapLogger(),
+			&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
+			addresses,
+		)
+		require.NoError(t, err)
+		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
+			provider,
+			log.NewNopZapLogger(),
+			&config.Signer{ExternalURL: "http://127.0.0.1:1", OperationalAddress: "0x456"},
+			addresses,
+		)
+		require.NoError(t, err)
+
+		return map[string]signer.Signer{
+			"internal signer": &internalSigner,
+			"external signer": &externalSigner,
+		}
+	}
+
+	errorCases := []struct {
+		name     string
+		result   string
+		errorMsg string
+	}{
+		{
+			name:     "empty response",
+			result:   `[]`,
+			errorMsg: "invalid fee estimate response: expected 1 estimate, got 0",
+		},
+		{
+			name:     "more estimates than transactions",
+			result:   "[" + validEstimate + ", " + validEstimate + "]",
+			errorMsg: "invalid fee estimate response: expected 1 estimate, got 2",
+		},
+		{
+			name: "null overall fee",
+			result: `[{"l1_gas_consumed": "0x10", "l1_gas_price": "0x20", ` +
+				`"l2_gas_consumed": "0x30", "l2_gas_price": "0x40", ` +
+				`"l1_data_gas_consumed": "0x50", "l1_data_gas_price": "0x60", ` +
+				`"overall_fee": null, "unit": "FRI"}]`,
+			errorMsg: "invalid fee estimate response: missing overall_fee",
+		},
+		{
+			name:     "missing gas fields",
+			result:   `[{"overall_fee": "0x70", "unit": "FRI"}]`,
+			errorMsg: "invalid fee estimate response: missing l1_gas_consumed",
+		},
+	}
+	for _, tc := range errorCases {
+		for name, s := range newSigners(t, tc.result) {
+			t.Run("Error: "+tc.name+" with the "+name, func(t *testing.T) {
+				_, err := s.EstimateFee(t.Context(), newEstimateTestTxn(true))
+				require.EqualError(t, err, tc.errorMsg)
+			})
+		}
+	}
+
+	for name, s := range newSigners(t, "["+validEstimate+"]") {
+		t.Run("Valid estimate with the "+name, func(t *testing.T) {
+			estimate, err := s.EstimateFee(t.Context(), newEstimateTestTxn(true))
+			require.NoError(t, err)
+			require.Equal(t, felt.NewFromUint64[felt.Felt](0x70), estimate.OverallFee)
+		})
+	}
+}
+
+func TestEstimateFeeUsesQueryVersion(t *testing.T) {
+	const estimateResult = `[{"l1_gas_consumed": "0x10", "l1_gas_price": "0x20", ` +
+		`"l2_gas_consumed": "0x30", "l2_gas_price": "0x40", "l1_data_gas_consumed": "0x50", ` +
+		`"l1_data_gas_price": "0x60", "overall_fee": "0x70", "unit": "FRI"}]`
+
+	type sentTxn struct {
+		Version   rpc.TransactionVersion `json:"version"`
+		Signature []*felt.Felt           `json:"signature"`
+	}
+
+	type setup struct {
+		signer    signer.Signer
+		estimated chan json.RawMessage
+		signed    chan rpc.TransactionVersion
+	}
+
+	newSetup := func(t *testing.T, external bool) setup {
+		t.Helper()
+
+		s := setup{
+			signer:    nil,
+			estimated: make(chan json.RawMessage, 1),
+			signed:    make(chan rpc.TransactionVersion, 2),
+		}
+		mockRPC := validator.MockRPCServer(t, validator.MockRPC{
+			Results: map[string]string{estimateFeeMethod: estimateResult},
+			OnRequest: func(method string, params []json.RawMessage) {
+				if method == estimateFeeMethod {
+					s.estimated <- params[0]
+				}
+			},
+		})
+		provider, err := rpc.NewProvider(t.Context(), mockRPC.URL)
+		require.NoError(t, err)
+		addresses := new(config.ContractAddresses).SetDefaults("SN_SEPOLIA")
+
+		if !external {
+			var internalSigner signer.InternalSigner
+			internalSigner, err = signer.NewInternalSigner(
+				t.Context(),
+				provider,
+				log.NewNopZapLogger(),
+				&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
+				addresses,
+			)
+			require.NoError(t, err)
+			s.signer = &internalSigner
+
+			return s
+		}
+
+		signServer := httptest.NewServer(http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				var req struct {
+					Transaction sentTxn `json:"transaction"`
+				}
+				if json.NewDecoder(r.Body).Decode(&req) == nil {
+					select {
+					case s.signed <- req.Transaction.Version:
+					default:
+					}
+				}
+				_, _ = w.Write([]byte(`{"signature": ["0x123", "0x456"]}`))
+			},
+		))
+		t.Cleanup(signServer.Close)
+
+		externalSigner, err := signer.NewExternalSigner(
+			t.Context(),
+			provider,
+			log.NewNopZapLogger(),
+			&config.Signer{ExternalURL: signServer.URL, OperationalAddress: "0x456"},
+			addresses,
+		)
+		require.NoError(t, err)
+		s.signer = &externalSigner
+
+		return s
+	}
+
+	estimatedTxn := func(t *testing.T, s *setup) sentTxn {
+		t.Helper()
+
+		var txns []sentTxn
+		require.NoError(t, json.Unmarshal(<-s.estimated, &txns))
+		require.Len(t, txns, 1)
+
+		return txns[0]
+	}
+
+	for name, external := range map[string]bool{"internal signer": false, "external signer": true} {
+		t.Run("V3 transaction is estimated signed as a query with the "+name, func(t *testing.T) {
+			s := newSetup(t, external)
+			txn := newEstimateTestTxn(false)
+
+			_, err := s.signer.EstimateFee(t.Context(), txn)
+			require.NoError(t, err)
+
+			require.Equal(t, newEstimateTestTxn(false), txn)
+			sent := estimatedTxn(t, &s)
+			require.Equal(t, rpc.TransactionV3WithQueryBit, sent.Version)
+			require.Len(t, sent.Signature, 2)
+			if external {
+				require.Len(t, s.signed, 1)
+				require.Equal(t, rpc.TransactionV3WithQueryBit, <-s.signed)
+			}
+		})
+
+		t.Run("Query transaction is estimated as given with the "+name, func(t *testing.T) {
+			s := newSetup(t, external)
+			txn := newEstimateTestTxn(true)
+			signature := []*felt.Felt{
+				felt.NewFromUint64[felt.Felt](1), felt.NewFromUint64[felt.Felt](2),
+			}
+			txn.Signature = signature
+
+			_, err := s.signer.EstimateFee(t.Context(), txn)
+			require.NoError(t, err)
+
+			sent := estimatedTxn(t, &s)
+			require.Equal(t, rpc.TransactionV3WithQueryBit, sent.Version)
+			require.Equal(t, signature, sent.Signature)
+			require.Empty(t, s.signed)
+		})
+	}
+}
+
+const estimateFeeMethod = "starknet_estimateFee"
+
+func newEstimateTestTxn(useQueryBit bool) *rpc.BroadcastInvokeTxnV3 {
+	return snGoUtils.BuildInvokeTxn(
+		felt.NewUnsafeFromString[felt.Felt]("0x456"),
+		new(felt.Felt).SetUint64(1),
+		[]*felt.Felt{new(felt.Felt).SetUint64(1)},
+		&rpc.ResourceBoundsMapping{
+			L1Gas:     rpc.ResourceBounds{MaxAmount: "0x0", MaxPricePerUnit: "0x0"},
+			L1DataGas: rpc.ResourceBounds{MaxAmount: "0x0", MaxPricePerUnit: "0x0"},
+			L2Gas:     rpc.ResourceBounds{MaxAmount: "0x0", MaxPricePerUnit: "0x0"},
+		},
+		&snGoUtils.TxnOptions{UseQueryBit: useQueryBit},
+	)
 }
 
 func TestFetchEpochInfo(t *testing.T) {
@@ -312,10 +552,10 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, err := signer.FetchEpochInfo(mockSigner)
+		epochInfo, err := signer.FetchEpochInfo(t.Context(), mockSigner)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.ErrorContains(t, err, "some contract error")
@@ -340,10 +580,10 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(1)}, nil)
 
-		epochInfo, err := signer.FetchEpochInfo(mockSigner)
+		epochInfo, err := signer.FetchEpochInfo(t.Context(), mockSigner)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(
@@ -385,13 +625,13 @@ func TestFetchEpochInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(
 				[]*felt.Felt{stakerAddress, stake, epochLen, epochID, currentEpochStartingBlock},
 				nil,
 			)
 
-		epochInfo, err := signer.FetchEpochInfo(mockSigner)
+		epochInfo, err := signer.FetchEpochInfo(t.Context(), mockSigner)
 
 		require.Equal(t, types.EpochInfo{
 			StakerAddress: types.Address(*stakerAddress),
@@ -427,21 +667,19 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		window, err := signer.FetchAttestWindow(mockSigner)
+		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(0), window)
-		require.Equal(
-			t,
-			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
-			err,
-		)
+		require.EqualError(t, err, "calling attestation_window on the attestation contract "+
+			"0x3f32e152b9637c31bfcf73e434f78591067a01ba070505ff6ee195642c9acfb failed: "+
+			"some contract error")
 	})
 
 	t.Run("Return error: wrong contract response length", func(t *testing.T) {
@@ -455,14 +693,14 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{}, nil)
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		window, err := signer.FetchAttestWindow(mockSigner)
+		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(0), window)
 		require.Equal(
@@ -483,14 +721,14 @@ func TestFetchAttestWindow(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(16)}, nil)
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		window, err := signer.FetchAttestWindow(mockSigner)
+		window, err := signer.FetchAttestWindow(t.Context(), mockSigner)
 
 		require.Equal(t, uint64(16), window)
 		require.Nil(t, err)
@@ -600,14 +838,16 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
 		mockSigner.EXPECT().ValidationContracts().Return(
 			validator.SepoliaValidationContracts(t),
 		).Times(1)
 
-		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(mockSigner, logger)
+		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(
+			t.Context(), mockSigner, logger,
+		)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
@@ -639,7 +879,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		epochStartingBlock := uint64(5)
 		mockSigner.
 			EXPECT().
-			Call(expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{
 				new(felt.Felt).SetUint64(1),
 				new(felt.Felt).SetUint64(2),
@@ -658,18 +898,18 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(nil, errors.New("some contract error"))
 
-		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(mockSigner, logger)
+		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(
+			t.Context(), mockSigner, logger,
+		)
 
 		require.Equal(t, types.EpochInfo{}, epochInfo)
 		require.Equal(t, types.AttestInfo{}, attestInfo)
-		require.Equal(
-			t,
-			errors.New("Error when calling entrypoint `attestation_window`: some contract error"),
-			err,
-		)
+		require.EqualError(t, err, "calling attestation_window on the attestation contract "+
+			"0x3f32e152b9637c31bfcf73e434f78591067a01ba070505ff6ee195642c9acfb failed: "+
+			"some contract error")
 	})
 
 	t.Run("Successfully fetch & compute info", func(t *testing.T) {
@@ -704,7 +944,7 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 
 		mockSigner.
 			EXPECT().
-			Call(expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedEpochInfoFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return(
 				[]*felt.Felt{
 					stakerAddress,
@@ -728,11 +968,13 @@ func TestFetchEpochAndAttestInfo(t *testing.T) {
 		attestWindow := uint64(16)
 		mockSigner.
 			EXPECT().
-			Call(expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
+			Call(gomock.Any(), expectedWindowFnCall, rpc.WithBlockTag(rpc.BlockTagLatest)).
 			Return([]*felt.Felt{new(felt.Felt).SetUint64(attestWindow)}, nil)
 
 		// Test
-		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(mockSigner, logger)
+		epochInfo, attestInfo, err := signer.FetchEpochAndAttestInfo(
+			t.Context(), mockSigner, logger,
+		)
 
 		// Assert
 		expectedEpochInfo := types.EpochInfo{

@@ -10,9 +10,34 @@ The validator includes a built-in metrics server that exposes various metrics ab
 
 By default, metrics are disabled. You can enable metrics tracking and customize the host and port with the following flags:
 
+```mdx-code-block
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+```
+
+<Tabs groupId="install">
+<TabItem value="docker" label="Docker" default>
+
+```bash
+docker run --network host \
+  --user "$(id -u):$(id -g)" \
+  -v /path/to/config.json:/app/config/config.json \
+  nethermind/starknet-staking-v2 \
+  --config /app/config/config.json \
+  --metrics --metrics-host "0.0.0.0" --metrics-port "9090"
+```
+
+</TabItem>
+<TabItem value="binary" label="Binary">
+
 ```bash
 ./build/validator --metrics --metrics-host "0.0.0.0" --metrics-port "9090"  # Listen on all interfaces, port 9090
 ```
+
+</TabItem>
+</Tabs>
+
+If the metrics server can't listen on that host and port (an invalid port, a port already in use), the validator exits with an error at startup.
 
 ## Endpoints
 
@@ -25,31 +50,29 @@ The metrics server exposes two endpoints:
 
 The following metrics are available:
 
-| Metric Name | Type | Description | Example |
-|-------------|------|-------------|---------|
-| `validator_attestation_starknet_latest_block_number` | Gauge | The latest block number seen by the validator on the Starknet network | `validator_attestation_starknet_latest_block_number{network="SN_SEPOLIA"} 10500` |
-| `validator_attestation_current_epoch_id` | Gauge | The ID of the current epoch the validator is participating in | `validator_attestation_current_epoch_id{network="SN_SEPOLIA"} 42` |
-| `validator_attestation_current_epoch_length` | Gauge | The total length (in blocks) of the current epoch | `validator_attestation_current_epoch_length{network="SN_SEPOLIA"} 100` |
-| `validator_attestation_current_epoch_starting_block_number` | Gauge | The first block number of the current epoch | `validator_attestation_current_epoch_starting_block_number{network="SN_SEPOLIA"} 10401` |
-| `validator_attestation_current_epoch_assigned_block_number` | Gauge | The specific block number within the current epoch for which the validator is assigned to attest | `validator_attestation_current_epoch_assigned_block_number{network="SN_SEPOLIA"} 10455` |
-| `validator_attestation_last_attestation_timestamp_seconds` | Gauge | The Unix timestamp (in seconds) of the last successful attestation submission | `validator_attestation_last_attestation_timestamp_seconds{network="SN_SEPOLIA"} 1678886400` |
-| `validator_attestation_attestation_submitted_count` | Counter | The total number of attestations submitted by the validator since startup | `validator_attestation_attestation_submitted_count{network="SN_SEPOLIA"} 55` |
-| `validator_attestation_attestation_failure_count` | Counter | The total number of attestation transaction submission failures encountered by the validator since startup | `validator_attestation_attestation_failure_count{network="SN_SEPOLIA"} 3` |
-| `validator_attestation_attestation_confirmed_count` | Counter | The total number of attestations that have been confirmed on the network since validator startup | `validator_attestation_attestation_confirmed_count{network="SN_SEPOLIA"} 52` |
-| `validator_attestation_signer_balance` | Gauge | The balance of the account that signs the attestation after each attest transaction | `validator_attestation_signer_balance{network="SN_SEPOLIA"} 113` |
-| `validator_attestation_signer_below_threshold` | Gauge | Set to one if the account that signs the attestation has it's balance below certain threshold | `validator_attestation_signer_below_threshold{network="SN_SEPOLIA"} 0` |
-| `validator_attestation_reward_balance` | Gauge | The balance of the reward account, checked after each attestation window | `validator_attestation_reward_balance{network="SN_SEPOLIA"} 25` |
-| `validator_attestation_reward_below_threshold` | Gauge | Set to one if the reward account has it's balance below certain threshold | `validator_attestation_reward_below_threshold{network="SN_SEPOLIA"} 0` |
-| `validator_attestation_reward_unclaimed` | Gauge | The staker's unclaimed rewards, in STRK, checked after each attestation window | `validator_attestation_reward_unclaimed{network="SN_SEPOLIA"} 0.83` |
-| `validator_attestation_reward_claim_submitted_count` | Counter | The total number of reward claim transactions submitted by the validator since startup | `validator_attestation_reward_claim_submitted_count{network="SN_SEPOLIA"} 2` |
-| `validator_attestation_reward_claim_failure_count` | Counter | The total number of reward claim failures encountered by the validator since startup | `validator_attestation_reward_claim_failure_count{network="SN_SEPOLIA"} 1` |
-| `validator_attestation_reward_claim_max_fee_exceeded_count` | Counter | The total number of reward claims skipped since startup because the estimated fee exceeded the claim max fee | `validator_attestation_reward_claim_max_fee_exceeded_count{network="SN_SEPOLIA"} 1` |
-| `validator_attestation_reward_last_claim_timestamp_seconds` | Gauge | The Unix timestamp (in seconds) of the last successful reward claim submission | `validator_attestation_reward_last_claim_timestamp_seconds{network="SN_SEPOLIA"} 1678886400` |
+```mdx-code-block
+import Metrics from "./_metrics.md";
+import ExpandableTable from "@site/src/components/ExpandableTable";
 
-All metrics include a `network` label that indicates the Starknet network (e.g., "SN_MAINNET", "SN_SEPOLIA").
+<ExpandableTable>
+<Metrics />
+</ExpandableTable>
+```
+
+Every metric has a `network` label with the chain id of the provider's network, such as `SN_MAIN` or `SN_SEPOLIA`. Metrics with an `account` label report `signer` or `reward` in it. A scrape of `/metrics` returns lines such as:
+
+```text
+validator_attestation_current_epoch_id{network="SN_SEPOLIA"} 42
+```
+
+Reading the counters:
+
+- An increase of `validator_attestation_epoch_info_fetch_failure_count` means the validator is stalled, since block headers are not processed while the fetch fails.
+- While `validator_attestation_balance_check_failure_count` grows, the balance metrics of that account keep their last value.
+- A reward claim that is submitted but neither confirmed nor counted as a failure was not accepted within 2 minutes: check its status manually.
 
 :::info Reward metrics
-All the `validator_attestation_reward_*` metrics are only reported if the [auto-claim rewards](./auto-claim) feature is enabled.
+All the `validator_attestation_reward_*` metrics are only reported if the [auto-claim rewards](./auto-claim) feature is enabled. The reward account balance metrics are not reported when the reward account is the operational account, whose balance is already reported by the signer metrics.
 :::
 
 ## Using with Prometheus

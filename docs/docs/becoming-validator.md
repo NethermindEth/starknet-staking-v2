@@ -9,7 +9,7 @@ Staking on Starknet provides an opportunity to contribute to network security an
 ## Prerequisites
 
 - **STRK Tokens**: At least 20,000 STRK is required for staking on mainnet (1 STRK on Sepolia testnet). For the latest details, check out the [Staking Protocol Details](https://docs.starknet.io/staking/overview/#protocol_details).
-- **Node Setup**: A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) with support for the JSON-RPC 0.10.2 or 0.10.3 API specification. For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/eqlabs/pathfinder).
+- **Node Setup**: A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) that serves RPC v0.10 (the `/rpc/v0_10` path on Juno and Pathfinder). For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/software-mansion/pathfinder).
 - **Starknet Wallet**: A compatible wallet, like [Braavos](https://braavos.app/wallet-features/ledger-on-braavos/) or [Argent](https://www.argent.xyz/blog/how-to-use-your-hardware-wallet-with-argent).
 - **Access to CLI/Block Explorer**: Tools like [Voyager](https://voyager.online) for interacting with contracts.
 - **An account with enough funds** to pay for the attestation transactions.
@@ -39,8 +39,8 @@ The configuration file properties for internal signing will look like:
 ```json
 {
   "provider": {
-      "http": "http://localhost:6060/v0_10",
-      "ws": "ws://localhost:6061/v0_10"
+      "http": "http://localhost:6060/rpc/v0_10",
+      "ws": "ws://localhost:6061/rpc/v0_10"
   },
   "signer": {
       "operationalAddress": "your operational address",
@@ -61,7 +61,7 @@ Register as a validator by staking STRK tokens through the Starknet staking cont
 Once your node is running and your STRK tokens are staked:
 
 1. **Install the validator**: Follow the [Installation](./installation) guide to install the validator software.
-2. **Configure and start the validator**: Use your operational address in the [Configuration](./configuration) guide.
+2. **Configure and start the validator**: Use your operational address in the [Setup](./setup) guide.
 3. Monitor your validator's status via dashboards like [Voyager](https://voyager.online/).
 
 :::info

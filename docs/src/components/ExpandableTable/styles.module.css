@@ -1,0 +1,127 @@
+.root {
+  margin-bottom: var(--ifm-leading);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.35rem;
+}
+
+.toggleAll {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--nm-label-size);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nm-ink-3);
+}
+
+.toggleAll:hover {
+  color: var(--nm-ink);
+}
+
+.scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.root .table {
+  margin: 0;
+}
+
+.root .table th,
+.root .table td {
+  padding: 0.5rem 1rem 0.5rem 0;
+  white-space: nowrap;
+}
+
+.root .table th {
+  text-align: left;
+}
+
+.root .table th:first-child {
+  padding-left: 1.5rem;
+}
+
+.root .summary td {
+  vertical-align: baseline;
+}
+
+.root .table th:last-child,
+.root .table td:last-child {
+  padding-right: 0;
+}
+
+.root .table code {
+  font-size: 0.82rem;
+}
+
+.summary {
+  cursor: pointer;
+}
+
+.root .summary:hover {
+  background: var(--ifm-background-surface-color);
+}
+
+.root .summary[data-open="true"] td {
+  border-bottom-color: transparent;
+}
+
+.chevron {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  vertical-align: middle;
+  color: var(--nm-ink-3);
+}
+
+.chevron::after {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: -0.35rem;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--ifm-transition-fast) linear;
+}
+
+.chevron[aria-expanded="true"]::after {
+  transform: translateY(-0.12rem) rotate(45deg);
+}
+
+.summary:hover .chevron,
+.chevron:focus-visible {
+  color: var(--nm-ink);
+}
+
+.root .details td {
+  padding: 0 0 0.7rem 1.5rem;
+  white-space: normal;
+  color: var(--nm-ink-2);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.root .details td:has(> [hidden]) {
+  padding: 0;
+  border-bottom: none;
+}
+
+.details [data-details] {
+  overflow-wrap: anywhere;
+}

@@ -3,7 +3,6 @@ package signer
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -20,11 +19,8 @@ import (
 var _ Signer = (*InternalSigner)(nil)
 
 type InternalSigner struct {
-	ctx     context.Context
-	Account account.Account
-	logger  log.Logger
-	// If the account used represents a braavos account
-	braavos             bool
+	Account             account.Account
+	logger              log.Logger
 	validationContracts types.ValidationContracts
 	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
 	maxTip uint64
@@ -36,13 +32,11 @@ func NewInternalSigner(
 	logger log.Logger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
-	braavos bool,
 	maxTip uint64,
 ) (InternalSigner, error) {
-	privateKey, ok := new(big.Int).SetString(signer.PrivKey, 0)
-	if !ok {
-		return InternalSigner{},
-			errors.Errorf("cannot turn private key %s into a big int", privateKey)
+	privateKey, err := types.PrivateKeyFromString(signer.PrivKey)
+	if err != nil {
+		return InternalSigner{}, fmt.Errorf("invalid private key: %w", err)
 	}
 
 	publicKey, _ := curve.PrivateKeyToPoint(privateKey)
@@ -75,22 +69,23 @@ func NewInternalSigner(
 	)
 
 	return InternalSigner{
-		ctx:                 ctx,
 		Account:             *acc,
 		logger:              logger,
-		braavos:             braavos,
 		validationContracts: validationContracts,
 		maxTip:              maxTip,
 	}, nil
 }
 
-func (s *InternalSigner) TransactionStatus(transactionHash *felt.Felt) (
+func (s *InternalSigner) TransactionStatus(
+	ctx context.Context, transactionHash *felt.Felt,
+) (
 	*rpc.TxnStatusResult, error,
 ) {
-	return s.Account.Provider.TransactionStatus(s.ctx, transactionHash)
+	return s.Account.Provider.TransactionStatus(ctx, transactionHash)
 }
 
 func (s *InternalSigner) BuildAttestTransaction(
+	ctx context.Context,
 	blockhash *types.BlockHash,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	calls := []rpc.InvokeFunctionCall{{
@@ -103,14 +98,14 @@ func (s *InternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to format calldata: %w", err)
 	}
 
-	nonce, err := s.Account.Nonce(s.ctx)
+	nonce, err := s.Account.Nonce(ctx)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to update the account nonce: %w", err)
 	}
 
 	defaultResources := makeDefaultResources()
 
-	tip, err := estimateAttestTip(s.ctx, s.Account.Provider, s.maxTip, s.logger)
+	tip, err := estimateAttestTip(ctx, s.Account.Provider, s.maxTip, s.logger)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
@@ -120,7 +115,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         s.Account.Address,
 		Calldata:              calldata,
-		Version:               rpc.TransactionV3,
+		Version:               rpc.TransactionV3WithQueryBit,
 		Signature:             []*felt.Felt{},
 		Nonce:                 nonce,
 		ResourceBounds:        &defaultResources,
@@ -136,56 +131,36 @@ func (s *InternalSigner) BuildAttestTransaction(
 	return attestTransaction, nil
 }
 
-func (s *InternalSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error) {
-	if s.braavos {
-		// Braavos require the use of the query bit txn version for fee estimation.
-		// The query bit txn version is used for custom validation logic from wallets/accounts
-		// when estimating fee/simulating txns
-		txn.Version = rpc.TransactionV3WithQueryBit
-		_, err := s.SignTransaction(txn)
-		if err != nil {
-			return rpc.FeeEstimation{}, err
-		}
-	}
-
-	estimateFee, err := s.Account.Provider.EstimateFee(
-		s.ctx,
-		[]rpc.BroadcastTxn{txn},
-		[]rpc.EstimateFeeFlag{},
-		rpc.WithBlockTag(rpc.BlockTagPreConfirmed),
-	)
-	if s.braavos {
-		// Revert the transaction version back.
-		// No need to re-sign
-		txn.Version = rpc.TransactionV3
-	}
-	if err != nil {
-		return rpc.FeeEstimation{}, err
-	}
-
-	return estimateFee[0], nil
+func (s *InternalSigner) EstimateFee(
+	ctx context.Context, txn *rpc.BroadcastInvokeTxnV3,
+) (rpc.FeeEstimation, error) {
+	return estimateFee(ctx, s, s.Account.Provider, txn)
 }
 
 func (s *InternalSigner) SignTransaction(
+	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (*rpc.BroadcastInvokeTxnV3, error) {
-	return txn, s.Account.SignInvokeTransaction(s.ctx, txn)
+	return txn, s.Account.SignInvokeTransaction(ctx, txn)
 }
 
 func (s *InternalSigner) InvokeTransaction(
+	ctx context.Context,
 	txn *rpc.BroadcastInvokeTxnV3,
 ) (rpc.AddInvokeTransactionResponse, error) {
-	return s.Account.Provider.AddInvokeTransaction(s.ctx, txn)
+	return s.Account.Provider.AddInvokeTransaction(ctx, txn)
 }
 
 func (s *InternalSigner) Call(
-	call rpc.FunctionCall, blockID rpc.BlockID,
+	ctx context.Context, call rpc.FunctionCall, blockID rpc.BlockID,
 ) ([]*felt.Felt, error) {
-	return s.Account.Provider.Call(s.ctx, call, blockID)
+	return s.Account.Provider.Call(ctx, call, blockID)
 }
 
-func (s *InternalSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
-	return s.Account.Provider.BlockWithTxHashes(s.ctx, blockID)
+func (s *InternalSigner) BlockWithTxHashes(
+	ctx context.Context, blockID rpc.BlockID,
+) (any, error) {
+	return s.Account.Provider.BlockWithTxHashes(ctx, blockID)
 }
 
 func (s *InternalSigner) Address() *types.Address {
@@ -196,6 +171,6 @@ func (s *InternalSigner) ValidationContracts() *types.ValidationContracts {
 	return &s.validationContracts
 }
 
-func (s *InternalSigner) Nonce() (*felt.Felt, error) {
-	return s.Account.Nonce(s.ctx)
+func (s *InternalSigner) Nonce(ctx context.Context) (*felt.Felt, error) {
+	return s.Account.Nonce(ctx)
 }

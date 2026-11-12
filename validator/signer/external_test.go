@@ -1,11 +1,14 @@
 package signer_test
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
@@ -43,7 +46,6 @@ func TestExternalSignerAddress(t *testing.T) {
 				OperationalAddress: opAddress,
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-			false,
 			math.MaxUint64,
 		)
 		require.NoError(t, err)
@@ -64,7 +66,6 @@ func TestExternalSignerAddress(t *testing.T) {
 			logger,
 			&config.Signer{OperationalAddress: malformedAddress},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-			false,
 			math.MaxUint64,
 		)
 		require.ErrorContains(t, err, "invalid operational address")
@@ -361,7 +362,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, externalSignerURL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, externalSignerURL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "connection refused")
@@ -389,7 +390,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		expectedErrorMsg := fmt.Sprintf(
@@ -420,10 +421,109 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		require.Zero(t, res)
 		require.ErrorContains(t, err, "invalid character")
+	})
+
+	const twoFeltsErrorMsg = "expected a signature of 2 felts"
+	invalidResponses := []struct {
+		name     string
+		body     string
+		errorMsg string
+	}{
+		{
+			name:     "empty object",
+			body:     `{}`,
+			errorMsg: "invalid external signer response `{}`: expected a signature of 2 felts",
+		},
+		{
+			name: "one felt",
+			body: `{"signature": ["0x1"]}`,
+			errorMsg: "invalid external signer response `{\"signature\": [\"0x1\"]}`: " +
+				"expected a signature of 2 felts",
+		},
+		{
+			name:     "three felts",
+			body:     `{"signature": ["0x1", "0x2", "0x3"]}`,
+			errorMsg: twoFeltsErrorMsg,
+		},
+		{
+			name:     "null felt",
+			body:     `{"signature": ["0x1", null]}`,
+			errorMsg: twoFeltsErrorMsg,
+		},
+		{
+			name:     "null signature",
+			body:     `{"signature": null}`,
+			errorMsg: twoFeltsErrorMsg,
+		},
+		{
+			name:     "not a felt",
+			body:     `{"signature": ["0x1", "not a felt"]}`,
+			errorMsg: "invalid external signer response",
+		},
+		{
+			name: "not JSON",
+			body: `hello`,
+			errorMsg: "invalid external signer response `hello`: " +
+				"invalid character 'h' looking for beginning of value",
+		},
+		{
+			name:     "long body is cut",
+			body:     strings.Repeat("x", 300),
+			errorMsg: "invalid external signer response `" + strings.Repeat("x", 200) + "...`: ",
+		},
+		{
+			name:     "long body is cut on a character boundary",
+			body:     strings.Repeat("x", 199) + "é" + strings.Repeat("y", 100),
+			errorMsg: "invalid external signer response `" + strings.Repeat("x", 199) + "...`: ",
+		},
+		{
+			name:     "whitespace is collapsed",
+			body:     "{\n  \"signature\": []\n}\n",
+			errorMsg: "invalid external signer response `{ \"signature\": [] }`: ",
+		},
+	}
+	for _, tc := range invalidResponses {
+		t.Run("Error: invalid response, "+tc.name, func(t *testing.T) {
+			mockServer := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					_, err := w.Write([]byte(tc.body))
+					require.NoError(t, err)
+				}))
+			defer mockServer.Close()
+
+			invokeTxnV3 := snUtils.BuildInvokeTxn(
+				felt.NewUnsafeFromString[felt.Felt]("0x123"),
+				new(felt.Felt).SetUint64(1),
+				[]*felt.Felt{},
+				&rpc.ResourceBoundsMapping{},
+				nil,
+			)
+			res, err := signer.HashAndSignTx(
+				t.Context(), invokeTxnV3, new(felt.Felt).SetUint64(1), mockServer.URL,
+			)
+			require.Zero(t, res)
+			require.ErrorContains(t, err, tc.errorMsg)
+		})
+	}
+
+	t.Run("Error: context done while the signer doesn't answer", func(t *testing.T) {
+		signerURL := newHungSignerServer(t)
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
+
+		invokeTxnV3 := snUtils.BuildInvokeTxn(
+			felt.NewUnsafeFromString[felt.Felt]("0x123"),
+			new(felt.Felt).SetUint64(1),
+			[]*felt.Felt{},
+			&rpc.ResourceBoundsMapping{},
+			nil,
+		)
+		err := hashAndSignWithin(t, ctx, invokeTxnV3, signerURL)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
 
 	t.Run("Successful request and response", func(t *testing.T) {
@@ -446,7 +546,7 @@ func TestHashAndSignTx(t *testing.T) {
 			nil,
 		)
 		chainID := new(felt.Felt).SetUint64(1)
-		res, err := signer.HashAndSignTx(invokeTxnV3, chainID, mockServer.URL)
+		res, err := signer.HashAndSignTx(t.Context(), invokeTxnV3, chainID, mockServer.URL)
 
 		expectedResult := s.Response{
 			Signature: [2]*felt.Felt{
@@ -457,4 +557,42 @@ func TestHashAndSignTx(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expectedResult, res)
 	})
+}
+
+func hashAndSignWithin(
+	t *testing.T, ctx context.Context, txn *rpc.BroadcastInvokeTxnV3, signerURL string,
+) error {
+	t.Helper()
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := signer.HashAndSignTx(ctx, txn, new(felt.Felt).SetUint64(1), signerURL)
+		result <- err
+	}()
+
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "HashAndSignTx did not return while the signer doesn't answer")
+
+		return nil
+	}
+}
+
+func newHungSignerServer(t *testing.T) string {
+	t.Helper()
+
+	release := make(chan struct{})
+	handler := func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(release) })
+
+	return server.URL
 }

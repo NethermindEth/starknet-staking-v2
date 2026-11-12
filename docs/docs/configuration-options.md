@@ -1,12 +1,13 @@
 ---
 sidebar_position: 4
+hide_table_of_contents: true
 ---
 
 # Configuration Options
 
 This page provides a complete reference of all configuration options available in the Starknet Staking v2 validator.
 
-In addition to the core configuration described in the [Configuration](./configuration) page, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag:
+In addition to the core configuration described in the [Setup](./setup) page, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag:
 
 ```bash
 # Standalone binary
@@ -16,47 +17,25 @@ In addition to the core configuration described in the [Configuration](./configu
 
 ## Complete Options Reference
 
-| Option | Environment Variable | Config File | Default | Description |
-|--------|---------------------|-------------|---------|-------------|
-| `--provider-http` | `PROVIDER_HTTP_URL` | `provider.http` | - | HTTP endpoint for JSON-RPC calls |
-| `--provider-ws` | `PROVIDER_WS_URL` | `provider.ws` | - | WebSocket endpoint for real-time updates |
-| `--signer-op-address` | `SIGNER_OPERATIONAL_ADDRESS` | `signer.operationalAddress` | - | Your validator's operational address |
-| `--signer-priv-key` | `SIGNER_PRIVATE_KEY` | `signer.privateKey` | - | Private key for internal signing |
-| `--signer-url` | `SIGNER_EXTERNAL_URL` | `signer.url` | - | URL for external signing service |
-| `--reward-address` | `REWARD_ADDRESS` | `reward.address` | - | Reward account address, used by the [auto-claim rewards](./auto-claim) feature |
-| `--reward-priv-key` | `REWARD_PRIVATE_KEY` | `reward.privateKey` | - | Reward account private key, for internal signing of the claim transactions |
-| `--reward-signer-url` | `REWARD_EXTERNAL_URL` | `reward.url` | - | URL for external signing of the claim transactions |
-| `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | Amount of unclaimed rewards, in STRK, that triggers a claim |
-| `--reward-claim-max-fee` | `REWARD_CLAIM_MAX_FEE` | `reward.claimMaxFee` | Unlimited | Max fee, in FRI, to pay for a claim transaction |
-| `--reward-braavos-account` | `REWARD_BRAAVOS_ACCOUNT` | `reward.braavos` | `false` | Set it if the reward account is a Braavos account |
-| `--max-tip` | `MAX_TIP` | `maxTip` | Unlimited | Max tip, in FRI per L2 gas unit, to pay for an attestation transaction. `0` means never paying a tip |
-| `--config` | - | - | - | Path to JSON configuration file |
-| `--staking-contract-address` | - | - | Auto-detected | Custom staking contract address |
-| `--attest-contract-address` | - | - | Auto-detected | Custom attestation contract address |
-| `--max-tries` | - | - | `10` | Maximum attempts to get attestation info (or "infinite") |
-| `--balance-threshold` | - | - | `100` | Triggers a warning if it detects the signer account (i.e. operational address) stark balance, or the reward account one when the auto-claim feature is configured, below the specified threshold. One stark equals 1e18 |
-| `--log-level` | - | - | `info` | Set logging level (trace, debug, info, warn, error) |
-| `--metrics` | - | - | `false` | Enable metrics server |
-| `--metrics-host` | - | - | `localhost` | Metrics server host |
-| `--metrics-port` | - | - | `9090` | Metrics server port |
-| `--braavos-account` | - | - | `false` | Enable Braavos account support (experimental) |
+Flags take priority over environment variables, which take priority over the config file. The Config File column is the key path in the JSON file: `reward.claimMaxFee` is `{"reward": {"claimMaxFee": ...}}`. An option with `-` in both columns can only be set as a flag.
+
+```mdx-code-block
+import ConfigOptions from "./_config-options.md";
+import ExpandableTable from "@site/src/components/ExpandableTable";
+
+<ExpandableTable>
+<ConfigOptions />
+</ExpandableTable>
+```
 
 ## Additional Configuration Details
 
-1. **Contract Addresses**: Using specific staking and attestation contract addresses through the `--staking-contract-address` and `--attest-contract-address` flags respectively. If no values are provided, sensible defaults are provided based on the network id.
+1. **Contract Addresses**: `--staking-contract-address` and `--attest-contract-address` set the staking and attestation contract addresses. On Mainnet and Sepolia they default to the official contracts. On any other network both are required.
 
-2. **Max Tries**: `--max-tries` allows you to set how many attempts the tool does to get attestation information. It can be set to any positive number or to _"infinite"_ if you want the tool to never stop execution. Defaults to 10.
+2. **Max Retries**: `--max-retries` sets how many times the tool retries getting the information it needs to attest. It can be any positive integer or _"infinite"_, the default, so the tool never stops retrying.
 
-4. **Balance Threshold**: `--balance-threshold` represents the balance amount you want your signer account to be above of. If the auto-claim reward feature is configured, the same threshold also applies to the reward account. Checks are performed after every attestation window ends and if a balance is below the specified amount a warning is emitted. Defaults to 100 STRK.
+3. **Balance Threshold**: `--balance-threshold` represents the balance amount you want your signer account to be above of. If the auto-claim reward feature is configured, the same threshold also applies to the reward account. Checks are performed after every attestation window ends and if a balance is below the specified amount a warning is emitted. Defaults to 100 STRK.
 
-5. **Log Level**: `--log-level` set's the tool logging level. Default to `info`.
+4. **Log Level**: `--log-level` sets the tool logging level. Defaults to `info`.
 
-6. **Braavos Account**: `--braavos-account` changes the transaction version format from `0x3` to `1<<128 + 0x3` required by Braavos accounts. _Note that this is still an experimental feature_. It only applies to the operational account: use `--reward-braavos-account` for the reward account.
-
-7. **Auto-Claim Rewards**: the `--reward-*` options configure the optional automatic claiming of the staking rewards. If any of them is set, `--reward-address`, `--reward-claim-threshold` and exactly one of `--reward-priv-key` or `--reward-signer-url` are required. See [Auto-Claim Rewards](./auto-claim) for the details.
-
-8. **Max Tip**: `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. The tip is estimated as the average tip of the transactions in the latest block, multiplied by 1.5. A single transaction with an unusually high tip can therefore make the estimate spike, so setting a max tip limits what an attestation can pay. When the estimated tip is above the max tip, the max tip is used instead and a warning is logged. Set it to 0 to never pay a tip. If not set, no limit is applied.
-
-:::warning Low max tip
-The tip affects how fast a transaction is included in a block. With no tip, or a max tip well below what other transactions are paying, an attestation may take longer to be included, especially when the network is busy. If it isn't included before the attestation window ends, the attestation is missed.
-:::
+5. **Auto-Claim Rewards**: the `--reward-*` options configure the optional automatic claiming of the staking rewards. If any of them is set, `--reward-address`, `--reward-claim-threshold` and exactly one of `--reward-priv-key` or `--reward-signer-url` are required. See [Auto-Claim Rewards](./auto-claim) for the details.

@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	felt "github.com/NethermindEth/juno/core/felt"
@@ -57,123 +58,123 @@ func (mr *MockSignerMockRecorder) Address() *gomock.Call {
 }
 
 // BlockWithTxHashes mocks base method.
-func (m *MockSigner) BlockWithTxHashes(blockID rpc.BlockID) (any, error) {
+func (m *MockSigner) BlockWithTxHashes(ctx context.Context, blockID rpc.BlockID) (any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BlockWithTxHashes", blockID)
+	ret := m.ctrl.Call(m, "BlockWithTxHashes", ctx, blockID)
 	ret0, _ := ret[0].(any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BlockWithTxHashes indicates an expected call of BlockWithTxHashes.
-func (mr *MockSignerMockRecorder) BlockWithTxHashes(blockID any) *gomock.Call {
+func (mr *MockSignerMockRecorder) BlockWithTxHashes(ctx, blockID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockWithTxHashes", reflect.TypeOf((*MockSigner)(nil).BlockWithTxHashes), blockID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockWithTxHashes", reflect.TypeOf((*MockSigner)(nil).BlockWithTxHashes), ctx, blockID)
 }
 
 // BuildAttestTransaction mocks base method.
-func (m *MockSigner) BuildAttestTransaction(blockHash *types.BlockHash) (rpc.BroadcastInvokeTxnV3, error) {
+func (m *MockSigner) BuildAttestTransaction(ctx context.Context, blockHash *types.BlockHash) (rpc.BroadcastInvokeTxnV3, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildAttestTransaction", blockHash)
+	ret := m.ctrl.Call(m, "BuildAttestTransaction", ctx, blockHash)
 	ret0, _ := ret[0].(rpc.BroadcastInvokeTxnV3)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BuildAttestTransaction indicates an expected call of BuildAttestTransaction.
-func (mr *MockSignerMockRecorder) BuildAttestTransaction(blockHash any) *gomock.Call {
+func (mr *MockSignerMockRecorder) BuildAttestTransaction(ctx, blockHash any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildAttestTransaction", reflect.TypeOf((*MockSigner)(nil).BuildAttestTransaction), blockHash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildAttestTransaction", reflect.TypeOf((*MockSigner)(nil).BuildAttestTransaction), ctx, blockHash)
 }
 
 // Call mocks base method.
-func (m *MockSigner) Call(call rpc.FunctionCall, blockID rpc.BlockID) ([]*felt.Felt, error) {
+func (m *MockSigner) Call(ctx context.Context, call rpc.FunctionCall, blockID rpc.BlockID) ([]*felt.Felt, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Call", call, blockID)
+	ret := m.ctrl.Call(m, "Call", ctx, call, blockID)
 	ret0, _ := ret[0].([]*felt.Felt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Call indicates an expected call of Call.
-func (mr *MockSignerMockRecorder) Call(call, blockID any) *gomock.Call {
+func (mr *MockSignerMockRecorder) Call(ctx, call, blockID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockSigner)(nil).Call), call, blockID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Call", reflect.TypeOf((*MockSigner)(nil).Call), ctx, call, blockID)
 }
 
 // EstimateFee mocks base method.
-func (m *MockSigner) EstimateFee(txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error) {
+func (m *MockSigner) EstimateFee(ctx context.Context, txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EstimateFee", txn)
+	ret := m.ctrl.Call(m, "EstimateFee", ctx, txn)
 	ret0, _ := ret[0].(rpc.FeeEstimation)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // EstimateFee indicates an expected call of EstimateFee.
-func (mr *MockSignerMockRecorder) EstimateFee(txn any) *gomock.Call {
+func (mr *MockSignerMockRecorder) EstimateFee(ctx, txn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateFee", reflect.TypeOf((*MockSigner)(nil).EstimateFee), txn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateFee", reflect.TypeOf((*MockSigner)(nil).EstimateFee), ctx, txn)
 }
 
 // InvokeTransaction mocks base method.
-func (m *MockSigner) InvokeTransaction(txn *rpc.BroadcastInvokeTxnV3) (rpc.AddInvokeTransactionResponse, error) {
+func (m *MockSigner) InvokeTransaction(ctx context.Context, txn *rpc.BroadcastInvokeTxnV3) (rpc.AddInvokeTransactionResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InvokeTransaction", txn)
+	ret := m.ctrl.Call(m, "InvokeTransaction", ctx, txn)
 	ret0, _ := ret[0].(rpc.AddInvokeTransactionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // InvokeTransaction indicates an expected call of InvokeTransaction.
-func (mr *MockSignerMockRecorder) InvokeTransaction(txn any) *gomock.Call {
+func (mr *MockSignerMockRecorder) InvokeTransaction(ctx, txn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvokeTransaction", reflect.TypeOf((*MockSigner)(nil).InvokeTransaction), txn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvokeTransaction", reflect.TypeOf((*MockSigner)(nil).InvokeTransaction), ctx, txn)
 }
 
 // Nonce mocks base method.
-func (m *MockSigner) Nonce() (*felt.Felt, error) {
+func (m *MockSigner) Nonce(ctx context.Context) (*felt.Felt, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Nonce")
+	ret := m.ctrl.Call(m, "Nonce", ctx)
 	ret0, _ := ret[0].(*felt.Felt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Nonce indicates an expected call of Nonce.
-func (mr *MockSignerMockRecorder) Nonce() *gomock.Call {
+func (mr *MockSignerMockRecorder) Nonce(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nonce", reflect.TypeOf((*MockSigner)(nil).Nonce))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nonce", reflect.TypeOf((*MockSigner)(nil).Nonce), ctx)
 }
 
 // SignTransaction mocks base method.
-func (m *MockSigner) SignTransaction(txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error) {
+func (m *MockSigner) SignTransaction(ctx context.Context, txn *rpc.BroadcastInvokeTxnV3) (*rpc.BroadcastInvokeTxnV3, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SignTransaction", txn)
+	ret := m.ctrl.Call(m, "SignTransaction", ctx, txn)
 	ret0, _ := ret[0].(*rpc.BroadcastInvokeTxnV3)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SignTransaction indicates an expected call of SignTransaction.
-func (mr *MockSignerMockRecorder) SignTransaction(txn any) *gomock.Call {
+func (mr *MockSignerMockRecorder) SignTransaction(ctx, txn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignTransaction", reflect.TypeOf((*MockSigner)(nil).SignTransaction), txn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignTransaction", reflect.TypeOf((*MockSigner)(nil).SignTransaction), ctx, txn)
 }
 
 // TransactionStatus mocks base method.
-func (m *MockSigner) TransactionStatus(transactionHash *felt.Felt) (*rpc.TxnStatusResult, error) {
+func (m *MockSigner) TransactionStatus(ctx context.Context, transactionHash *felt.Felt) (*rpc.TxnStatusResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TransactionStatus", transactionHash)
+	ret := m.ctrl.Call(m, "TransactionStatus", ctx, transactionHash)
 	ret0, _ := ret[0].(*rpc.TxnStatusResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // TransactionStatus indicates an expected call of TransactionStatus.
-func (mr *MockSignerMockRecorder) TransactionStatus(transactionHash any) *gomock.Call {
+func (mr *MockSignerMockRecorder) TransactionStatus(ctx, transactionHash any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransactionStatus", reflect.TypeOf((*MockSigner)(nil).TransactionStatus), transactionHash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransactionStatus", reflect.TypeOf((*MockSigner)(nil).TransactionStatus), ctx, transactionHash)
 }
 
 // ValidationContracts mocks base method.

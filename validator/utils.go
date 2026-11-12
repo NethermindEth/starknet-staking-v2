@@ -27,10 +27,10 @@ func logNewEpoch(
 	logger = skipCaller(logger)
 	logger.Info(
 		"epoch started",
-		zap.Uint64("epochID", epochInfo.EpochID+1),
+		zap.Uint64("epochID", epochInfo.EpochID),
 		zap.Uint64("epochLength", epochInfo.EpochLen),
 		zap.Uint64("startBlock", epochInfo.StartingBlock.Uint64()),
-		zap.Uint64("endBlock", epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen),
+		zap.Uint64("endBlock", epochInfo.StartingBlock.Uint64()+epochInfo.EpochLen-1),
 	)
 	logger.Info(
 		"attest info",
@@ -51,20 +51,22 @@ func logBlock(
 	var suffix string
 	switch {
 	case blockNum < attestInfo.WindowStart.Uint64():
-		suffix = fmt.Sprintf(
-			"%d blocks to attest", uint64(attestInfo.WindowStart)-blockNum,
-		)
+		suffix = blockCount(uint64(attestInfo.WindowStart)-blockNum) + " to attest"
 	case blockNum < attestInfo.WindowEnd.Uint64():
-		suffix = fmt.Sprintf(
-			"%d blocks before end of window",
-			uint64(attestInfo.WindowEnd)-blockNum,
-		)
+		suffix = blockCount(uint64(attestInfo.WindowEnd)-blockNum) + " before end of window"
 	default:
-		suffix = fmt.Sprintf(
-			"%d blocks for the next epoch",
+		suffix = blockCount(
 			uint64(epochInfo.StartingBlock)+epochInfo.EpochLen-blockNum,
-		)
+		) + " for the next epoch"
 	}
 
-	logger.Info(base + ", " + suffix)
+	logger.Info(base+", "+suffix, zap.Uint64("blockNumber", blockNum))
+}
+
+func blockCount(blocks uint64) string {
+	if blocks == 1 {
+		return "1 block"
+	}
+
+	return fmt.Sprintf("%d blocks", blocks)
 }

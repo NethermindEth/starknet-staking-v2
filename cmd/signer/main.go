@@ -4,14 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/signer"
+	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
+
+const logLevels = "trace, debug, info, warn, error"
 
 func NewCommand() cobra.Command {
 	var address string
@@ -31,14 +37,14 @@ func NewCommand() cobra.Command {
 		logLevel := log.NewLevel(log.INFO)
 		err = logLevel.Set(logLevelF)
 		if err != nil {
-			return err
+			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
 		}
 		logger, err = log.NewZapLogger(logLevel, log.WithColour(true))
 		if err != nil {
 			return err
 		}
 
-		privKey, err = readSignerKeyFromEnv(envFilePath, logger)
+		privKey, err = readSignerKeyFromEnv(envFilePath, cmd.Flags().Changed("env"), logger)
 		if err != nil {
 			return err
 		}
@@ -46,19 +52,23 @@ func NewCommand() cobra.Command {
 		return nil
 	}
 
-	runE := func(_ *cobra.Command, args []string) error {
+	runE := func(cmd *cobra.Command, args []string) error {
 		remoteSigner, err := signer.New(privKey, logger)
 		if err != nil {
 			return err
 		}
 
-		return remoteSigner.Listen(address)
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
+		return remoteSigner.Listen(ctx, address)
 	}
 
 	//nolint:exhaustruct_v5 // Only specifying used fields
 	cmd := cobra.Command{
 		Use:     "signer",
 		Short:   "Program that signs transactions received by http request",
+		Version: validator.Version,
 		PreRunE: preRunE,
 		RunE:    runE,
 		Args:    cobra.NoArgs,
@@ -67,39 +77,49 @@ func NewCommand() cobra.Command {
 	cmd.Flags().StringVar(
 		&address, "address", "localhost:8080", "Address where to listen for requests",
 	)
-	cmd.Flags().StringVar(&envFilePath, "env", ".env", "Path to JSON config file")
 	cmd.Flags().StringVar(
-		&logLevelF, "log-level", log.INFO.String(), "Options: trace, debug, info, warn, error",
+		&envFilePath,
+		"env",
+		".env",
+		"Path to a dotenv file (KEY=value lines) that can set SIGNER_PRIVATE_KEY.\n"+
+			"The default file is optional, a file passed with this flag must exist",
 	)
+	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels)
 
 	return cmd
 }
 
 func main() {
 	cmd := NewCommand()
-	err := cmd.ExecuteContext(context.Background())
-	if err != nil {
-		fmt.Printf("Signer closed unexepctedly: %s", err)
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
 		os.Exit(1)
 	}
 }
 
-func readSignerKeyFromEnv(envFilePath string, logger *log.ZapLogger) (string, error) {
+func readSignerKeyFromEnv(
+	envFilePath string, explicitEnvFile bool, logger *log.ZapLogger,
+) (string, error) {
 	err := godotenv.Load(envFilePath)
-	if err != nil {
-		logger.Debug("couldn't load env var file",
-			zap.String("envFilePath", envFilePath),
-			zap.Error(err),
+	var pathErr *fs.PathError
+	switch {
+	case err == nil:
+	case errors.Is(err, fs.ErrNotExist) && !explicitEnvFile:
+		logger.Debug("no env var file", zap.String("envFilePath", envFilePath))
+	case errors.As(err, &pathErr):
+		return "", fmt.Errorf("cannot read the env var file: %w", err)
+	default:
+		return "", fmt.Errorf(
+			"cannot parse the env var file %s: it must be a dotenv file with KEY=value lines",
+			envFilePath,
 		)
 	}
 
 	signerKey := os.Getenv("SIGNER_PRIVATE_KEY")
 	if signerKey == "" {
-		return "",
-			errors.New(
-				"couldn't read SIGNER_PRIVATE_KEY env var." +
-					"Please make sure it is set before running this program",
-			)
+		return "", errors.New(
+			"SIGNER_PRIVATE_KEY env var is not set. Set it in the environment or in the " +
+				"env var file (--env)",
+		)
 	}
 
 	return signerKey, nil

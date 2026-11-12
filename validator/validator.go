@@ -11,6 +11,7 @@ import (
 	"github.com/NethermindEth/starknet-staking-v2/validator/metrics"
 	signerP "github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
+	"github.com/NethermindEth/starknet.go/client"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/cockroachdb/errors"
 	"github.com/sourcegraph/conc"
@@ -19,6 +20,17 @@ import (
 
 // The current version of the validator tool.  This is set at build time
 var Version string = "dev"
+
+const (
+	wsDialRetryDelay    = 5 * time.Second
+	resubscribeMinDelay = time.Second
+	resubscribeMaxDelay = 30 * time.Second
+)
+
+var (
+	errReorg             = errors.New("reorg notification")
+	errSubscriptionEnded = errors.New("WS subscription ended")
+)
 
 type Validator struct {
 	provider *rpc.Provider
@@ -36,11 +48,25 @@ func New(
 	conf *config.Config,
 	snConfig *config.StarknetConfig,
 	logger log.Logger,
-	braavos bool,
 ) (Validator, error) {
+	v, err := newValidator(ctx, conf, snConfig, logger)
+
+	return v, redactErrorURLs(err)
+}
+
+func newValidator(
+	ctx context.Context,
+	conf *config.Config,
+	snConfig *config.StarknetConfig,
+	logger log.Logger,
+) (Validator, error) {
+	if err := checkWSProviderURL(conf.Provider.WS); err != nil {
+		return Validator{}, err
+	}
+
 	provider, err := NewProvider(ctx, conf.Provider.HTTP, logger)
 	if err != nil {
-		return Validator{}, fmt.Errorf("failed to connect to provider: %w", err)
+		return Validator{}, err
 	}
 
 	var signer signerP.Signer
@@ -51,16 +77,17 @@ func New(
 			logger,
 			&conf.Signer,
 			&snConfig.ContractAddresses,
-			braavos,
 			conf.MaxTipOrDefault(),
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to connect to external signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to connect to external signer: %w", err),
+			)
 		}
 		signer = &externalSigner
 		logger.Info(
 			"using external signer",
-			zap.String("externalSignerURL", conf.Signer.ExternalURL),
+			zap.String("externalSignerURL", redactURL(conf.Signer.ExternalURL)),
 		)
 	} else {
 		internalSigner, err := signerP.NewInternalSigner(
@@ -69,11 +96,12 @@ func New(
 			logger,
 			&conf.Signer,
 			&snConfig.ContractAddresses,
-			braavos,
 			conf.MaxTipOrDefault(),
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to initialise internal signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to initialise internal signer: %w", err),
+			)
 		}
 		signer = &internalSigner
 		logger.Info("using internal signer")
@@ -81,15 +109,16 @@ func New(
 
 	logger.Info(
 		"Validation contracts",
-		zap.String("validationContracts", signer.ValidationContracts().String()),
+		zap.String("stakingContractAddress", signer.ValidationContracts().Staking.String()),
+		zap.String("attestContractAddress", signer.ValidationContracts().Attest.String()),
 	)
 
 	var rewardSigner signerP.RewardSigner
 	if conf.Reward.IsSet() {
-		epochInfo, err := signerP.FetchEpochInfo(signer)
+		epochInfo, err := signerP.FetchEpochInfo(ctx, signer)
 		if err != nil {
-			return Validator{}, fmt.Errorf(
-				"failed to fetch staking address from epoch info: %w", err,
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to fetch staking address from epoch info: %w", err),
 			)
 		}
 
@@ -100,11 +129,12 @@ func New(
 			&conf.Reward,
 			&snConfig.ContractAddresses,
 			&epochInfo.StakerAddress,
-			conf.Reward.IsBraavos(),
 			conf.Reward.IsExternal(),
 		)
 		if err != nil {
-			return Validator{}, fmt.Errorf("failed to initialise reward signer: %w", err)
+			return Validator{}, markIfTransient(
+				fmt.Errorf("failed to initialise reward signer: %w", err),
+			)
 		}
 
 		logger.Info(
@@ -140,21 +170,21 @@ func (v *Validator) Attest(
 	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance
-	go CheckBalance(v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
+	go CheckBalance(ctx, v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
 
 	// Create the event dispatcher
 	dispatcher := NewEventDispatcher[signerP.Signer]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
-		dispatcher.Dispatch(v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
+		dispatcher.Dispatch(ctx, v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
 		v.logger.Debug("Dispatch method finished")
 	})
 	defer wg.Wait()
 	defer close(dispatcher.PrepareAttest)
 
-	return RunBlockHeaderWatcher(
+	return redactErrorURLs(RunBlockHeaderWatcher(
 		ctx, v.wsProvider, v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
-	)
+	))
 }
 
 func RunBlockHeaderWatcher[S signerP.Signer](
@@ -172,7 +202,9 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 		close(headersFeed)
 	}
 
+	shownWSURL := redactURL(wsProviderURL)
 	retries := maxRetries
+	failedSubscriptions := 0
 	for {
 		wsProvider, headersFeed, clientSubscription, err := SubscribeToBlockHeaders(
 			ctx, wsProviderURL, logger,
@@ -183,19 +215,21 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			}
 			logger.Error(
 				"cannot connect to ws provider",
+				zap.String("wsProviderURL", shownWSURL),
+				zap.Error(redactErrorURLs(err)),
 				zap.String("retriesLeft", retries.String()),
 			)
-			logger.Debug(err.Error())
 			retries.Sub()
-			Sleep(5 * time.Second) //nolint:mnd // Number of seconds to sleep
+			Sleep(wsDialRetryDelay)
 
 			continue
 		}
-		retries = maxRetries
 
-		stopProcessingHeaders := make(chan error)
+		highestBefore, processedBefore := dispatcher.progress.highestBlock()
+		var endErr error
+		processingDone := make(chan error, 1)
 		wg.Go(func() {
-			err := ProcessBlockHeaders(
+			processingDone <- ProcessBlockHeaders(
 				ctx,
 				headersFeed,
 				signer,
@@ -204,9 +238,6 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 				maxRetries,
 				tracer,
 			)
-			if err != nil {
-				stopProcessingHeaders <- err
-			}
 		})
 
 		select {
@@ -214,23 +245,103 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			wg.Wait()
 
 			return nil
-		case err := <-clientSubscription.Err():
-			logger.Error("client subscription error", zap.Error(err))
-			cleanUp(wsProvider, headersFeed)
-		case reorgEvent := <-clientSubscription.Reorg():
-			logger.Info(
-				"reorg detected. Restarting WS subscription...",
-				zap.Uint64("startBlock", reorgEvent.StartBlockNum),
-				zap.Uint64("endBlock", reorgEvent.EndBlockNum),
-			)
-			cleanUp(wsProvider, headersFeed)
-		case err := <-stopProcessingHeaders:
-			logger.Error("processing block headers", zap.Error(err))
+		case endErr = <-clientSubscription.Err():
+			logSubscriptionError(logger, shownWSURL, endErr)
+		case reorgEvent, ok := <-clientSubscription.Reorg():
+			if ok {
+				logger.Info(
+					"reorg detected. Restarting WS subscription...",
+					zap.Uint64("startBlock", reorgEvent.StartBlockNum),
+					zap.Uint64("endBlock", reorgEvent.EndBlockNum),
+				)
+				endErr = errReorg
+			} else {
+				endErr = subscriptionEndError(clientSubscription)
+				logSubscriptionError(logger, shownWSURL, endErr)
+			}
+		case err := <-processingDone:
 			cleanUp(wsProvider, headersFeed)
 
+			return fmt.Errorf("processing block headers: %w", err)
+		}
+		cleanUp(wsProvider, headersFeed)
+		if stop, err := waitForProcessing(ctx, wg, processingDone); stop {
 			return err
 		}
+
+		highestAfter, processedAfter := dispatcher.progress.highestBlock()
+		if processedAfter && (!processedBefore || highestAfter > highestBefore) {
+			retries = maxRetries
+			failedSubscriptions = 0
+
+			continue
+		}
+		if retries.IsZero() {
+			return errors.Errorf(
+				"WS subscription to %s ended %d times in a row without a new block header: %w",
+				shownWSURL, failedSubscriptions+1, endErr,
+			)
+		}
+		failedSubscriptions++
+		delay := resubscribeDelay(failedSubscriptions)
+		logger.Warn(
+			"WS subscription ended without a new block header. Resubscribing in "+
+				delay.String(),
+			zap.String("wsProviderURL", shownWSURL),
+			zap.String("retriesLeft", retries.String()),
+		)
+		retries.Sub()
+		Sleep(delay)
 	}
+}
+
+func waitForProcessing(
+	ctx context.Context, wg *conc.WaitGroup, processingDone <-chan error,
+) (bool, error) {
+	select {
+	case <-ctx.Done():
+		wg.Wait()
+
+		return true, nil
+	case err := <-processingDone:
+		if err != nil {
+			return true, fmt.Errorf("processing block headers: %w", err)
+		}
+
+		return false, nil
+	}
+}
+
+func logSubscriptionError(logger log.Logger, wsProviderURL string, err error) {
+	logger.Error(
+		"client subscription error",
+		zap.String("wsProviderURL", wsProviderURL),
+		zap.Error(redactErrorURLs(err)),
+	)
+}
+
+func subscriptionEndError(clientSubscription *client.ClientSubscription) error {
+	select {
+	case err := <-clientSubscription.Err():
+		if err != nil {
+			return err
+		}
+	default:
+	}
+
+	return errSubscriptionEnded
+}
+
+func resubscribeDelay(failedSubscriptions int) time.Duration {
+	delay := resubscribeMinDelay
+	for range failedSubscriptions - 1 {
+		delay *= 2
+		if delay >= resubscribeMaxDelay {
+			return resubscribeMaxDelay
+		}
+	}
+
+	return delay
 }
 
 func ProcessBlockHeaders[Account signerP.Signer](
@@ -244,44 +355,57 @@ func ProcessBlockHeaders[Account signerP.Signer](
 ) error {
 	noEpochSwitch := func(*types.EpochInfo, *types.EpochInfo) bool { return true }
 	epochInfo, attestInfo, err := FetchEpochAndAttestInfoWithRetry(
-		account, logger, nil, noEpochSwitch, maxRetries, "at app startup",
+		ctx, account, logger, nil, noEpochSwitch, maxRetries, "at app startup", tracer,
 	)
 	if err != nil {
 		return err
 	}
 
-	SetTargetBlockHashIfExists(account, logger, &attestInfo)
+	SetTargetBlockHashIfExists(ctx, account, logger, &attestInfo)
 
-	logNewEpoch(&epochInfo, &attestInfo, logger)
+	if dispatcher.progress.newEpoch(epochInfo.EpochID) {
+		logNewEpoch(&epochInfo, &attestInfo, logger)
+	}
 	tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 
 	for block := range headersFeed {
-		logBlock(block.Number, &epochInfo, &attestInfo, logger)
+		if !dispatcher.progress.addBlock(block.Number) {
+			logger.Debug("block header already processed, skipping it",
+				zap.Uint64("blockNumber", block.Number),
+			)
+
+			continue
+		}
 		tracer.UpdateLatestBlockNumber(block.Number)
 
 		// todo(rdr): look for some nice way of refactoring this if/else blocks
 		if block.Number >= uint64(epochInfo.StartingBlock)+epochInfo.EpochLen {
 			prevEpochInfo := epochInfo
 			epochInfo, attestInfo, err = FetchEpochAndAttestInfoWithRetry(
+				ctx,
 				account,
 				logger,
 				&prevEpochInfo,
 				CorrectEpochSwitch,
 				maxRetries,
 				strconv.FormatUint(prevEpochInfo.EpochID+1, 10),
+				tracer,
 			)
 			if err != nil {
 				return err
 			}
-			logNewEpoch(&epochInfo, &attestInfo, logger)
+			if dispatcher.progress.newEpoch(epochInfo.EpochID) {
+				logNewEpoch(&epochInfo, &attestInfo, logger)
+			}
 			// Update epoch info metrics
 			tracer.UpdateEpochInfo(&epochInfo, attestInfo.TargetBlock.Uint64())
 		}
+		logBlock(block.Number, &epochInfo, &attestInfo, logger)
 		if uint64(attestInfo.TargetBlock) == block.Number {
 			attestInfo.TargetBlockHash = types.BlockHash(*block.Hash)
 			logger.Info(
 				"Target block reached",
-				zap.String("blockHash", block.Hash.String()),
+				zap.String("targetBlockHash", block.Hash.String()),
 			)
 			dispatcher.PrepareAttest <- types.PrepareAttest{
 				BlockHash: attestInfo.TargetBlockHash,
@@ -311,12 +435,13 @@ func ProcessBlockHeaders[Account signerP.Signer](
 }
 
 func SetTargetBlockHashIfExists[Account signerP.Signer](
+	ctx context.Context,
 	account Account,
 	logger log.Logger,
 	attestInfo *types.AttestInfo,
 ) {
 	targetBlockNumber := attestInfo.TargetBlock.Uint64()
-	res, err := account.BlockWithTxHashes(rpc.WithBlockNumber(targetBlockNumber))
+	res, err := account.BlockWithTxHashes(ctx, rpc.WithBlockNumber(targetBlockNumber))
 
 	// If no error, then target block already exists
 	if err == nil {
@@ -330,40 +455,34 @@ func SetTargetBlockHashIfExists[Account signerP.Signer](
 	}
 }
 
+const epochFetchWarnEvery = 10
+
 func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
+	ctx context.Context,
 	signer Signer,
 	logger log.Logger,
 	prevEpoch *types.EpochInfo,
 	isEpochSwitchCorrect func(prevEpoch *types.EpochInfo, newEpoch *types.EpochInfo) bool,
 	maxRetries types.Retries,
 	newEpochID string,
+	tracer metrics.Tracer,
 ) (types.EpochInfo, types.AttestInfo, error) {
 	// storing the initial value for error reporting
 	totalRetryAmount := maxRetries.String()
+	failedAttempts := 0
 
-	newEpoch, newAttestInfo, err := signerP.FetchEpochAndAttestInfo(signer, logger)
-
-	for (err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch)) && !maxRetries.IsZero() {
-		if err != nil {
-			logger.Debug("failed to fetch epoch info",
-				zap.String("epochID", newEpochID),
-				zap.Error(err),
-			)
-		} else {
-			logger.Debug(
-				"wrong epoch switch",
-				zap.Any("fromEpoch", prevEpoch),
-				zap.Any("toEpoch", &newEpoch),
-			)
+	newEpoch, newAttestInfo, err := signerP.FetchEpochAndAttestInfo(ctx, signer, logger)
+	for err != nil || !isEpochSwitchCorrect(prevEpoch, &newEpoch) {
+		failedAttempts++
+		tracer.RecordEpochInfoFetchFailure()
+		if maxRetries.IsZero() {
+			break
 		}
-		logger.Debug(
-			"retrying to fetch epoch info",
-			zap.String("retriesRemaining", maxRetries.String()),
-		)
+		logEpochFetchRetry(logger, failedAttempts, &maxRetries, err, prevEpoch, &newEpoch)
 
 		Sleep(time.Second)
 
-		newEpoch, newAttestInfo, err = signerP.FetchEpochAndAttestInfo(signer, logger)
+		newEpoch, newAttestInfo, err = signerP.FetchEpochAndAttestInfo(ctx, signer, logger)
 		maxRetries.Sub()
 	}
 
@@ -386,8 +505,45 @@ func FetchEpochAndAttestInfoWithRetry[Signer signerP.Signer](
 				newEpoch.String(),
 			)
 	}
+	if failedAttempts > 0 {
+		logger.Info(
+			"fetched epoch info after failed attempts. Resuming block processing",
+			zap.Uint64("epochID", newEpoch.EpochID),
+			zap.Int("failedAttempts", failedAttempts),
+		)
+	}
 
 	return newEpoch, newAttestInfo, nil
+}
+
+func logEpochFetchRetry(
+	logger log.Logger,
+	failedAttempts int,
+	retriesLeft *types.Retries,
+	err error,
+	prevEpoch, newEpoch *types.EpochInfo,
+) {
+	logFn := logger.Debug
+	if failedAttempts%epochFetchWarnEvery == 1 {
+		logFn = logger.Warn
+	}
+
+	fields := []zap.Field{
+		zap.Int("failedAttempts", failedAttempts),
+		zap.String("retriesLeft", retriesLeft.String()),
+	}
+	if prevEpoch != nil {
+		fields = append(fields, zap.Uint64("epochID", prevEpoch.EpochID+1))
+	}
+	if err != nil {
+		fields = append(fields, zap.Error(redactErrorURLs(err)))
+		logFn("failed to fetch epoch info, block headers are not processed. Retrying in 1s",
+			fields...)
+
+		return
+	}
+	fields = append(fields, zap.Reflect("fromEpoch", prevEpoch), zap.Reflect("toEpoch", newEpoch))
+	logFn("wrong epoch switch, block headers are not processed. Retrying in 1s", fields...)
 }
 
 func CorrectEpochSwitch(prevEpoch, newEpoch *types.EpochInfo) bool {

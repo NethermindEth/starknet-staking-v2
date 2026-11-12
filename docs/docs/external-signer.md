@@ -4,17 +4,18 @@ sidebar_position: 5
 
 # External Signer
 
-> This section explains how the external signer works. If you don't plan to run the validator in an unsafe environment (such as the cloud) you probably don't need it.
-
-To avoid users exposing their private keys the validator program has a simple communication protocol implemented via HTTP requests for remote/external signing.
+When the validator runs in an unsafe environmet, it is possible to start it without private keys and connect it via HTTP to a remote signing service. This
+section explains how to achieve that.
 
 ## HTTP Protocol
 
-The external signer must implement a simple HTTP server that waits for `POST` requests on an endpoint of the form `<signer_address>/sign`. When initializing the validator the `<signer_address>` should be specified in its configuration (e.g. specifying `--signer-url` flag).
+The external/remote signer must implement a simple HTTP server that waits for `POST` requests on an endpoint with the form `<signer_address>/sign`.
+This `<signer_address>` has to be specified in the Validator during startup via the `--signer-url` flag (or equivalent environment var or config file).
 
 ### Request Format
 
-The validator will make `POST` request with all the transaction data to sign:
+The external signer server will receive a `POST` request from the validator. This request
+will include all the transaction data required for signing. Request example:
 
 ```json
 {
@@ -58,9 +59,12 @@ The validator will make `POST` request with all the transaction data to sign:
 }
 ```
 
+Each transaction is sent to the signer twice. The first request has the query version `0x100000000000000000000000000000003`, which the validator uses only to estimate the fee: a transaction with this version can't be included in a block. The second request has version `0x3`, with the resource bounds set from that estimate, and its signature is the one sent to the network. The signer must hash the transaction with the version it receives, as the provided implementation does.
+
 ### Response Format
 
-It will wait for ECDSA signature values `r` and `s` in an array:
+The signer wil then respond with the ECDSA signature values `r` and `s`, any other response not matching this format will fail loudly on the Validator side.
+The validator waits up to 15 seconds for the answer, exceeding data, it will log an error. Response example format:
 
 ```json
 {
@@ -71,11 +75,12 @@ It will wait for ECDSA signature values `r` and `s` in an array:
 }
 ```
 
-We have provided an already functional implementation for you to use or take as an example to implement your own.
+## In-House Signer
 
-## Example
+As part of the validator, a remote signing server is provided for users to use or take as inspiration. Some certain level
+of development knowledge is expected here onwards.
 
-This example simulates the interaction between validator and remote signer using our own implemented signer. Start by compiling the remote signer:
+To build the in-house signer service, from the project root, run:
 
 ```bash
 make signer
@@ -83,14 +88,15 @@ make signer
 
 Then set a private key which will be used to sign transactions and the HTTP address where the signer will receive POST requests from the validator program. For example using private key `0x123`:
 
+Start the compiled binary with an associated private key and an HTTP address from which it will receive the POST requests:
+
 ```bash
 SIGNER_PRIVATE_KEY="0x123" ./build/signer \
     --address localhost:8080
 ```
 
-This will start the program and will remain there listening for requests.
 
-**On a separate terminal**, send a transaction data and request its signing. For example:
+**On a separate terminal**, simulate a transaction `POST` request:
 
 ```bash
 curl -X POST http://localhost:8080/sign \
@@ -136,7 +142,7 @@ curl -X POST http://localhost:8080/sign \
   }'
 ```
 
-You should immediately get the following answer provided you used the same private key and transaction data shown as an example:
+You should immediately get the following answer. Signature should match given that the same private key and transaction data was used in both console commands. 
 
 ```json
 {
@@ -147,4 +153,6 @@ You should immediately get the following answer provided you used the same priva
 }
 ```
 
-This communication is what will happen behind the curtains when using the validator and an external signer each time there is an attestation required. Notice that the validator program remains completely agnostic to the private key since only the remote signer knows it. 
+This shows that the signer is working correctly. 
+
+You can now start the validator with the signer URL and operational address so it signs attestation transactions remotely. See the **[external signing example](./setup?signing-method=external#signing-methods)** for the Docker and binary commands.

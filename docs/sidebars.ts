@@ -19,16 +19,18 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Getting Started',
+      collapsed: false,
       items: [
         'becoming-validator',
         'installation',
-        'configuration',
+        'setup',
         'configuration-options',
       ],
     },
     {
       type: 'category',
       label: 'Advanced Features',
+      collapsed: true,
       items: [
         'external-signer',
         'metrics',

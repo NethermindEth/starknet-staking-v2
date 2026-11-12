@@ -1,12 +1,22 @@
 package main_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	main "github.com/NethermindEth/starknet-staking-v2/cmd/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
@@ -15,7 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testProviderHTTP = "http://localhost:1234"
+const (
+	testProviderHTTP = "http://localhost:1234"
+	testProviderWS   = "ws://localhost:1235"
+	testSignerURL    = "http://localhost:5555"
+	configFlag       = "--config"
+)
 
 func TestNewCommand(t *testing.T) {
 	t.Run("PreRunE returns an error: cannot load inexisting config", func(t *testing.T) {
@@ -24,6 +39,51 @@ func TestNewCommand(t *testing.T) {
 
 		err := command.ExecuteContext(t.Context())
 		require.ErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("PreRunE returns an error: config file is not valid JSON", func(t *testing.T) {
+		filePath := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(filePath, []byte(`{"provider": {}`), 0o600))
+
+		command := main.NewCommand()
+		command.SetArgs([]string{configFlag, filePath})
+
+		err := command.ExecuteContext(t.Context())
+		require.EqualError(
+			t, err, "cannot parse config file "+filePath+": unexpected end of JSON input",
+		)
+	})
+
+	t.Run("PreRunE returns an error naming the sources of a key and a URL", func(t *testing.T) {
+		conf := config.Config{
+			Provider: config.Provider{HTTP: testProviderHTTP, WS: testProviderWS},
+			Signer: config.Signer{
+				OperationalAddress: "0x456",
+				ExternalURL:        testSignerURL,
+			},
+		}
+		filePath := createTemporaryConfigFile(t, &conf)
+		t.Setenv("SIGNER_PRIVATE_KEY", "0x123")
+
+		command := main.NewCommand()
+		command.SetArgs([]string{configFlag, filePath})
+
+		err := command.ExecuteContext(t.Context())
+		require.ErrorContains(
+			t,
+			err,
+			"(private key set by env vars, external URL set by config file "+filePath+")",
+		)
+	})
+
+	t.Run("PreRunE returns an error: unknown log level", func(t *testing.T) {
+		command := main.NewCommand()
+		command.SetArgs(validFlags(testProviderHTTP, testProviderWS, "--log-level", "verbose"))
+
+		err := command.ExecuteContext(t.Context())
+		require.EqualError(
+			t, err, `unknown log level "verbose" (known: trace, debug, info, warn, error)`,
+		)
 	})
 
 	t.Run("PreRunE returns an error: config file verification fails", func(t *testing.T) {
@@ -176,7 +236,6 @@ func TestNewCommand(t *testing.T) {
 			rewardSignerURLFlag = "--reward-signer-url"
 			rewardThresholdFlag = "--reward-claim-threshold"
 			rewardMaxFeeFlag    = "--reward-claim-max-fee"
-			rewardBraavosFlag   = "--reward-braavos-account"
 		)
 
 		// Returns the required reward flags followed by `optionalFlags`
@@ -219,16 +278,6 @@ func TestNewCommand(t *testing.T) {
 				expectedErr: errAddressNotSet,
 			},
 			{
-				name:        "Only reward braavos account",
-				rewardFlags: []string{rewardBraavosFlag},
-				expectedErr: errAddressNotSet,
-			},
-			{
-				name:        "Only reward braavos account explicitly false",
-				rewardFlags: []string{rewardBraavosFlag + "=false"},
-				expectedErr: errAddressNotSet,
-			},
-			{
 				name:        "Full reward configuration, without optional fields",
 				rewardFlags: fullRewardFlags(),
 			},
@@ -236,31 +285,15 @@ func TestNewCommand(t *testing.T) {
 				name:        "Full reward configuration, with claim max fee",
 				rewardFlags: fullRewardFlags(rewardMaxFeeFlag, "1000"),
 			},
-			{
-				name:        "Full reward configuration, with braavos account",
-				rewardFlags: fullRewardFlags(rewardBraavosFlag),
-			},
-			{
-				name:        "Full reward configuration, with braavos account explicitly false",
-				rewardFlags: fullRewardFlags(rewardBraavosFlag + "=false"),
-			},
-			{
-				name:        "Full reward configuration",
-				rewardFlags: fullRewardFlags(rewardMaxFeeFlag, "1000", rewardBraavosFlag),
-			},
 		}
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				ctx, httpURL, wsURL := newTestNode(t)
 
-				args := []string{
-					"--provider-http", httpURL,
-					"--provider-ws", wsURL,
-					"--signer-op-address", "0x456",
-					"--signer-url", "http://localhost:5555",
-				}
-				command := newTestCommandWithArgs(t, append(args, tc.rewardFlags...)...)
+				command := newTestCommandWithArgs(
+					t, validFlags(httpURL, wsURL, tc.rewardFlags...)...,
+				)
 
 				err := command.ExecuteContext(ctx)
 				if tc.expectedErr == "" {
@@ -271,6 +304,140 @@ func TestNewCommand(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestHelpText(t *testing.T) {
+	command := main.NewCommand()
+	command.SetArgs([]string{"--help"})
+	var output bytes.Buffer
+	command.SetOut(&output)
+
+	require.NoError(t, command.ExecuteContext(t.Context()))
+	help := output.String()
+
+	for i, line := range strings.Split(help, "\n") {
+		require.Equal(
+			t, strings.TrimRight(line, " \t"), line, "trailing whitespace on line %d", i+1,
+		)
+	}
+	for _, defect := range []string{"the the", "Defaults values", "1 << 1e18", "Only applies for"} {
+		require.NotContains(t, help, defect)
+	}
+	require.Contains(t, help, "Exclusive with --signer-url")
+	require.Contains(t, help, "Exclusive with --signer-priv-key")
+}
+
+func TestThresholdFlags(t *testing.T) {
+	t.Run("Explicit zero claim threshold is rejected", func(t *testing.T) {
+		t.Setenv("REWARD_CLAIM_THRESHOLD", "5")
+
+		for _, flag := range []string{"--reward-claim-threshold=0", "--reward-claim-threshold=00"} {
+			command := newTestCommandWithArgs(
+				t,
+				validFlags(testProviderHTTP, testProviderWS,
+					"--reward-address", "0x789", "--reward-priv-key", "0xabc", flag)...,
+			)
+			err := command.ExecuteContext(t.Context())
+			require.EqualError(t, err, "--reward-claim-threshold must be a positive number of STRK")
+		}
+	})
+
+	t.Run("Non-finite balance threshold is rejected", func(t *testing.T) {
+		for _, value := range []string{"nan", "NaN", "inf", "+Inf", "-inf"} {
+			command := newTestCommandWithArgs(
+				t, validFlags(testProviderHTTP, testProviderWS, "--balance-threshold", value)...,
+			)
+			err := command.ExecuteContext(t.Context())
+			require.ErrorContains(t, err, "--balance-threshold must be a finite number", value)
+		}
+	})
+
+	t.Run("Zero and negative balance thresholds are accepted", func(t *testing.T) {
+		for _, value := range []string{"0", "-1"} {
+			ctx, httpURL, wsURL := newTestNode(t)
+
+			command := newTestCommandWithArgs(
+				t, validFlags(httpURL, wsURL, "--balance-threshold", value)...,
+			)
+			require.NoError(t, command.ExecuteContext(ctx), value)
+		}
+	})
+}
+
+func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
+	return append([]string{
+		"--provider-http", httpURL,
+		"--provider-ws", wsURL,
+		"--signer-op-address", "0x456",
+		"--signer-url", testSignerURL,
+	}, extraFlags...)
+}
+
+func TestMetricsFlags(t *testing.T) {
+	t.Run("Invalid metrics port is rejected at startup", func(t *testing.T) {
+		for _, port := range []string{"abc", "99999", "0", "-1", ""} {
+			t.Run(port, func(t *testing.T) {
+				command := newTestCommandWithArgs(
+					t,
+					validFlags(testProviderHTTP, testProviderWS,
+						"--metrics", "--metrics-port", port)...,
+				)
+				err := command.ExecuteContext(t.Context())
+				require.ErrorContains(t, err, fmt.Sprintf("invalid --metrics-port %q", port))
+			})
+		}
+	})
+
+	t.Run("Metrics port already in use is rejected at startup", func(t *testing.T) {
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+		_, port, err := net.SplitHostPort(listener.Addr().String())
+		require.NoError(t, err)
+
+		command := newTestCommandWithArgs(
+			t,
+			validFlags(testProviderHTTP, testProviderWS,
+				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...,
+		)
+		err = command.ExecuteContext(t.Context())
+		require.ErrorContains(t, err, "cannot listen on 127.0.0.1:"+port)
+		require.ErrorContains(t, err, "address already in use")
+	})
+
+	t.Run("Metrics port is not checked without --metrics", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		command := newTestCommandWithArgs(
+			t, validFlags(httpURL, wsURL, "--metrics-port", "abc")...,
+		)
+		require.NoError(t, command.ExecuteContext(ctx))
+	})
+
+	t.Run("Metrics server on a free port starts", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+
+		command := newTestCommandWithArgs(
+			t,
+			validFlags(httpURL, wsURL,
+				"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", freePort(t))...,
+		)
+		require.NoError(t, command.ExecuteContext(ctx))
+	})
+}
+
+func freePort(t *testing.T) string {
+	t.Helper()
+
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	_, port, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, listener.Close())
+
+	return port
 }
 
 func createTemporaryConfigFile(t *testing.T, conf *config.Config) string {
@@ -334,4 +501,179 @@ func newTestNode(t *testing.T) (ctx context.Context, httpURL, wsURL string) {
 	})
 
 	return ctx, server.URL, "ws" + strings.TrimPrefix(server.URL, "http")
+}
+
+const (
+	runMainEnvVar  = "VALIDATOR_TEST_RUN_MAIN"
+	processTimeout = 30 * time.Second
+)
+
+func newMainProcess(t *testing.T, args ...string) (cmd *exec.Cmd, output *bytes.Buffer) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(t.Context(), processTimeout)
+	t.Cleanup(cancel)
+	cmd = exec.CommandContext(ctx, os.Args[0], args...)
+	cmd.Env = []string{runMainEnvVar + "=1"}
+	output = new(bytes.Buffer)
+	cmd.Stdout = output
+	cmd.Stderr = output
+
+	return cmd, output
+}
+
+func exitCode(t *testing.T, err error) int {
+	t.Helper()
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	require.NoError(t, err)
+
+	return 0
+}
+
+func TestFatalErrorIsLoggedWithoutStackTrace(t *testing.T) {
+	server := validator.MockRPCServer(t, validator.MockRPC{})
+
+	cmd, output := newMainProcess(t, validFlags(
+		server.URL, "ws"+strings.TrimPrefix(server.URL, "http"), "--max-retries", "1",
+	)...)
+
+	require.Equal(t, 1, exitCode(t, cmd.Run()), output.String())
+	require.Contains(t, output.String(), "validator stopped with error")
+	require.NotContains(t, output.String(), "errorVerbose")
+	require.NotContains(t, output.String(), "\n\t")
+}
+
+func TestLogsHaveNoColourCodesWithoutATerminal(t *testing.T) {
+	server := validator.MockRPCServer(t, validator.MockRPC{})
+
+	cmd, output := newMainProcess(t, validFlags(
+		server.URL, "ws"+strings.TrimPrefix(server.URL, "http"), "--max-retries", "1",
+	)...)
+
+	require.Equal(t, 1, exitCode(t, cmd.Run()), output.String())
+	require.Contains(t, output.String(), "ERROR")
+	require.NotContains(t, output.String(), "\x1b[")
+}
+
+func TestShutdownSignalDuringStartup(t *testing.T) {
+	for _, signal := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		t.Run(signal.String(), func(t *testing.T) {
+			requested := make(chan struct{}, 1)
+			release := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					select {
+					case requested <- struct{}{}:
+					default:
+					}
+					select {
+					case <-release:
+					case <-r.Context().Done():
+					}
+				},
+			))
+			t.Cleanup(server.Close)
+			t.Cleanup(func() { close(release) })
+
+			cmd, output := newMainProcess(t, validFlags(server.URL, "ws://127.0.0.1:1")...)
+			require.NoError(t, cmd.Start())
+
+			select {
+			case <-requested:
+			case <-time.After(processTimeout):
+				require.FailNow(t, "the validator didn't call the node")
+			}
+			require.NoError(t, cmd.Process.Signal(signal))
+
+			require.Equal(t, 0, exitCode(t, cmd.Wait()), output.String())
+			require.Contains(t, output.String(), "Received shutdown signal")
+		})
+	}
+}
+
+func TestStartMetricsServer(t *testing.T) {
+	t.Run("A server that cannot listen reports the error", func(t *testing.T) {
+		requested := make(chan struct{})
+		release := make(chan struct{})
+		var firstRequest sync.Once
+		_, httpURL, _ := newFaultyNode(t, supportedSpecVersion,
+			func(string, string) (int, string, bool) {
+				firstRequest.Do(func() {
+					close(requested)
+					select {
+					case <-release:
+					case <-t.Context().Done():
+					}
+				})
+
+				return 0, "", false
+			},
+		)
+		port := freePort(t)
+
+		cmd, output := newMainProcess(t, validFlags(httpURL, unresponsiveWSURL(t),
+			"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...)
+		require.NoError(t, cmd.Start())
+
+		select {
+		case <-requested:
+		case <-time.After(processTimeout):
+			require.FailNow(t, "the validator didn't call the node")
+		}
+		var listenConfig net.ListenConfig
+		listener, err := listenConfig.Listen(
+			t.Context(), "tcp", net.JoinHostPort("127.0.0.1", port),
+		)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, listener.Close()) }()
+		close(release)
+
+		require.Equal(t, 1, exitCode(t, cmd.Wait()), output.String())
+		require.Contains(t, output.String(), "metrics server failed, stopping the validator")
+		require.Contains(t, output.String(), "address already in use")
+		require.NotContains(t, output.String(), "Stopping metrics server")
+	})
+
+	t.Run("Stopping a running server reports no error", func(t *testing.T) {
+		_, httpURL, _ := newTestNode(t)
+		port := freePort(t)
+
+		cmd, output := newMainProcess(t, validFlags(httpURL, unresponsiveWSURL(t),
+			"--metrics", "--metrics-host", "127.0.0.1", "--metrics-port", port)...)
+		require.NoError(t, cmd.Start())
+
+		healthURL := "http://" + net.JoinHostPort("127.0.0.1", port) + "/health"
+		health, err := http.NewRequestWithContext(
+			t.Context(), http.MethodGet, healthURL, http.NoBody,
+		)
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			resp, err := http.DefaultClient.Do(health)
+			if err != nil {
+				return false
+			}
+
+			return resp.Body.Close() == nil && resp.StatusCode == http.StatusOK
+		}, processTimeout, 10*time.Millisecond)
+		require.NoError(t, cmd.Process.Signal(syscall.SIGINT))
+
+		require.Equal(t, 0, exitCode(t, cmd.Wait()), output.String())
+		require.Equal(t, 1, strings.Count(output.String(), "Stopping metrics server"))
+		require.NotContains(t, output.String(), "failed to stop metrics server")
+	})
+}
+
+func unresponsiveWSURL(t *testing.T) string {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	return "ws" + strings.TrimPrefix(server.URL, "http")
 }

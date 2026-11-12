@@ -1,6 +1,8 @@
 package validator_test
 
 import (
+	"bytes"
+	"context"
 	"testing"
 	"time"
 
@@ -106,7 +108,9 @@ func TestDispatch(t *testing.T) {
 
 			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockSigner, nil, math.Inf(1), logger, tracer) })
+			wg.Go(func() {
+				dispatcher.Dispatch(t.Context(), mockSigner, nil, math.Inf(1), logger, tracer)
+			})
 
 			// Send event
 			dispatcher.DoAttest <- types.DoAttest{BlockHash: *blockhash}
@@ -167,7 +171,7 @@ func TestDispatch(t *testing.T) {
 
 				// Start routine
 				wg := &conc.WaitGroup{}
-				wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+				wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 				// Send the same event x3
 				blockHash := (*types.BlockHash)(blockHashFelt)
@@ -245,7 +249,7 @@ func TestDispatch(t *testing.T) {
 
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+			wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 			// Send the same event x3
 			blockHash := (*types.BlockHash)(blockHashFelt)
@@ -333,7 +337,7 @@ func TestDispatch(t *testing.T) {
 
 				// Start routine
 				wg := &conc.WaitGroup{}
-				wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+				wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 				// Send the same event x2
 				blockHash := (*types.BlockHash)(blockHashFelt)
@@ -447,7 +451,7 @@ func TestDispatch(t *testing.T) {
 
 			// Start routine
 			wg := &conc.WaitGroup{}
-			wg.Go(func() { dispatcher.Dispatch(mockSigner, logger, tracer) })
+			wg.Go(func() { dispatcher.Dispatch(t.Context(), mockSigner, logger, tracer) })
 
 			// Send event A
 			blockHashA := (*types.BlockHash)(blockHashFeltA)
@@ -489,26 +493,26 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			TransactionStatus(txHash).
+			TransactionStatus(gomock.Any(), txHash).
 			Return(nil, validator.ErrTxnHashNotFound)
 
-		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+		txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
 		require.Equal(t, validator.Ongoing, txStatus)
 	})
 
 	t.Run(
-		"attestation fails also if error different from transaction status not found",
+		"attestation is still ongoing if the transaction status request fails",
 		func(t *testing.T) {
 			txHash := new(felt.Felt).SetUint64(1)
 
 			mockSigner.EXPECT().
-				TransactionStatus(txHash).
+				TransactionStatus(gomock.Any(), txHash).
 				Return(nil, errors.New("some internal error"))
 
-			txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+			txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
-			require.Equal(t, validator.Failed, txStatus)
+			require.Equal(t, validator.Ongoing, txStatus)
 		})
 
 	t.Run("attestation fails if accepted but REVERTED", func(t *testing.T) {
@@ -516,14 +520,14 @@ func TestTrackAttest(t *testing.T) {
 
 		revertError := "reverted for some reason"
 		mockSigner.EXPECT().
-			TransactionStatus(txHash).
+			TransactionStatus(gomock.Any(), txHash).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusREVERTED,
 				FailureReason:   revertError,
 			}, nil)
 
-		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+		txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
 		require.Equal(t, validator.Failed, txStatus)
 	})
@@ -532,13 +536,13 @@ func TestTrackAttest(t *testing.T) {
 		txHash := new(felt.Felt).SetUint64(1)
 
 		mockSigner.EXPECT().
-			TransactionStatus(txHash).
+			TransactionStatus(gomock.Any(), txHash).
 			Return(&rpc.TxnStatusResult{
 				FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
 				ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
 			}, nil)
 
-		txStatus := validator.TrackAttest(mockSigner, logger, txHash)
+		txStatus := validator.TrackAttest(t.Context(), mockSigner, logger, txHash)
 
 		require.Equal(t, validator.Successful, txStatus)
 	})
@@ -561,13 +565,15 @@ func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
 		AnyTimes()
 	// Called by `TrackAttest` when the window ends without a successful attest
 	mockSigner.EXPECT().
-		TransactionStatus(gomock.Any()).
+		TransactionStatus(gomock.Any(), gomock.Any()).
 		Return(nil, validator.ErrTxnHashNotFound).
 		AnyTimes()
 	// Called by the `CheckBalance` goroutine launched at the end of the window
 	mockSigner.EXPECT().
-		Call(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ rpc.FunctionCall, _ rpc.BlockID) ([]*felt.Felt, error) {
+		Call(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context, _ rpc.FunctionCall, _ rpc.BlockID,
+		) ([]*felt.Felt, error) {
 			select {
 			case balanceChecked <- struct{}{}:
 			default:
@@ -581,6 +587,7 @@ func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(
+			t.Context(),
 			mockSigner, nil, 100, log.NewNopZapLogger(), metrics.NewNoOpMetrics(),
 		)
 	})
@@ -623,13 +630,15 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 		AnyTimes()
 	// Called by `TrackAttest` when the window ends without a successful attest
 	mockSigner.EXPECT().
-		TransactionStatus(gomock.Any()).
+		TransactionStatus(gomock.Any(), gomock.Any()).
 		Return(nil, validator.ErrTxnHashNotFound).
 		AnyTimes()
 	// Called by the `CheckBalance` goroutine for the signer and the reward accounts
 	mockSigner.EXPECT().
-		Call(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ rpc.FunctionCall, _ rpc.BlockID) ([]*felt.Felt, error) {
+		Call(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context, _ rpc.FunctionCall, _ rpc.BlockID,
+		) ([]*felt.Felt, error) {
 			balanceChecked <- struct{}{}
 
 			return nil, errors.New("balance unavailable")
@@ -639,14 +648,15 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 	mockRewardSigner := mocks.NewMockRewardSigner(mockCtrl)
 	mockRewardSigner.EXPECT().Address().Return(&rewardAddress).AnyTimes()
 	mockRewardSigner.EXPECT().
-		ClaimRewards(gomock.Any()).
-		Do(func(metrics.Tracer) { rewardsClaimed <- struct{}{} }).
+		ClaimRewards(gomock.Any(), gomock.Any()).
+		Do(func(context.Context, metrics.Tracer) { rewardsClaimed <- struct{}{} }).
 		Times(1)
 
 	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(
+			t.Context(),
 			mockSigner, mockRewardSigner, 100, log.NewNopZapLogger(), metrics.NewNoOpMetrics(),
 		)
 	})
@@ -669,4 +679,471 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 	case <-timeout:
 		require.Fail(t, "rewards were not claimed at the end of the window")
 	}
+}
+
+type attestTracer struct {
+	metrics.NoOpMetrics
+
+	submitted int
+	confirmed int
+	failures  int
+}
+
+func (a *attestTracer) RecordAttestationSubmitted() { a.submitted++ }
+
+func (a *attestTracer) RecordAttestationConfirmed() { a.confirmed++ }
+
+func (a *attestTracer) RecordAttestationFailure() { a.failures++ }
+
+func newAttestSigner(t *testing.T) (mockSigner *mocks.MockSigner, balanceChecked chan struct{}) {
+	t.Helper()
+
+	signerAddress, err := types.AddressFromString("0x123")
+	require.NoError(t, err)
+	balanceChecked = make(chan struct{}, 10)
+
+	mockSigner = mocks.NewMockSigner(gomock.NewController(t))
+	mockSigner.EXPECT().Address().Return(&signerAddress).AnyTimes()
+	mockSigner.EXPECT().
+		ValidationContracts().
+		Return(validator.SepoliaValidationContracts(t)).
+		AnyTimes()
+	mockSigner.EXPECT().
+		Call(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context, _ rpc.FunctionCall, _ rpc.BlockID,
+		) ([]*felt.Felt, error) {
+			balanceChecked <- struct{}{}
+
+			return nil, errors.New("balance unavailable")
+		}).
+		AnyTimes()
+
+	return mockSigner, balanceChecked
+}
+
+func waitBalanceCheck(t *testing.T, balanceChecked chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-balanceChecked:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "balance check was not performed at the end of the window")
+	}
+}
+
+func startDispatcher(
+	t *testing.T, signer *mocks.MockSigner, tracer metrics.Tracer,
+) (dispatcher *validator.EventDispatcher[*mocks.MockSigner], stop func()) {
+	t.Helper()
+
+	d := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher = &d
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(t.Context(), signer, nil, 0, log.NewNopZapLogger(), tracer)
+	})
+
+	return dispatcher, func() {
+		close(dispatcher.DoAttest)
+		require.Nil(t, wg.WaitAndRecover())
+	}
+}
+
+func sendEvent[E any](t *testing.T, ch chan<- E, event E) {
+	t.Helper()
+
+	select {
+	case ch <- event:
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "the dispatcher did not take the event")
+	}
+}
+
+func attestTxn() rpc.BroadcastInvokeTxnV3 {
+	return rpc.BroadcastInvokeTxnV3{Nonce: new(felt.Felt).SetUint64(1)}
+}
+
+func feeEstimate() rpc.FeeEstimation {
+	one := new(felt.Felt).SetUint64(1)
+
+	return rpc.FeeEstimation{
+		FeeEstimationCommon: rpc.FeeEstimationCommon{
+			L1GasConsumed:     one,
+			L1GasPrice:        one,
+			L2GasConsumed:     one,
+			L2GasPrice:        one,
+			L1DataGasConsumed: one,
+			L1DataGasPrice:    one,
+			OverallFee:        one,
+		},
+	}
+}
+
+func TestDispatchRetriesFailedAttempts(t *testing.T) {
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	txHash := new(felt.Felt).SetUint64(0xa77e57)
+	signerDown := errors.New("signer unreachable")
+
+	t.Run("Nonce refresh fails at window start", func(t *testing.T) {
+		mockSigner, _ := newAttestSigner(t)
+		gomock.InOrder(
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().
+				Nonce(gomock.Any()).
+				Return(nil, errors.New("-32603 Internal Error")),
+			mockSigner.EXPECT().Nonce(gomock.Any()).Return(new(felt.Felt).SetUint64(1), nil),
+			mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().
+				InvokeTransaction(gomock.Any(), gomock.Any()).
+				Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		stop()
+
+		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
+		require.Equal(t, *txHash, dispatcher.CurrentAttest.Hash)
+		require.Equal(t, 1, tracer.submitted)
+	})
+
+	t.Run("Signer down across the window start", func(t *testing.T) {
+		mockSigner, _ := newAttestSigner(t)
+		gomock.InOrder(
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().Nonce(gomock.Any()).Return(new(felt.Felt).SetUint64(1), nil),
+			mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, signerDown),
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, signerDown),
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().
+				InvokeTransaction(gomock.Any(), gomock.Any()).
+				Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+		for range 3 {
+			sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		}
+		stop()
+
+		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
+		require.Equal(t, *txHash, dispatcher.CurrentAttest.Hash)
+		require.Equal(t, 1, tracer.submitted)
+	})
+
+	t.Run("Re-signing after a nonce change fails", func(t *testing.T) {
+		mockSigner, _ := newAttestSigner(t)
+		gomock.InOrder(
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().Nonce(gomock.Any()).Return(new(felt.Felt).SetUint64(2), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, signerDown),
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().
+				InvokeTransaction(gomock.Any(), gomock.Any()).
+				Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil),
+		)
+		dispatcher, stop := startDispatcher(t, mockSigner, new(attestTracer))
+
+		sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		stop()
+
+		require.Equal(t, validator.Ongoing, dispatcher.CurrentAttest.Status)
+		require.Equal(t, *txHash, dispatcher.CurrentAttest.Hash)
+	})
+
+	t.Run("Window ends after failed attempts only", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		mockSigner.EXPECT().
+			BuildAttestTransaction(gomock.Any(), &blockHash).
+			Return(rpc.BroadcastInvokeTxnV3{}, errors.New("-32603 Internal Error")).
+			Times(2)
+		mockSigner.EXPECT().TransactionStatus(gomock.Any(), gomock.Any()).Times(0)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 0, tracer.submitted)
+		require.Equal(t, 1, tracer.failures)
+		require.Equal(t, validator.Iddle, dispatcher.CurrentAttest.Status)
+	})
+}
+
+func TestTrackAttestWithoutTransaction(t *testing.T) {
+	mockSigner := mocks.NewMockSigner(gomock.NewController(t))
+	mockSigner.EXPECT().TransactionStatus(gomock.Any(), gomock.Any()).Times(0)
+
+	status := validator.TrackAttest(t.Context(), mockSigner, log.NewNopZapLogger(), &felt.Zero)
+
+	require.Equal(t, validator.Failed, status)
+}
+
+func TestDispatchUnknownAttestStatus(t *testing.T) {
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	txHash := new(felt.Felt).SetUint64(0xa77e57)
+	nodeDown := errors.New("-32603 The error is not a valid RPC error: connection refused")
+	succeeded := &rpc.TxnStatusResult{
+		FinalityStatus:  rpc.TxnStatusAcceptedOnL2,
+		ExecutionStatus: rpc.TxnExecutionStatusSUCCEEDED,
+	}
+
+	expectSend := func(mockSigner *mocks.MockSigner) *gomock.Call {
+		invoke := mockSigner.EXPECT().InvokeTransaction(gomock.Any(), gomock.Any())
+		sign := mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any())
+		estimate := mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any())
+		build := mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash)
+
+		return invoke.
+			After(sign.Return(nil, nil).Times(2)).
+			After(estimate.Return(feeEstimate(), nil)).
+			After(build.Return(attestTxn(), nil)).
+			Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
+	}
+
+	t.Run("Failed status requests keep the transaction", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().
+				TransactionStatus(gomock.Any(), txHash).
+				Return(nil, nodeDown).
+				Times(2),
+			mockSigner.EXPECT().TransactionStatus(gomock.Any(), txHash).Return(succeeded, nil),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		for range 4 {
+			sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		}
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.submitted)
+		require.Equal(t, 1, tracer.confirmed)
+		require.Equal(t, 0, tracer.failures)
+	})
+
+	t.Run("Transaction not found for too long is sent again", func(t *testing.T) {
+		mockSigner, _ := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().
+				TransactionStatus(gomock.Any(), txHash).
+				Return(nil, validator.ErrTxnHashNotFound).
+				Times(5),
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(attestTxn(), nil),
+			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
+			mockSigner.EXPECT().
+				EstimateFee(gomock.Any(), gomock.Any()).
+				Return(rpc.FeeEstimation{}, errors.New("Attestation is done for this epoch")),
+		)
+		dispatcher, stop := startDispatcher(t, mockSigner, new(attestTracer))
+
+		for range 7 {
+			sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		}
+		stop()
+
+		require.Equal(t, validator.Successful, dispatcher.CurrentAttest.Status)
+	})
+
+	t.Run("Unknown status at the end of the window", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().
+				TransactionStatus(gomock.Any(), txHash).
+				Return(nil, validator.ErrTxnHashNotFound),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.submitted)
+		require.Equal(t, 0, tracer.confirmed)
+		require.Equal(t, 0, tracer.failures)
+	})
+
+	t.Run("Node down from the send to the end of the window", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().
+				TransactionStatus(gomock.Any(), txHash).
+				Return(nil, nodeDown).
+				Times(5),
+			mockSigner.EXPECT().
+				BuildAttestTransaction(gomock.Any(), &blockHash).
+				Return(rpc.BroadcastInvokeTxnV3{}, nodeDown).
+				Times(4),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		for range 9 {
+			sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		}
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.submitted)
+		require.Equal(t, 0, tracer.confirmed)
+		require.Equal(t, 0, tracer.failures)
+	})
+
+	t.Run("Transaction still in processing at the end of the window", func(t *testing.T) {
+		mockSigner, balanceChecked := newAttestSigner(t)
+		sent := expectSend(mockSigner)
+		gomock.InOrder(
+			sent,
+			mockSigner.EXPECT().
+				TransactionStatus(gomock.Any(), txHash).
+				Return(&rpc.TxnStatusResult{FinalityStatus: rpc.TxnStatusReceived}, nil),
+		)
+		tracer := new(attestTracer)
+		dispatcher, stop := startDispatcher(t, mockSigner, tracer)
+
+		sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+		sendEvent(t, dispatcher.EndOfWindow, struct{}{})
+		stop()
+		waitBalanceCheck(t, balanceChecked)
+
+		require.Equal(t, 1, tracer.failures)
+	})
+}
+
+func TestDispatchPrepareWhileAttestingIsNotAnError(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(gomock.Any(), &blockHash).
+		Return(rpc.BroadcastInvokeTxnV3{}, errors.New("node down")).
+		Times(2)
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	require.Equal(t, validator.Failed, dispatcher.CurrentAttest.Status)
+	require.NotContains(t, buf.String(), "prepare attest")
+}
+
+func TestDispatchAttestLogKeys(t *testing.T) {
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.DEBUG), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	txHash := new(felt.Felt).SetUint64(0xa77e57)
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash).Return(attestTxn(), nil)
+	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+	mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil)
+	mockSigner.EXPECT().
+		InvokeTransaction(gomock.Any(), gomock.Any()).
+		Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	out := buf.String()
+	require.Contains(t, out, `invoking attest	{"targetBlockHash": "0xb10c"}`)
+	require.Contains(t, out, `attest transaction sent	{"transactionHash": "0xa77e57"}`)
+	require.Contains(t, out, `for blockhash	{"targetBlockHash": "0xb10c"}`)
+}
+
+func TestDispatchRedactsProviderURLsInErrors(t *testing.T) {
+	const apiKey = "0123456789abcdef0123456789abcdef"
+	var buf bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
+	mockSigner, _ := newAttestSigner(t)
+	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash).Return(attestTxn(), nil)
+	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil)
+	mockSigner.EXPECT().Nonce(gomock.Any()).Return(nil, errors.New(
+		`-32603 The error is not a valid RPC error: Post "http://node/v3/`+apiKey+`": EOF`,
+	))
+
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	wg := conc.NewWaitGroup()
+	wg.Go(func() {
+		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
+	})
+	sendEvent(t, dispatcher.PrepareAttest, types.PrepareAttest{BlockHash: blockHash})
+	sendEvent(t, dispatcher.DoAttest, types.DoAttest{BlockHash: blockHash})
+	close(dispatcher.DoAttest)
+	require.Nil(t, wg.WaitAndRecover())
+
+	require.Contains(t, buf.String(), `Post \"http://node/v3/REDACTED\": EOF`)
+	require.NotContains(t, buf.String(), apiKey)
 }

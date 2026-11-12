@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"math"
 
 	"github.com/NethermindEth/juno/utils/log"
@@ -19,52 +20,59 @@ const (
 // and its address differs from the signer one, of the reward account as well.
 // Each balance is recorded and a warning is given if it is below the threshold
 func CheckBalance[S signerP.Signer](
+	ctx context.Context,
 	signer S,
 	rewardS signerP.RewardSigner,
 	threshold float64,
 	logger log.Logger,
 	tracer metrics.Tracer,
 ) {
-	if balance, ok := fetchStrkBalance(signer, signerAccount, signer.Address(), logger); ok {
+	balance, ok := fetchStrkBalance(ctx, signer, signerAccount, signer.Address(), logger)
+	if ok {
 		tracer.UpdateSignerBalance(balance)
 		if isBelowThreshold(signerAccount, balance, threshold, logger) {
 			tracer.RecordSignerBalanceBelowThreshold()
 		} else {
 			tracer.RecordSignerBalanceAboveThreshold()
 		}
+	} else {
+		tracer.RecordBalanceCheckFailure(signerAccount)
 	}
 
 	// If the reward address is the signer one, its balance was already checked
 	if rewardS == nil || rewardS.Address().Felt().Equal(signer.Address().Felt()) {
 		return
 	}
-	if balance, ok := fetchStrkBalance(signer, rewardAccount, rewardS.Address(), logger); ok {
+	balance, ok = fetchStrkBalance(ctx, signer, rewardAccount, rewardS.Address(), logger)
+	if ok {
 		tracer.UpdateRewardBalance(balance)
 		if isBelowThreshold(rewardAccount, balance, threshold, logger) {
 			tracer.RecordRewardBalanceBelowThreshold()
 		} else {
 			tracer.RecordRewardBalanceAboveThreshold()
 		}
+	} else {
+		tracer.RecordBalanceCheckFailure(rewardAccount)
 	}
 }
 
 // Fetches the STRK balance of the given address. Returns false if the balance
 // couldn't be fetched or has an unexpected value
 func fetchStrkBalance[S signerP.Signer](
-	signer S, account string, address *types.Address, logger log.Logger,
+	ctx context.Context, signer S, account string, address *types.Address, logger log.Logger,
 ) (float64, bool) {
 	logger.Debug(
 		"Calling account balance",
 		zap.String("account", account),
 		zap.String("address", address.String()),
 	)
-	balanceFri, err := signerP.FetchBalance(signer, address)
+	balanceFri, err := signerP.FetchBalance(ctx, signer, address)
 	if err != nil {
 		logger.Warn(
 			"Unable to get STRK balance of account",
 			zap.String("account", account),
 			zap.String("address", address.String()),
-			zap.Error(err),
+			zap.Error(redactErrorURLs(err)),
 		)
 
 		return 0, false
@@ -78,13 +86,7 @@ func fetchStrkBalance[S signerP.Signer](
 		zap.String("FRI", balanceFri.Text(10)), //nolint:mnd // Decimal base
 	)
 
-	if math.IsInf(balance, 1) {
-		logger.Debug(
-			"STRK balance value cannot be represented as a float64, using +Inf",
-			zap.String("account", account),
-			zap.Float64("balance", balance),
-		)
-	} else if math.IsInf(balance, -1) || math.IsNaN(balance) {
+	if math.IsInf(balance, -1) || math.IsNaN(balance) {
 		logger.Error(
 			"Unexpected balance conversion value from FRI to STRK",
 			zap.String("account", account),
