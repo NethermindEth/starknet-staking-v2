@@ -59,7 +59,7 @@ func TestConfigFromFile(t *testing.T) {
                 "privateKey": "0x789",
                 "address": "0xabc",
                 "claimThreshold": 100,
-                "claimMaxFee": 1000,
+                "claimMaxFee": 1000
             },
             "maxTip": 5000
         }`)
@@ -500,7 +500,7 @@ func TestConfigFill(t *testing.T) {
                 "privateKey": "0x888",
                 "address": "0xabc",
                 "claimThreshold": 99,
-                "claimMaxFee": 1000,
+                "claimMaxFee": 1000
             },
             "maxTip": 5000
         }`),
@@ -523,7 +523,7 @@ func TestConfigFill(t *testing.T) {
                 "privateKey": "0x321",
                 "address": "0xabc",
                 "claimThreshold": 10,
-                "claimMaxFee": 1000,
+                "claimMaxFee": 1000
             },
             "maxTip": 5000
         }`),

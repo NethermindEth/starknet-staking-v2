@@ -69,7 +69,7 @@ func TestEstimateAttestTip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			provider := mocks.NewMockRPCProvider(gomock.NewController(t))
 			provider.EXPECT().
-				BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), gomock.Nil()).
+				BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
 				Return(latestBlockWithTip(tc.blockTip), nil)
 
 			tip, err := estimateAttestTip(t.Context(), provider, tc.maxTip, log.NewNopZapLogger())
@@ -81,7 +81,7 @@ func TestEstimateAttestTip(t *testing.T) {
 	t.Run("Capped tip logs a warning", func(t *testing.T) {
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
 		provider.EXPECT().
-			BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), gomock.Nil()).
+			BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
 			Return(latestBlockWithTip("0x7d0"), nil) // 2000
 		core, logs := observer.New(zapcore.DebugLevel)
 
@@ -125,7 +125,6 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 		t.Helper()
 
 		return &ExternalSigner{
-			ctx:                 t.Context(),
 			Provider:            provider,
 			logger:              log.NewNopZapLogger(),
 			validationContracts: *sepoliaContracts(t),
@@ -169,12 +168,12 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 			// A zero max tip skips the tip estimation, so the latest block is not fetched
 			if tc.maxTip != 0 {
 				provider.EXPECT().
-					BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), gomock.Nil()).
+					BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
 					Return(latestBlock, nil)
 			}
 
 			s := newExternalSigner(t, provider, tc.maxTip)
-			txn, err := s.BuildAttestTransaction(new(types.BlockHash))
+			txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedTip, txn.Tip)
 		})
@@ -191,7 +190,7 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 			Return(nil, blockErr)
 
 		s := newExternalSigner(t, provider, math.MaxUint64)
-		_, err := s.BuildAttestTransaction(new(types.BlockHash))
+		_, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
 		require.ErrorIs(t, err, blockErr)
 	})
 }

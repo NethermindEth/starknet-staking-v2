@@ -234,7 +234,7 @@ func estimateAttestTip(
 		return "0x0", nil
 	}
 
-	estimatedTip, err := rpc.EstimateTip(ctx, provider, constants.TipMultiplier)
+	estimatedTip, err := estimateTip(ctx, provider)
 	if err != nil {
 		return "", fmt.Errorf("estimate tip: %w", err)
 	}

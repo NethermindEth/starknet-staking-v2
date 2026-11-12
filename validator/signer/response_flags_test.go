@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -134,6 +135,7 @@ func TestBuildAttestTransactionResponseFlags(t *testing.T) {
 				internalSigner, err := signer.NewInternalSigner(
 					ctx, provider, log.NewNopZapLogger(), &signerConfig,
 					new(config.ContractAddresses),
+					math.MaxUint64,
 				)
 
 				return &internalSigner, err
@@ -145,6 +147,7 @@ func TestBuildAttestTransactionResponseFlags(t *testing.T) {
 				externalSigner, err := signer.NewExternalSigner(
 					ctx, provider, log.NewNopZapLogger(), &signerConfig,
 					new(config.ContractAddresses),
+					math.MaxUint64,
 				)
 
 				return &externalSigner, err
@@ -204,5 +207,6 @@ func TestClaimRewardsResponseFlags(t *testing.T) {
 		messages = append(messages, entry.Message)
 	}
 	require.Equal(t, []string{"Auto-Claiming Rewards: failed to populate fees"}, messages)
-	requireNoNullResponseFlags(t, requests)
+	// The claim transaction pays no tip, so the latest block is never requested
+	require.Empty(t, requests.responseFlags())
 }

@@ -2,6 +2,7 @@ package signer_test
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -39,6 +40,7 @@ func TestSignersUseTheCallContext(t *testing.T) {
 				log.NewNopZapLogger(),
 				&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
 				new(config.ContractAddresses),
+				math.MaxUint64,
 			)
 			require.NoError(t, err)
 
@@ -56,6 +58,7 @@ func TestSignersUseTheCallContext(t *testing.T) {
 					OperationalAddress: "0x456",
 				},
 				new(config.ContractAddresses),
+				math.MaxUint64,
 			)
 			require.NoError(t, err)
 
