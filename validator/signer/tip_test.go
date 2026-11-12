@@ -1,4 +1,4 @@
-package signer
+package signer_test
 
 import (
 	"errors"
@@ -8,6 +8,8 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/starknet-staking-v2/mocks"
+	"github.com/NethermindEth/starknet-staking-v2/validator/config"
+	"github.com/NethermindEth/starknet-staking-v2/validator/signer"
 	"github.com/NethermindEth/starknet-staking-v2/validator/types"
 	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,43 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 )
+
+func newInternalSigner(
+	t *testing.T, provider rpc.RPCProvider, maxTip uint64, logger log.Logger,
+) signer.Signer {
+	t.Helper()
+
+	internalSigner, err := signer.NewInternalSigner(
+		t.Context(),
+		provider,
+		logger,
+		&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
+		new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+		maxTip,
+	)
+	require.NoError(t, err)
+
+	return &internalSigner
+}
+
+func newExternalSigner(
+	t *testing.T, provider rpc.RPCProvider, maxTip uint64, logger log.Logger,
+) signer.Signer {
+	t.Helper()
+
+	externalSigner, err := signer.NewExternalSigner(
+		t.Context(),
+		provider,
+		logger,
+		// No external URL: building the transaction doesn't sign it
+		&config.Signer{OperationalAddress: "0x456"},
+		new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
+		maxTip,
+	)
+	require.NoError(t, err)
+
+	return &externalSigner
+}
 
 // Returns a latest block with a single transaction paying the given tip
 func latestBlockWithTip(tip rpc.U64) *rpc.Block {
@@ -31,7 +70,31 @@ func latestBlockWithTip(tip rpc.U64) *rpc.Block {
 	}
 }
 
-func TestEstimateAttestTip(t *testing.T) {
+// Returns a mock provider that expects the calls made when creating a signer and
+// building an attestation transaction. The latest block is only expected when
+// latestBlock or blockErr is set, so a test fails if the tip estimation fetches
+// a block it shouldn't
+func newTipProvider(
+	t *testing.T, latestBlock *rpc.Block, blockErr error,
+) *mocks.MockRPCProvider {
+	t.Helper()
+
+	provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+	// The internal signer queries the chain ID twice on creation, the external once
+	provider.EXPECT().ChainID(gomock.Any()).Return("SN_SEPOLIA", nil).MinTimes(1)
+	provider.EXPECT().
+		Nonce(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(felt.NewFromUint64[felt.Felt](1), nil)
+	if latestBlock != nil || blockErr != nil {
+		provider.EXPECT().
+			BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
+			Return(latestBlock, blockErr)
+	}
+
+	return provider
+}
+
+func TestBuildAttestTransactionTip(t *testing.T) {
 	// The estimated tip is the block's tip multiplied by TipMultiplier (1.5)
 	testCases := []struct {
 		name        string
@@ -65,132 +128,60 @@ func TestEstimateAttestTip(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-			provider.EXPECT().
-				BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
-				Return(latestBlockWithTip(tc.blockTip), nil)
-
-			tip, err := estimateAttestTip(t.Context(), provider, tc.maxTip, log.NewNopZapLogger())
-			require.NoError(t, err)
-			require.Equal(t, tc.expectedTip, tip)
-		})
-	}
-
-	t.Run("Capped tip logs a warning", func(t *testing.T) {
-		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		provider.EXPECT().
-			BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
-			Return(latestBlockWithTip("0x7d0"), nil) // 2000
-		core, logs := observer.New(zapcore.DebugLevel)
-
-		tip, err := estimateAttestTip(t.Context(), provider, 1000, log.NewZapLoggerWithCore(core))
-		require.NoError(t, err)
-		require.Equal(t, rpc.U64("0x3e8"), tip) // 1000
-		require.Equal(t, 1, logs.FilterLevelExact(zapcore.WarnLevel).Len())
-	})
-
-	t.Run("Zero max tip skips the estimation and logs no warning", func(t *testing.T) {
-		// No provider expectations: any RPC call fails the test
-		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		core, logs := observer.New(zapcore.DebugLevel)
-
-		tip, err := estimateAttestTip(t.Context(), provider, 0, log.NewZapLoggerWithCore(core))
-		require.NoError(t, err)
-		require.Equal(t, rpc.U64("0x0"), tip)
-		require.Zero(t, logs.Len())
-	})
-
-	t.Run("Error: estimate tip fails", func(t *testing.T) {
-		blockErr := errors.New("block error")
-		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		provider.EXPECT().
-			BlockWithTxs(gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, blockErr)
-
-		_, err := estimateAttestTip(t.Context(), provider, math.MaxUint64, log.NewNopZapLogger())
-		require.ErrorIs(t, err, blockErr)
-		require.ErrorContains(t, err, "estimate tip")
-	})
-}
-
-func TestBuildAttestTransactionTip(t *testing.T) {
-	// The estimated tip is 1500 (1000 * TipMultiplier)
-	latestBlock := latestBlockWithTip("0x3e8") // 1000
-
-	newExternalSigner := func(
-		t *testing.T, provider *mocks.MockRPCProvider, maxTip uint64,
-	) *ExternalSigner {
-		t.Helper()
-
-		return &ExternalSigner{
-			Provider:            provider,
-			logger:              log.NewNopZapLogger(),
-			validationContracts: *sepoliaContracts(t),
-			maxTip:              maxTip,
-		}
-	}
-
-	testCases := []struct {
-		name        string
-		maxTip      uint64
-		expectedTip rpc.U64
+	// Both signers estimate the attestation tip the same way
+	signers := []struct {
+		name      string
+		newSigner func(*testing.T, rpc.RPCProvider, uint64, log.Logger) signer.Signer
 	}{
-		{
-			name:        "Unlimited max tip keeps the estimated tip",
-			maxTip:      math.MaxUint64,
-			expectedTip: "0x5dc", // 1500
-		},
-		{
-			name:        "Max tip above the estimated tip",
-			maxTip:      2000,
-			expectedTip: "0x5dc", // 1500
-		},
-		{
-			name:        "Max tip below the estimated tip caps it",
-			maxTip:      100,
-			expectedTip: "0x64", // 100
-		},
-		{
-			name:        "Zero max tip never pays a tip",
-			maxTip:      0,
-			expectedTip: "0x0", // 0
-		},
+		{name: "Internal signer", newSigner: newInternalSigner},
+		{name: "External signer", newSigner: newExternalSigner},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-			provider.EXPECT().
-				Nonce(gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(felt.NewFromUint64[felt.Felt](1), nil)
-			// A zero max tip skips the tip estimation, so the latest block is not fetched
-			if tc.maxTip != 0 {
-				provider.EXPECT().
-					BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
-					Return(latestBlock, nil)
+	for _, signerType := range signers {
+		t.Run(signerType.name, func(t *testing.T) {
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					provider := newTipProvider(t, latestBlockWithTip(tc.blockTip), nil)
+					s := signerType.newSigner(t, provider, tc.maxTip, log.NewNopZapLogger())
+
+					txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+					require.NoError(t, err)
+					require.Equal(t, tc.expectedTip, txn.Tip)
+				})
 			}
 
-			s := newExternalSigner(t, provider, tc.maxTip)
-			txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
-			require.NoError(t, err)
-			require.Equal(t, tc.expectedTip, txn.Tip)
+			t.Run("Capped tip logs a warning", func(t *testing.T) {
+				provider := newTipProvider(t, latestBlockWithTip("0x7d0"), nil) // 2000
+				core, logs := observer.New(zapcore.DebugLevel)
+				s := signerType.newSigner(t, provider, 1000, log.NewZapLoggerWithCore(core))
+
+				txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+				require.NoError(t, err)
+				require.Equal(t, rpc.U64("0x3e8"), txn.Tip) // 1000
+				require.Equal(t, 1, logs.FilterLevelExact(zapcore.WarnLevel).Len())
+			})
+
+			t.Run("Zero max tip skips the estimation and logs no warning", func(t *testing.T) {
+				// No latest block expectation: fetching it fails the test
+				provider := newTipProvider(t, nil, nil)
+				core, logs := observer.New(zapcore.DebugLevel)
+				s := signerType.newSigner(t, provider, 0, log.NewZapLoggerWithCore(core))
+
+				txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+				require.NoError(t, err)
+				require.Equal(t, rpc.U64("0x0"), txn.Tip)
+				require.Zero(t, logs.FilterLevelExact(zapcore.WarnLevel).Len())
+			})
+
+			t.Run("Error: estimate tip fails", func(t *testing.T) {
+				blockErr := errors.New("block error")
+				provider := newTipProvider(t, nil, blockErr)
+				s := signerType.newSigner(t, provider, math.MaxUint64, log.NewNopZapLogger())
+
+				_, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+				require.ErrorIs(t, err, blockErr)
+				require.ErrorContains(t, err, "estimate tip")
+			})
 		})
 	}
-
-	t.Run("Error: estimate tip fails", func(t *testing.T) {
-		blockErr := errors.New("block error")
-		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		provider.EXPECT().
-			Nonce(gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(felt.NewFromUint64[felt.Felt](1), nil)
-		provider.EXPECT().
-			BlockWithTxs(gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, blockErr)
-
-		s := newExternalSigner(t, provider, math.MaxUint64)
-		_, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
-		require.ErrorIs(t, err, blockErr)
-	})
 }
