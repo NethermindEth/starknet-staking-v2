@@ -32,6 +32,7 @@ func defaultOverrides() map[string]override {
 		"attest-contract-address":  {registered: []string{`""`}, shown: autoDetected},
 		"staking-contract-address": {registered: []string{`""`}, shown: autoDetected},
 		"reward-claim-max-fee":     {registered: []string{"0"}, shown: "Unlimited"},
+		"max-tip":                  {registered: []string{"0"}, shown: "Unlimited"},
 		"reward-claim-threshold":   {registered: []string{"0"}, shown: "-"},
 		"log-level": {
 			registered: []string{"log.INFO.String()", "utils.INFO.String()"},
