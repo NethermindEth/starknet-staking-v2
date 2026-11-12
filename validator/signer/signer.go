@@ -212,19 +212,6 @@ func singleFeeEstimate(estimates []rpc.FeeEstimation) (rpc.FeeEstimation, error)
 	return estimate, nil
 }
 
-// Caps the tip to maxTip. Returns the resulting tip and whether it was capped
-func capTip(tip rpc.U64, maxTip uint64) (rpc.U64, bool, error) {
-	uintTip, err := tip.ToUint64()
-	if err != nil {
-		return "", false, fmt.Errorf("invalid tip %q: %w", tip, err)
-	}
-	if uintTip <= maxTip {
-		return tip, false, nil
-	}
-
-	return rpc.U64(fmt.Sprintf("0x%x", maxTip)), true, nil
-}
-
 // Estimates the tip for the attestation transaction, capped to maxTip. A warning is
 // logged if the estimated tip is above maxTip
 func estimateAttestTip(
@@ -239,19 +226,21 @@ func estimateAttestTip(
 		return "", fmt.Errorf("estimate tip: %w", err)
 	}
 
-	tip, capped, err := capTip(estimatedTip, maxTip)
+	uintTip, err := estimatedTip.ToUint64()
 	if err != nil {
-		return "", fmt.Errorf("cap tip: %w", err)
+		return "", fmt.Errorf("parse estimated tip: %w", err)
 	}
-	if capped {
-		logger.Warn(
-			"Estimated tip exceeds the max tip, using the max tip instead",
-			zap.String("estimatedTip", string(estimatedTip)),
-			zap.String("maxTip", string(tip)),
-		)
+	if uintTip <= maxTip {
+		return estimatedTip, nil
 	}
 
-	return tip, nil
+	logger.Warn(
+		"Estimated tip exceeds the max tip, using the max tip instead",
+		zap.Uint64("estimatedTip", uintTip),
+		zap.Uint64("maxTip", maxTip),
+	)
+
+	return rpc.U64(fmt.Sprintf("0x%x", maxTip)), nil
 }
 
 func ComputeBlockNumberToAttestTo(
