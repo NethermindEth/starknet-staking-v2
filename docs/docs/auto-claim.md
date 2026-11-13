@@ -13,6 +13,7 @@ To configure this, 5 new flags are made available. Full descriptions are availab
 * **`reward-claim-threshold`** is the amount after which a `claim_rewards` transaction will trigger.
 * `reward-claim-max-fee` is the maximum fee you're willing to pay to execute this transaction.
 
+Claim transactions are not time-sensitive, so they are always sent without a tip.
 
 There are [Metrics](./metrics) endpoints made available for this feature.
 
