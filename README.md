@@ -120,6 +120,8 @@ In addition to the configuration described above, the tool allows for other non-
 
 4. `--log-level` set's the tool logging level. Defaults to `info`.
 
+5. `--max-tip` caps the tip of the attestation transactions, in FRI per L2 gas unit. When the estimated tip is above it, the max tip is used instead and a warning is logged. Set it to 0 to never pay a tip. Defaults to unlimited.
+
 ## Other features
 
 We offer advance features such as **[external signing](https://nethermindeth.github.io/starknet-staking-v2/external-signer)**, **[monitoring via prometheus](https://nethermindeth.github.io/starknet-staking-v2/metrics)** and **[automatic reward claiming](https://nethermindeth.github.io/starknet-staking-v2/auto-claim)**. 

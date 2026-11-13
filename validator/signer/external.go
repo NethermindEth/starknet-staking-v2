@@ -52,6 +52,7 @@ func newExternalSignerClient(timeout time.Duration) *http.Client {
 // Used as a wrapper around an exgernal signer implementation
 type ExternalSigner struct {
 	Provider            rpc.RPCProvider
+	logger              log.Logger
 	operationalAddress  types.Address
 	chainID             felt.Felt
 	url                 string
@@ -85,6 +86,7 @@ func NewExternalSigner(
 
 	return ExternalSigner{
 		Provider:            provider,
+		logger:              logger,
 		operationalAddress:  operationalAddress,
 		url:                 sig.ExternalURL,
 		chainID:             *chainID,
@@ -95,6 +97,7 @@ func NewExternalSigner(
 func (s *ExternalSigner) BuildAttestTransaction(
 	ctx context.Context,
 	blockhash *types.BlockHash,
+	maxTip uint64,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	invokeCall := []rpc.InvokeFunctionCall{{
 		ContractAddress: s.ValidationContracts().Attest.Felt(),
@@ -103,7 +106,6 @@ func (s *ExternalSigner) BuildAttestTransaction(
 	}}
 	call := utils.InvokeFuncCallsToFunctionCalls(invokeCall)
 	calldata := account.FmtCallDataCairo2(call)
-	defaultResources := makeDefaultResources()
 
 	nonce, err := s.Provider.Nonce(
 		ctx,
@@ -114,30 +116,9 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := estimateTip(ctx, s.Provider)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
-	}
-
-	// Taken from starknet.go `utils.BuildInvokeTxn`
-	attestTransaction := rpc.BroadcastInvokeTxnV3{
-		Type:                  rpc.TransactionTypeInvoke,
-		SenderAddress:         s.Address().Felt(),
-		Calldata:              calldata,
-		Version:               rpc.TransactionV3WithQueryBit,
-		Signature:             []*felt.Felt{},
-		Nonce:                 nonce,
-		ResourceBounds:        &defaultResources,
-		Tip:                   tip,
-		PayMasterData:         []*felt.Felt{},
-		AccountDeploymentData: []*felt.Felt{},
-		NonceDataMode:         rpc.DAModeL1,
-		FeeMode:               rpc.DAModeL1,
-		Proof:                 []string{},
-		ProofFacts:            []*felt.Felt{},
-	}
-
-	return attestTransaction, nil
+	return newAttestTransaction(
+		ctx, s.Provider, s.Address().Felt(), nonce, calldata, maxTip, s.logger,
+	)
 }
 
 func (s *ExternalSigner) EstimateFee(

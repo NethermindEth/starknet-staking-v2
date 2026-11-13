@@ -538,12 +538,8 @@ func (rs *rewardSigner) buildClaimRewardTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to get nonce: %w", err)
 	}
 
-	tip, err := estimateTip(ctx, rs.provider)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
-	}
-
-	// Taken from starknet.go `utils.BuildInvokeTxn`
+	// Taken from starknet.go `utils.BuildInvokeTxn`. Claiming isn't time-sensitive,
+	// so no tip is paid
 	claimTransaction := rpc.BroadcastInvokeTxnV3{
 		Type:                  rpc.TransactionTypeInvoke,
 		SenderAddress:         rs.Address().Felt(),
@@ -552,7 +548,7 @@ func (rs *rewardSigner) buildClaimRewardTransaction(
 		Signature:             []*felt.Felt{},
 		Nonce:                 nonce,
 		ResourceBounds:        &defaultResources,
-		Tip:                   tip,
+		Tip:                   "0x0",
 		PayMasterData:         []*felt.Felt{},
 		AccountDeploymentData: []*felt.Felt{},
 		NonceDataMode:         rpc.DAModeL1,

@@ -60,7 +60,8 @@ func TestConfigFromFile(t *testing.T) {
                 "address": "0xabc",
                 "claimThreshold": 100,
                 "claimMaxFee": 1000
-            }
+            },
+            "maxTip": 5000
         }`)
 		config, err := FromData(data)
 		require.NoError(t, err)
@@ -81,6 +82,7 @@ func TestConfigFromFile(t *testing.T) {
 				ClaimThreshold: 100,
 				ClaimMaxFee:    1000,
 			},
+			MaxTip: new(uint64(5000)),
 		}
 		require.Equal(t, expectedConfig, config)
 	})
@@ -150,12 +152,15 @@ func TestConfigFromEnv(t *testing.T) {
 	)
 
 	// Test Config
+	t.Setenv("MAX_TIP", "5000")
+
 	config, err := FromEnv()
 	require.NoError(t, err)
 	expectedConfig := Config{
 		Provider: expectedProvider,
 		Signer:   expectedSigner,
 		Reward:   expectedReward,
+		MaxTip:   new(uint64(5000)),
 	}
 	require.Equal(t, expectedConfig, config)
 }
@@ -188,6 +193,26 @@ func TestRewardFromEnvInvalidValues(t *testing.T) {
 
 			_, err = FromEnv()
 			require.ErrorContains(t, err, tc.envVar)
+		})
+	}
+}
+
+func TestConfigFromEnvInvalidMaxTip(t *testing.T) {
+	testCases := []struct {
+		name  string
+		value string
+	}{
+		{name: "Non numeric max tip", value: "xyz"},
+		{name: "Negative max tip", value: "-10"},
+		{name: "Decimal max tip", value: "2.5"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MAX_TIP", tc.value)
+
+			_, err := FromEnv()
+			require.ErrorContains(t, err, "MAX_TIP")
 		})
 	}
 }
@@ -396,6 +421,54 @@ func TestRewardSetDefaults(t *testing.T) {
 	})
 }
 
+func TestConfigMaxTipOrDefault(t *testing.T) {
+	testCases := []struct {
+		name     string
+		maxTip   *uint64
+		expected uint64
+	}{
+		{name: "Not set defaults to max uint64", maxTip: nil, expected: math.MaxUint64},
+		{name: "Explicit zero is kept", maxTip: new(uint64(0)), expected: 0},
+		{name: "Explicit value is kept", maxTip: new(uint64(1000)), expected: 1000},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := Config{MaxTip: tc.maxTip}
+			config.SetDefaults()
+			require.Equal(t, tc.expected, config.MaxTipOrDefault())
+		})
+	}
+}
+
+// An explicit zero max tip means never paying a tip, so it must be told apart from
+// a value not set in every config source
+func TestConfigExplicitZeroMaxTip(t *testing.T) {
+	t.Run("From file", func(t *testing.T) {
+		config, err := FromData([]byte(`{"maxTip": 0}`))
+		require.NoError(t, err)
+		require.Equal(t, new(uint64(0)), config.MaxTip)
+
+		config, err = FromData([]byte(`{}`))
+		require.NoError(t, err)
+		require.Nil(t, config.MaxTip)
+	})
+
+	t.Run("From env", func(t *testing.T) {
+		t.Setenv("MAX_TIP", "0")
+
+		config, err := FromEnv()
+		require.NoError(t, err)
+		require.Equal(t, new(uint64(0)), config.MaxTip)
+	})
+
+	t.Run("Not overridden by a lower priority source", func(t *testing.T) {
+		config := Config{MaxTip: new(uint64(0))}
+		config.Fill(&Config{MaxTip: new(uint64(5000))})
+		require.Equal(t, new(uint64(0)), config.MaxTip)
+	})
+}
+
 func TestConfigFill(t *testing.T) {
 	// Test data
 	config1, err := FromData(
@@ -428,7 +501,8 @@ func TestConfigFill(t *testing.T) {
                 "address": "0xabc",
                 "claimThreshold": 99,
                 "claimMaxFee": 1000
-            }
+            },
+            "maxTip": 5000
         }`),
 	)
 	require.NoError(t, err)
@@ -450,7 +524,8 @@ func TestConfigFill(t *testing.T) {
                 "address": "0xabc",
                 "claimThreshold": 10,
                 "claimMaxFee": 1000
-            }
+            },
+            "maxTip": 5000
         }`),
 	)
 	require.NoError(t, err)

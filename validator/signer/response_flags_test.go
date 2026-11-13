@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -160,7 +161,7 @@ func TestBuildAttestTransactionResponseFlags(t *testing.T) {
 			attestSigner, err := tc.new(t.Context(), provider)
 			require.NoError(t, err)
 
-			txn, err := attestSigner.BuildAttestTransaction(t.Context(), &blockHash)
+			txn, err := attestSigner.BuildAttestTransaction(t.Context(), &blockHash, math.MaxUint64)
 
 			require.NoError(t, err)
 			require.Equal(t, rpc.U64("0x0"), txn.Tip)
@@ -204,5 +205,6 @@ func TestClaimRewardsResponseFlags(t *testing.T) {
 		messages = append(messages, entry.Message)
 	}
 	require.Equal(t, []string{"Auto-Claiming Rewards: failed to populate fees"}, messages)
-	requireNoNullResponseFlags(t, requests)
+	// The claim transaction pays no tip, so the latest block is never requested
+	require.Empty(t, requests.responseFlags())
 }

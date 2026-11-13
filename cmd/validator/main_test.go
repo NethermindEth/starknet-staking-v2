@@ -199,7 +199,33 @@ func TestNewCommand(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	// Any reward flag given requires the rest of the reward configuration
+	for _, maxTip := range []string{"1000", "0"} {
+		t.Run("Full command setup works with max tip flag "+maxTip, func(t *testing.T) {
+			ctx, httpURL, wsURL := newTestNode(t)
+
+			command := newTestCommandWithArgs(
+				t,
+				"--provider-http", httpURL,
+				"--provider-ws", wsURL,
+				"--signer-op-address", "0x456",
+				"--signer-url", "http://localhost:5555",
+				"--max-tip", maxTip,
+			)
+			err := command.ExecuteContext(ctx)
+			require.NoError(t, err)
+		})
+	}
+
+	t.Run("Error: invalid max tip flag", func(t *testing.T) {
+		command := main.NewCommand()
+		command.SetArgs([]string{"--max-tip", "-1"})
+
+		err := command.ExecuteContext(t.Context())
+		require.ErrorContains(t, err, "max-tip")
+	})
+
+	// Any reward flag given, even `--reward-braavos-account=false`, requires the rest
+	// of the reward configuration
 	t.Run("Reward flags require the full reward configuration", func(t *testing.T) {
 		const (
 			errAddressNotSet = "address is not set in reward configuration"

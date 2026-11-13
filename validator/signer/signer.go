@@ -23,8 +23,10 @@ type Signer interface {
 		ctx context.Context, transactionHash *felt.Felt,
 	) (*rpc.TxnStatusResult, error)
 
+	// Builds the attestation transaction, capping its tip to maxTip (in FRI per
+	// L2 gas unit)
 	BuildAttestTransaction(
-		ctx context.Context, blockHash *types.BlockHash,
+		ctx context.Context, blockHash *types.BlockHash, maxTip uint64,
 	) (rpc.BroadcastInvokeTxnV3, error)
 	EstimateFee(ctx context.Context, txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error)
 	SignTransaction(
@@ -210,6 +212,74 @@ func singleFeeEstimate(estimates []rpc.FeeEstimation) (rpc.FeeEstimation, error)
 	}
 
 	return estimate, nil
+}
+
+// Builds the attestation transaction shared by all signers, estimating its tip capped
+// to maxTip
+func newAttestTransaction(
+	ctx context.Context,
+	provider rpc.RPCProvider,
+	sender *felt.Felt,
+	nonce *felt.Felt,
+	calldata []*felt.Felt,
+	maxTip uint64,
+	logger log.Logger,
+) (rpc.BroadcastInvokeTxnV3, error) {
+	tip, err := estimateAttestTip(ctx, provider, maxTip, logger)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
+
+	defaultResources := makeDefaultResources()
+
+	// Taken from starknet.go `utils.BuildInvokeTxn`
+	return rpc.BroadcastInvokeTxnV3{
+		Type:                  rpc.TransactionTypeInvoke,
+		SenderAddress:         sender,
+		Calldata:              calldata,
+		Version:               rpc.TransactionV3WithQueryBit,
+		Signature:             []*felt.Felt{},
+		Nonce:                 nonce,
+		ResourceBounds:        &defaultResources,
+		Tip:                   tip,
+		PayMasterData:         []*felt.Felt{},
+		AccountDeploymentData: []*felt.Felt{},
+		NonceDataMode:         rpc.DAModeL1,
+		FeeMode:               rpc.DAModeL1,
+		Proof:                 []string{},
+		ProofFacts:            []*felt.Felt{},
+	}, nil
+}
+
+// Estimates the tip for the attestation transaction, capped to maxTip. A warning is
+// logged if the estimated tip is above maxTip
+func estimateAttestTip(
+	ctx context.Context, provider rpc.RPCProvider, maxTip uint64, logger log.Logger,
+) (rpc.U64, error) {
+	if maxTip == 0 {
+		return "0x0", nil
+	}
+
+	estimatedTip, err := estimateTip(ctx, provider)
+	if err != nil {
+		return "", fmt.Errorf("estimate tip: %w", err)
+	}
+
+	uintTip, err := estimatedTip.ToUint64()
+	if err != nil {
+		return "", fmt.Errorf("parse estimated tip: %w", err)
+	}
+	if uintTip <= maxTip {
+		return estimatedTip, nil
+	}
+
+	logger.Warn(
+		"Estimated tip exceeds the max tip, using the max tip instead",
+		zap.Uint64("estimatedTip", uintTip),
+		zap.Uint64("maxTip", maxTip),
+	)
+
+	return rpc.U64(fmt.Sprintf("0x%x", maxTip)), nil
 }
 
 func ComputeBlockNumberToAttestTo(

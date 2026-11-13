@@ -20,6 +20,7 @@ var _ Signer = (*InternalSigner)(nil)
 
 type InternalSigner struct {
 	Account             account.Account
+	logger              log.Logger
 	validationContracts types.ValidationContracts
 }
 
@@ -66,6 +67,7 @@ func NewInternalSigner(
 
 	return InternalSigner{
 		Account:             *acc,
+		logger:              logger,
 		validationContracts: validationContracts,
 	}, nil
 }
@@ -81,6 +83,7 @@ func (s *InternalSigner) TransactionStatus(
 func (s *InternalSigner) BuildAttestTransaction(
 	ctx context.Context,
 	blockhash *types.BlockHash,
+	maxTip uint64,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	calls := []rpc.InvokeFunctionCall{{
 		ContractAddress: s.ValidationContracts().Attest.Felt(),
@@ -97,32 +100,9 @@ func (s *InternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to update the account nonce: %w", err)
 	}
 
-	defaultResources := makeDefaultResources()
-
-	tip, err := estimateTip(ctx, s.Account.Provider)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to estimate tip: %w", err)
-	}
-
-	// Taken from starknet.go `utils.BuildInvokeTxn`
-	attestTransaction := rpc.BroadcastInvokeTxnV3{
-		Type:                  rpc.TransactionTypeInvoke,
-		SenderAddress:         s.Account.Address,
-		Calldata:              calldata,
-		Version:               rpc.TransactionV3WithQueryBit,
-		Signature:             []*felt.Felt{},
-		Nonce:                 nonce,
-		ResourceBounds:        &defaultResources,
-		Tip:                   tip,
-		PayMasterData:         []*felt.Felt{},
-		AccountDeploymentData: []*felt.Felt{},
-		NonceDataMode:         rpc.DAModeL1,
-		FeeMode:               rpc.DAModeL1,
-		Proof:                 []string{},
-		ProofFacts:            []*felt.Felt{},
-	}
-
-	return attestTransaction, nil
+	return newAttestTransaction(
+		ctx, s.Account.Provider, s.Account.Address, nonce, calldata, maxTip, s.logger,
+	)
 }
 
 func (s *InternalSigner) EstimateFee(

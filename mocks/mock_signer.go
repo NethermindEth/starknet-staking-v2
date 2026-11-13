@@ -73,18 +73,18 @@ func (mr *MockSignerMockRecorder) BlockWithTxHashes(ctx, blockID any) *gomock.Ca
 }
 
 // BuildAttestTransaction mocks base method.
-func (m *MockSigner) BuildAttestTransaction(ctx context.Context, blockHash *types.BlockHash) (rpc.BroadcastInvokeTxnV3, error) {
+func (m *MockSigner) BuildAttestTransaction(ctx context.Context, blockHash *types.BlockHash, maxTip uint64) (rpc.BroadcastInvokeTxnV3, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildAttestTransaction", ctx, blockHash)
+	ret := m.ctrl.Call(m, "BuildAttestTransaction", ctx, blockHash, maxTip)
 	ret0, _ := ret[0].(rpc.BroadcastInvokeTxnV3)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BuildAttestTransaction indicates an expected call of BuildAttestTransaction.
-func (mr *MockSignerMockRecorder) BuildAttestTransaction(ctx, blockHash any) *gomock.Call {
+func (mr *MockSignerMockRecorder) BuildAttestTransaction(ctx, blockHash, maxTip any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildAttestTransaction", reflect.TypeOf((*MockSigner)(nil).BuildAttestTransaction), ctx, blockHash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildAttestTransaction", reflect.TypeOf((*MockSigner)(nil).BuildAttestTransaction), ctx, blockHash, maxTip)
 }
 
 // Call mocks base method.

@@ -104,7 +104,7 @@ func TestDispatchAttestationDoneRevert(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockSigner, balanceChecked := newAttestSigner(t)
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil)
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil)
 			tc.expect(mockSigner)
@@ -133,13 +133,15 @@ func TestDispatchLogsReadableRevert(t *testing.T) {
 	require.NoError(t, err)
 	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
 	mockSigner, _ := newAttestSigner(t)
-	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash).Return(attestTxn(), nil)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
+		Return(attestTxn(), nil)
 	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil)
 	mockSigner.EXPECT().
 		EstimateFee(gomock.Any(), gomock.Any()).
 		Return(rpc.FeeEstimation{}, attestRevert(t, outOfWindowFelts, true))
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())

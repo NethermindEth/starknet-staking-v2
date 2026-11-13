@@ -150,7 +150,7 @@ func TestProcessBlockHeadersSkipsReplayedHeaders(t *testing.T) {
 	windowEnd := attestInfo.WindowEnd.Uint64()
 	require.Less(t, windowEnd+1, uint64(testEpochStart+testEpochLen))
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	counter := countEvents(&dispatcher)
 
 	err = validator.ProcessBlockHeaders(
@@ -180,7 +180,7 @@ func TestProcessBlockHeadersLogsBlockAfterEpochSwitch(t *testing.T) {
 	)
 	require.NoError(t, err)
 	mockSigner := newEpochSigner(t, 0, 1)
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	counter := countEvents(&dispatcher)
 
 	nextEpochStart := uint64(testEpochStart + testEpochLen)

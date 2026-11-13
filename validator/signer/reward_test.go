@@ -585,21 +585,6 @@ func TestBuildClaimRewardTransaction(t *testing.T) {
 		require.ErrorIs(t, err, nonceErr)
 	})
 
-	t.Run("Error: estimate tip fails", func(t *testing.T) {
-		blockErr := errors.New("block error")
-		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
-		provider.EXPECT().
-			Nonce(gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(felt.NewFromUint64[felt.Felt](5), nil)
-		provider.EXPECT().
-			BlockWithTxs(gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, blockErr)
-
-		rs := newTestRewardSigner(t, newMockSigner(t), provider, 1, 1)
-		_, err := rs.buildClaimRewardTransaction(t.Context())
-		require.ErrorIs(t, err, blockErr)
-	})
-
 	t.Run("Error: signing fails", func(t *testing.T) {
 		signErr := errors.New("sign error")
 		mockSigner := newMockSigner(t)
@@ -1671,8 +1656,7 @@ func newFeeEstimation(t *testing.T, overallFee uint64) rpc.FeeEstimation {
 }
 
 // expectBuildClaimTxn expects the provider calls performed when building a claim
-// transaction: the reward account nonce, and the latest block used to estimate the
-// tip (an empty block gives a tip of 0x0).
+// transaction: only the reward account nonce, since the tip is always 0x0.
 func expectBuildClaimTxn(t *testing.T, provider *mocks.MockRPCProvider, nonce *felt.Felt) {
 	t.Helper()
 
@@ -1681,9 +1665,6 @@ func expectBuildClaimTxn(t *testing.T, provider *mocks.MockRPCProvider, nonce *f
 	provider.EXPECT().
 		Nonce(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagPreConfirmed), rewardAddress.Felt()).
 		Return(nonce, nil)
-	provider.EXPECT().
-		BlockWithTxs(gomock.Any(), rpc.WithBlockTag(rpc.BlockTagLatest), []rpc.TxnResponseFlag{}).
-		Return(&rpc.Block{}, nil)
 }
 
 func expectClaimStart(t *testing.T, provider *mocks.MockRPCProvider, nonce *felt.Felt) {

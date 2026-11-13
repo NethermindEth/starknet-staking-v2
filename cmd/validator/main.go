@@ -63,6 +63,7 @@ func NewCommand() cobra.Command {
 	var balanceThreshold float64
 	var snConfig configP.StarknetConfig
 	var logger *log.ZapLogger
+	var maxTipF uint64
 
 	preRunE := func(cmd *cobra.Command, args []string) error {
 		// Flags and args are already parsed at this point, so from here on
@@ -71,6 +72,9 @@ func NewCommand() cobra.Command {
 
 		if err := checkThresholdFlags(cmd, &config, balanceThreshold); err != nil {
 			return err
+		}
+		if cmd.Flags().Changed("max-tip") {
+			config.MaxTip = &maxTipF
 		}
 		if err := loadConfig(&config, configPath); err != nil {
 			return err
@@ -241,6 +245,16 @@ func NewCommand() cobra.Command {
 			"is configured, the reward account balance is checked as well.\n"+
 			"The threshold is in STRK (1 STRK = 1e18 FRI).",
 	)
+
+	cmd.Flags().Uint64Var(
+		&maxTipF,
+		"max-tip",
+		0,
+		"Max tip, in FRI per L2 gas unit, to pay for the attestation transaction.\n"+
+			"The estimated tip is capped to this value. Set it to 0 to never pay a tip.\n"+
+			"Defaults to 'unlimited' if not specified (max uint64)",
+	)
+
 	cmd.Flags().StringVar(&logLevelF, "log-level", log.INFO.String(), "Options: "+logLevels+".")
 
 	return cmd
@@ -294,7 +308,9 @@ func run(ctx context.Context, opts *runOptions) error {
 	// Start validator in a goroutine
 	errCh := make(chan error, 1)
 	go func() {
-		err := v.Attest(ctx, opts.maxRetries, opts.balanceThreshold, tracer)
+		err := v.Attest(
+			ctx, opts.maxRetries, opts.balanceThreshold, opts.config.MaxTipOrDefault(), tracer,
+		)
 		if err != nil {
 			errCh <- err
 		}

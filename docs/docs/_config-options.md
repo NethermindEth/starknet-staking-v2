@@ -20,4 +20,5 @@
 | `--metrics-port` | - | - | `9090` | Port for the metric server |
 | `--max-retries` | - | - | `infinite` | How many times to retry to get information required for attestation. It can be either a positive integer or the key word 'infinite' |
 | `--balance-threshold` | - | - | `100` | Triggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. If the auto-claim reward feature is configured, the reward account balance is checked as well. The threshold is in STRK (1 STRK = 1e18 FRI). |
+| `--max-tip` | `MAX_TIP` | `maxTip` | Unlimited | Max tip, in FRI per L2 gas unit, to pay for the attestation transaction. The estimated tip is capped to this value. Set it to 0 to never pay a tip. Defaults to 'unlimited' if not specified (max uint64) |
 | `--log-level` | - | - | `info` | Options: trace, debug, info, warn, error. |

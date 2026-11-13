@@ -37,7 +37,9 @@ func TestDispatchUsesItsContext(t *testing.T) {
 		ValidationContracts().
 		Return(validator.SepoliaValidationContracts(t)).
 		AnyTimes()
-	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), gomock.Any()).Return(attestTxn(), nil)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(gomock.Any(), gomock.Any(), testMaxTip).
+		Return(attestTxn(), nil)
 	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
 	mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil)
 	mockSigner.EXPECT().
@@ -71,7 +73,7 @@ func TestDispatchUsesItsContext(t *testing.T) {
 
 	ctx := context.WithValue(t.Context(), dispatchContextKey{}, "dispatch")
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(
