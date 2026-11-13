@@ -3,7 +3,6 @@ package signer_test
 import (
 	"context"
 	"fmt"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,7 +45,6 @@ func TestExternalSignerAddress(t *testing.T) {
 				OperationalAddress: opAddress,
 			},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-			math.MaxUint64,
 		)
 		require.NoError(t, err)
 
@@ -66,7 +64,6 @@ func TestExternalSignerAddress(t *testing.T) {
 			logger,
 			&config.Signer{OperationalAddress: malformedAddress},
 			new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-			math.MaxUint64,
 		)
 		require.ErrorContains(t, err, "invalid operational address")
 		require.ErrorContains(t, err, malformedAddress)

@@ -103,16 +103,13 @@ func NewRewardSigner(
 	isExternal bool,
 ) (RewardSigner, error) {
 	signerConf := makeSignerConfFromRewardConf(rewardConfig)
-	// The reward signer never builds attestation transactions, and the claim
-	// transaction has no tip
-	const maxTip = 0
 	signerLogger := withAccountField(logger, rewardAccount)
 
 	var signer Signer
 
 	if isExternal {
 		externalSigner, err := NewExternalSigner(
-			ctx, provider, signerLogger, &signerConf, contractAddresses, maxTip,
+			ctx, provider, signerLogger, &signerConf, contractAddresses,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create external signer: %w", err)
@@ -120,7 +117,7 @@ func NewRewardSigner(
 		signer = &externalSigner
 	} else {
 		internalSigner, err := NewInternalSigner(
-			ctx, provider, signerLogger, &signerConf, contractAddresses, maxTip,
+			ctx, provider, signerLogger, &signerConf, contractAddresses,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create internal signer: %w", err)

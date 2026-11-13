@@ -23,8 +23,10 @@ type Signer interface {
 		ctx context.Context, transactionHash *felt.Felt,
 	) (*rpc.TxnStatusResult, error)
 
+	// Builds the attestation transaction, capping its tip to maxTip (in FRI per
+	// L2 gas unit)
 	BuildAttestTransaction(
-		ctx context.Context, blockHash *types.BlockHash,
+		ctx context.Context, blockHash *types.BlockHash, maxTip uint64,
 	) (rpc.BroadcastInvokeTxnV3, error)
 	EstimateFee(ctx context.Context, txn *rpc.BroadcastInvokeTxnV3) (rpc.FeeEstimation, error)
 	SignTransaction(

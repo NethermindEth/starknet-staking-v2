@@ -19,7 +19,7 @@ import (
 )
 
 func newInternalSigner(
-	t *testing.T, provider rpc.RPCProvider, maxTip uint64, logger log.Logger,
+	t *testing.T, provider rpc.RPCProvider, logger log.Logger,
 ) signer.Signer {
 	t.Helper()
 
@@ -29,7 +29,6 @@ func newInternalSigner(
 		logger,
 		&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
 		new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-		maxTip,
 	)
 	require.NoError(t, err)
 
@@ -37,7 +36,7 @@ func newInternalSigner(
 }
 
 func newExternalSigner(
-	t *testing.T, provider rpc.RPCProvider, maxTip uint64, logger log.Logger,
+	t *testing.T, provider rpc.RPCProvider, logger log.Logger,
 ) signer.Signer {
 	t.Helper()
 
@@ -48,7 +47,6 @@ func newExternalSigner(
 		// No external URL: building the transaction doesn't sign it
 		&config.Signer{OperationalAddress: "0x456"},
 		new(config.ContractAddresses).SetDefaults("SN_SEPOLIA"),
-		maxTip,
 	)
 	require.NoError(t, err)
 
@@ -131,7 +129,7 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 	// Both signers estimate the attestation tip the same way
 	signers := []struct {
 		name      string
-		newSigner func(*testing.T, rpc.RPCProvider, uint64, log.Logger) signer.Signer
+		newSigner func(*testing.T, rpc.RPCProvider, log.Logger) signer.Signer
 	}{
 		{name: "Internal signer", newSigner: newInternalSigner},
 		{name: "External signer", newSigner: newExternalSigner},
@@ -142,9 +140,11 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 			for _, tc := range testCases {
 				t.Run(tc.name, func(t *testing.T) {
 					provider := newTipProvider(t, latestBlockWithTip(tc.blockTip), nil)
-					s := signerType.newSigner(t, provider, tc.maxTip, log.NewNopZapLogger())
+					s := signerType.newSigner(t, provider, log.NewNopZapLogger())
 
-					txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+					txn, err := s.BuildAttestTransaction(
+						t.Context(), new(types.BlockHash), tc.maxTip,
+					)
 					require.NoError(t, err)
 					require.Equal(t, tc.expectedTip, txn.Tip)
 				})
@@ -153,9 +153,9 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 			t.Run("Capped tip logs a warning", func(t *testing.T) {
 				provider := newTipProvider(t, latestBlockWithTip("0x7d0"), nil) // 2000
 				core, logs := observer.New(zapcore.DebugLevel)
-				s := signerType.newSigner(t, provider, 1000, log.NewZapLoggerWithCore(core))
+				s := signerType.newSigner(t, provider, log.NewZapLoggerWithCore(core))
 
-				txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+				txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash), 1000)
 				require.NoError(t, err)
 				require.Equal(t, rpc.U64("0x3e8"), txn.Tip) // 1000
 				require.Equal(t, 1, logs.FilterLevelExact(zapcore.WarnLevel).Len())
@@ -165,9 +165,9 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 				// No latest block expectation: fetching it fails the test
 				provider := newTipProvider(t, nil, nil)
 				core, logs := observer.New(zapcore.DebugLevel)
-				s := signerType.newSigner(t, provider, 0, log.NewZapLoggerWithCore(core))
+				s := signerType.newSigner(t, provider, log.NewZapLoggerWithCore(core))
 
-				txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+				txn, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash), 0)
 				require.NoError(t, err)
 				require.Equal(t, rpc.U64("0x0"), txn.Tip)
 				require.Zero(t, logs.FilterLevelExact(zapcore.WarnLevel).Len())
@@ -176,9 +176,11 @@ func TestBuildAttestTransactionTip(t *testing.T) {
 			t.Run("Error: estimate tip fails", func(t *testing.T) {
 				blockErr := errors.New("block error")
 				provider := newTipProvider(t, nil, blockErr)
-				s := signerType.newSigner(t, provider, math.MaxUint64, log.NewNopZapLogger())
+				s := signerType.newSigner(t, provider, log.NewNopZapLogger())
 
-				_, err := s.BuildAttestTransaction(t.Context(), new(types.BlockHash))
+				_, err := s.BuildAttestTransaction(
+					t.Context(), new(types.BlockHash), math.MaxUint64,
+				)
 				require.ErrorIs(t, err, blockErr)
 				require.ErrorContains(t, err, "estimate tip")
 			})

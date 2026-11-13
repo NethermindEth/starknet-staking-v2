@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"testing"
 
 	"github.com/NethermindEth/juno/utils/log"
@@ -258,7 +257,6 @@ func newMockedInternalSigner(t *testing.T, mock validator.MockRPC) *signer.Inter
 		log.NewNopZapLogger(),
 		&config.Signer{PrivKey: "0x1", OperationalAddress: "0x1234"},
 		new(config.ContractAddresses),
-		math.MaxUint64,
 	)
 	require.NoError(t, err)
 

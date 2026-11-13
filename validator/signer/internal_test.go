@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -49,7 +48,6 @@ func TestNewInternalSigner(t *testing.T) {
 				logger,
 				&config.Signer{PrivKey: privKey, OperationalAddress: "0x456"},
 				contractAddresses,
-				math.MaxUint64,
 			)
 
 			require.Equal(t, signer.InternalSigner{}, validatorAccount)
@@ -73,7 +71,6 @@ func TestNewInternalSigner(t *testing.T) {
 			logger,
 			&config.Signer{PrivKey: "0x123", OperationalAddress: malformedAddress},
 			contractAddresses,
-			math.MaxUint64,
 		)
 		require.ErrorContains(t, err, "invalid operational address")
 		require.ErrorContains(t, err, malformedAddress)
@@ -94,7 +91,7 @@ func TestNewInternalSigner(t *testing.T) {
 		// Test
 		logger := log.NewNopZapLogger()
 		internalSigner, err := signer.NewInternalSigner(
-			t.Context(), provider, logger, &configSigner, contractAddresses, math.MaxUint64,
+			t.Context(), provider, logger, &configSigner, contractAddresses,
 		)
 		require.NoError(t, err)
 
@@ -296,7 +293,6 @@ func TestEstimateFeeResponseValidation(t *testing.T) {
 			log.NewNopZapLogger(),
 			&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
 			addresses,
-			math.MaxUint64,
 		)
 		require.NoError(t, err)
 		externalSigner, err := signer.NewExternalSigner(
@@ -305,7 +301,6 @@ func TestEstimateFeeResponseValidation(t *testing.T) {
 			log.NewNopZapLogger(),
 			&config.Signer{ExternalURL: "http://127.0.0.1:1", OperationalAddress: "0x456"},
 			addresses,
-			math.MaxUint64,
 		)
 		require.NoError(t, err)
 
@@ -406,7 +401,6 @@ func TestEstimateFeeUsesQueryVersion(t *testing.T) {
 				log.NewNopZapLogger(),
 				&config.Signer{PrivKey: "0x123", OperationalAddress: "0x456"},
 				addresses,
-				math.MaxUint64,
 			)
 			require.NoError(t, err)
 			s.signer = &internalSigner
@@ -436,7 +430,6 @@ func TestEstimateFeeUsesQueryVersion(t *testing.T) {
 			log.NewNopZapLogger(),
 			&config.Signer{ExternalURL: signServer.URL, OperationalAddress: "0x456"},
 			addresses,
-			math.MaxUint64,
 		)
 		require.NoError(t, err)
 		s.signer = &externalSigner

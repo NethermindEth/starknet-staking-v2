@@ -22,8 +22,6 @@ type InternalSigner struct {
 	Account             account.Account
 	logger              log.Logger
 	validationContracts types.ValidationContracts
-	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
-	maxTip uint64
 }
 
 func NewInternalSigner(
@@ -32,7 +30,6 @@ func NewInternalSigner(
 	logger log.Logger,
 	signer *config.Signer,
 	addresses *config.ContractAddresses,
-	maxTip uint64,
 ) (InternalSigner, error) {
 	privateKey, err := types.PrivateKeyFromString(signer.PrivKey)
 	if err != nil {
@@ -72,7 +69,6 @@ func NewInternalSigner(
 		Account:             *acc,
 		logger:              logger,
 		validationContracts: validationContracts,
-		maxTip:              maxTip,
 	}, nil
 }
 
@@ -87,6 +83,7 @@ func (s *InternalSigner) TransactionStatus(
 func (s *InternalSigner) BuildAttestTransaction(
 	ctx context.Context,
 	blockhash *types.BlockHash,
+	maxTip uint64,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	calls := []rpc.InvokeFunctionCall{{
 		ContractAddress: s.ValidationContracts().Attest.Felt(),
@@ -105,7 +102,7 @@ func (s *InternalSigner) BuildAttestTransaction(
 
 	defaultResources := makeDefaultResources()
 
-	tip, err := estimateAttestTip(ctx, s.Account.Provider, s.maxTip, s.logger)
+	tip, err := estimateAttestTip(ctx, s.Account.Provider, maxTip, s.logger)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}

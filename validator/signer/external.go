@@ -57,8 +57,6 @@ type ExternalSigner struct {
 	chainID             felt.Felt
 	url                 string
 	validationContracts types.ValidationContracts
-	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
-	maxTip uint64
 }
 
 func NewExternalSigner(
@@ -67,7 +65,6 @@ func NewExternalSigner(
 	logger log.Logger,
 	sig *config.Signer,
 	addresses *config.ContractAddresses,
-	maxTip uint64,
 ) (ExternalSigner, error) {
 	operationalAddress, err := types.AddressFromString(sig.OperationalAddress)
 	if err != nil {
@@ -94,13 +91,13 @@ func NewExternalSigner(
 		url:                 sig.ExternalURL,
 		chainID:             *chainID,
 		validationContracts: validationContracts,
-		maxTip:              maxTip,
 	}, nil
 }
 
 func (s *ExternalSigner) BuildAttestTransaction(
 	ctx context.Context,
 	blockhash *types.BlockHash,
+	maxTip uint64,
 ) (rpc.BroadcastInvokeTxnV3, error) {
 	invokeCall := []rpc.InvokeFunctionCall{{
 		ContractAddress: s.ValidationContracts().Attest.Felt(),
@@ -120,7 +117,7 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := estimateAttestTip(ctx, s.Provider, s.maxTip, s.logger)
+	tip, err := estimateAttestTip(ctx, s.Provider, maxTip, s.logger)
 	if err != nil {
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}

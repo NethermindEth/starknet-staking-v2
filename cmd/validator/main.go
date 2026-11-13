@@ -308,7 +308,9 @@ func run(ctx context.Context, opts *runOptions) error {
 	// Start validator in a goroutine
 	errCh := make(chan error, 1)
 	go func() {
-		err := v.Attest(ctx, opts.maxRetries, opts.balanceThreshold, tracer)
+		err := v.Attest(
+			ctx, opts.maxRetries, opts.balanceThreshold, opts.config.MaxTipOrDefault(), tracer,
+		)
 		if err != nil {
 			errCh <- err
 		}

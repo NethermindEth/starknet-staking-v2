@@ -77,7 +77,6 @@ func newValidator(
 			logger,
 			&conf.Signer,
 			&snConfig.ContractAddresses,
-			conf.MaxTipOrDefault(),
 		)
 		if err != nil {
 			return Validator{}, markIfTransient(
@@ -96,7 +95,6 @@ func newValidator(
 			logger,
 			&conf.Signer,
 			&snConfig.ContractAddresses,
-			conf.MaxTipOrDefault(),
 		)
 		if err != nil {
 			return Validator{}, markIfTransient(
@@ -167,13 +165,17 @@ func (v *Validator) ChainID(ctx context.Context) string {
 // Main execution loop of the program. Listens to the blockchain and sends
 // attest invoke when it's the right time
 func (v *Validator) Attest(
-	ctx context.Context, maxRetries types.Retries, balanceThreshold float64, tracer metrics.Tracer,
+	ctx context.Context,
+	maxRetries types.Retries,
+	balanceThreshold float64,
+	maxTip uint64,
+	tracer metrics.Tracer,
 ) error {
 	// Initial check of the account balance
 	go CheckBalance(ctx, v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)
 
 	// Create the event dispatcher
-	dispatcher := NewEventDispatcher[signerP.Signer]()
+	dispatcher := NewEventDispatcher[signerP.Signer](maxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(ctx, v.signer, v.rewardSigner, balanceThreshold, v.logger, tracer)

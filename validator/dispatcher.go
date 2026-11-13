@@ -41,12 +41,12 @@ type AttestTransaction struct {
 }
 
 func (t *AttestTransaction) Build(
-	ctx context.Context, signer signerP.Signer, blockHash *types.BlockHash,
+	ctx context.Context, signer signerP.Signer, blockHash *types.BlockHash, maxTip uint64,
 ) error {
 	t.valid = false
 
 	var err error
-	t.txn, err = signer.BuildAttestTransaction(ctx, blockHash)
+	t.txn, err = signer.BuildAttestTransaction(ctx, blockHash, maxTip)
 	if err != nil {
 		return fmt.Errorf("signer failed building the transaction: %w", err)
 	}
@@ -188,12 +188,15 @@ type EventDispatcher[S signerP.Signer] struct {
 	// Current epoch attest-related fields
 	CurrentAttest AttestTracker
 
+	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction
+	maxTip   uint64
 	progress *headerProgress
 }
 
-func NewEventDispatcher[S signerP.Signer]() EventDispatcher[S] {
+func NewEventDispatcher[S signerP.Signer](maxTip uint64) EventDispatcher[S] {
 	return EventDispatcher[S]{
 		CurrentAttest: NewAttestTracker(),
+		maxTip:        maxTip,
 		DoAttest:      make(chan types.DoAttest),
 		PrepareAttest: make(chan types.PrepareAttest),
 		EndOfWindow:   make(chan struct{}),
@@ -270,7 +273,7 @@ func (d *EventDispatcher[S]) Dispatch(
 				"building attest transaction for blockhash",
 				zap.String("targetBlockHash", targetBlockHash.String()),
 			)
-			err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash)
+			err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash, d.maxTip)
 			if err != nil {
 				logger.Error("failed to build attest transaction", zap.Error(redactErrorURLs(err)))
 
@@ -310,7 +313,7 @@ func (d *EventDispatcher[S]) Dispatch(
 					"building attest transaction (in `do` stage) for blockhash",
 					zap.String("targetBlockHash", targetBlockHash.String()),
 				)
-				err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash)
+				err := d.CurrentAttest.Transaction.Build(ctx, signer, &targetBlockHash, d.maxTip)
 				if err != nil {
 					logger.Error(
 						"failed to build attest transaction. Will retry on the next block",

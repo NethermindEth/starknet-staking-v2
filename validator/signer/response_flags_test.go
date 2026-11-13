@@ -135,7 +135,6 @@ func TestBuildAttestTransactionResponseFlags(t *testing.T) {
 				internalSigner, err := signer.NewInternalSigner(
 					ctx, provider, log.NewNopZapLogger(), &signerConfig,
 					new(config.ContractAddresses),
-					math.MaxUint64,
 				)
 
 				return &internalSigner, err
@@ -147,7 +146,6 @@ func TestBuildAttestTransactionResponseFlags(t *testing.T) {
 				externalSigner, err := signer.NewExternalSigner(
 					ctx, provider, log.NewNopZapLogger(), &signerConfig,
 					new(config.ContractAddresses),
-					math.MaxUint64,
 				)
 
 				return &externalSigner, err
@@ -163,7 +161,7 @@ func TestBuildAttestTransactionResponseFlags(t *testing.T) {
 			attestSigner, err := tc.new(t.Context(), provider)
 			require.NoError(t, err)
 
-			txn, err := attestSigner.BuildAttestTransaction(t.Context(), &blockHash)
+			txn, err := attestSigner.BuildAttestTransaction(t.Context(), &blockHash, math.MaxUint64)
 
 			require.NoError(t, err)
 			require.Equal(t, rpc.U64("0x0"), txn.Tip)

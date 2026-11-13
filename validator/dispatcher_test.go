@@ -106,7 +106,7 @@ func TestDispatch(t *testing.T) {
 				InvokeTransaction(gomock.Any()).
 				Return(&rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
 
-			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 			wg := &conc.WaitGroup{}
 			wg.Go(func() {
 				dispatcher.Dispatch(t.Context(), mockSigner, nil, math.Inf(1), logger, tracer)
@@ -150,7 +150,7 @@ func TestDispatch(t *testing.T) {
 				// - an AttestRequired event A is emitted and ignored (as 1st one finished & succeeded)
 
 				// Setup
-				dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+				dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 				blockHashFelt := new(felt.Felt).SetUint64(1)
 
 				attestAddr := validationContracts.Attest.Felt()
@@ -227,7 +227,7 @@ func TestDispatch(t *testing.T) {
 			// - an AttestRequired event A is emitted and processed (as 1st one finished & failed)
 
 			// Setup
-			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 			blockHashFelt := new(felt.Felt).SetUint64(1)
 
 			attestAddr := validationContracts.Attest.Felt()
@@ -317,7 +317,7 @@ func TestDispatch(t *testing.T) {
 				// - an AttestRequired event A is emitted and ignored (as 2nd one succeeded)
 
 				// Setup
-				dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+				dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 				blockHashFelt := new(felt.Felt).SetUint64(1)
 
 				attestAddr := validationContracts.Attest.Felt()
@@ -395,7 +395,7 @@ func TestDispatch(t *testing.T) {
 			// - an EndOfWindow event for B is emitted and processed
 
 			// Setup
-			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+			dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 
 			// For event A
 			blockHashFeltA := new(felt.Felt).SetUint64(1)
@@ -548,6 +548,10 @@ func TestTrackAttest(t *testing.T) {
 	})
 }
 
+// Max tip given to the dispatchers under test. Expectations on BuildAttestTransaction
+// match it to check the dispatcher forwards its max tip to the signer
+const testMaxTip uint64 = 1000
+
 // When the auto-claim reward feature is not configured, the dispatcher receives
 // a nil *RewardSigner. Processing an EndOfWindow event must not panic.
 func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
@@ -583,7 +587,7 @@ func TestDispatchEndOfWindowWithoutRewardSigner(t *testing.T) {
 		}).
 		AnyTimes()
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(
@@ -652,7 +656,7 @@ func TestDispatchEndOfWindowClaimsRewards(t *testing.T) {
 		Do(func(context.Context, metrics.Tracer) { rewardsClaimed <- struct{}{} }).
 		Times(1)
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(
@@ -737,7 +741,7 @@ func startDispatcher(
 ) (dispatcher *validator.EventDispatcher[*mocks.MockSigner], stop func()) {
 	t.Helper()
 
-	d := validator.NewEventDispatcher[*mocks.MockSigner]()
+	d := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	dispatcher = &d
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
@@ -789,7 +793,7 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 		mockSigner, _ := newAttestSigner(t)
 		gomock.InOrder(
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().
@@ -819,18 +823,18 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 		mockSigner, _ := newAttestSigner(t)
 		gomock.InOrder(
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().Nonce(gomock.Any()).Return(new(felt.Felt).SetUint64(1), nil),
 			mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, signerDown),
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, signerDown),
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil),
@@ -857,13 +861,13 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 		mockSigner, _ := newAttestSigner(t)
 		gomock.InOrder(
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().Nonce(gomock.Any()).Return(new(felt.Felt).SetUint64(2), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, signerDown),
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil),
@@ -886,7 +890,7 @@ func TestDispatchRetriesFailedAttempts(t *testing.T) {
 	t.Run("Window ends after failed attempts only", func(t *testing.T) {
 		mockSigner, balanceChecked := newAttestSigner(t)
 		mockSigner.EXPECT().
-			BuildAttestTransaction(gomock.Any(), &blockHash).
+			BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 			Return(rpc.BroadcastInvokeTxnV3{}, errors.New("-32603 Internal Error")).
 			Times(2)
 		mockSigner.EXPECT().TransactionStatus(gomock.Any(), gomock.Any()).Times(0)
@@ -927,7 +931,7 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 		invoke := mockSigner.EXPECT().InvokeTransaction(gomock.Any(), gomock.Any())
 		sign := mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any())
 		estimate := mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any())
-		build := mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash)
+		build := mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip)
 
 		return invoke.
 			After(sign.Return(nil, nil).Times(2)).
@@ -972,7 +976,7 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 				Return(nil, validator.ErrTxnHashNotFound).
 				Times(5),
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(attestTxn(), nil),
 			mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil),
 			mockSigner.EXPECT().
@@ -1021,7 +1025,7 @@ func TestDispatchUnknownAttestStatus(t *testing.T) {
 				Return(nil, nodeDown).
 				Times(5),
 			mockSigner.EXPECT().
-				BuildAttestTransaction(gomock.Any(), &blockHash).
+				BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 				Return(rpc.BroadcastInvokeTxnV3{}, nodeDown).
 				Times(4),
 		)
@@ -1070,11 +1074,11 @@ func TestDispatchPrepareWhileAttestingIsNotAnError(t *testing.T) {
 	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
 	mockSigner, _ := newAttestSigner(t)
 	mockSigner.EXPECT().
-		BuildAttestTransaction(gomock.Any(), &blockHash).
+		BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
 		Return(rpc.BroadcastInvokeTxnV3{}, errors.New("node down")).
 		Times(2)
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
@@ -1097,14 +1101,16 @@ func TestDispatchAttestLogKeys(t *testing.T) {
 	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
 	txHash := new(felt.Felt).SetUint64(0xa77e57)
 	mockSigner, _ := newAttestSigner(t)
-	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash).Return(attestTxn(), nil)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
+		Return(attestTxn(), nil)
 	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
 	mockSigner.EXPECT().EstimateFee(gomock.Any(), gomock.Any()).Return(feeEstimate(), nil)
 	mockSigner.EXPECT().
 		InvokeTransaction(gomock.Any(), gomock.Any()).
 		Return(rpc.AddInvokeTransactionResponse{Hash: txHash}, nil)
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())
@@ -1128,13 +1134,15 @@ func TestDispatchRedactsProviderURLsInErrors(t *testing.T) {
 	require.NoError(t, err)
 	blockHash := types.BlockHash(*new(felt.Felt).SetUint64(0xb10c))
 	mockSigner, _ := newAttestSigner(t)
-	mockSigner.EXPECT().BuildAttestTransaction(gomock.Any(), &blockHash).Return(attestTxn(), nil)
+	mockSigner.EXPECT().
+		BuildAttestTransaction(gomock.Any(), &blockHash, testMaxTip).
+		Return(attestTxn(), nil)
 	mockSigner.EXPECT().SignTransaction(gomock.Any(), gomock.Any()).Return(nil, nil)
 	mockSigner.EXPECT().Nonce(gomock.Any()).Return(nil, errors.New(
 		`-32603 The error is not a valid RPC error: Post "http://node/v3/`+apiKey+`": EOF`,
 	))
 
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	wg := conc.NewWaitGroup()
 	wg.Go(func() {
 		dispatcher.Dispatch(t.Context(), mockSigner, nil, 0, logger, metrics.NewNoOpMetrics())

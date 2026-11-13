@@ -175,7 +175,7 @@ func runWatcher(
 
 	maxRetries, err := types.RetriesFromString(retries)
 	require.NoError(t, err)
-	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner]()
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
 	counter := countEvents(&dispatcher)
 	wg := conc.NewWaitGroup()
 
