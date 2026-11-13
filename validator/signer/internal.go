@@ -100,32 +100,9 @@ func (s *InternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, fmt.Errorf("failed to update the account nonce: %w", err)
 	}
 
-	defaultResources := makeDefaultResources()
-
-	tip, err := estimateAttestTip(ctx, s.Account.Provider, maxTip, s.logger)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
-	}
-
-	// Taken from starknet.go `utils.BuildInvokeTxn`
-	attestTransaction := rpc.BroadcastInvokeTxnV3{
-		Type:                  rpc.TransactionTypeInvoke,
-		SenderAddress:         s.Account.Address,
-		Calldata:              calldata,
-		Version:               rpc.TransactionV3WithQueryBit,
-		Signature:             []*felt.Felt{},
-		Nonce:                 nonce,
-		ResourceBounds:        &defaultResources,
-		Tip:                   tip,
-		PayMasterData:         []*felt.Felt{},
-		AccountDeploymentData: []*felt.Felt{},
-		NonceDataMode:         rpc.DAModeL1,
-		FeeMode:               rpc.DAModeL1,
-		Proof:                 []string{},
-		ProofFacts:            []*felt.Felt{},
-	}
-
-	return attestTransaction, nil
+	return newAttestTransaction(
+		ctx, s.Account.Provider, s.Account.Address, nonce, calldata, maxTip, s.logger,
+	)
 }
 
 func (s *InternalSigner) EstimateFee(

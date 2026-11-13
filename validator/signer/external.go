@@ -106,7 +106,6 @@ func (s *ExternalSigner) BuildAttestTransaction(
 	}}
 	call := utils.InvokeFuncCallsToFunctionCalls(invokeCall)
 	calldata := account.FmtCallDataCairo2(call)
-	defaultResources := makeDefaultResources()
 
 	nonce, err := s.Provider.Nonce(
 		ctx,
@@ -117,30 +116,9 @@ func (s *ExternalSigner) BuildAttestTransaction(
 		return rpc.BroadcastInvokeTxnV3{}, err
 	}
 
-	tip, err := estimateAttestTip(ctx, s.Provider, maxTip, s.logger)
-	if err != nil {
-		return rpc.BroadcastInvokeTxnV3{}, err
-	}
-
-	// Taken from starknet.go `utils.BuildInvokeTxn`
-	attestTransaction := rpc.BroadcastInvokeTxnV3{
-		Type:                  rpc.TransactionTypeInvoke,
-		SenderAddress:         s.Address().Felt(),
-		Calldata:              calldata,
-		Version:               rpc.TransactionV3WithQueryBit,
-		Signature:             []*felt.Felt{},
-		Nonce:                 nonce,
-		ResourceBounds:        &defaultResources,
-		Tip:                   tip,
-		PayMasterData:         []*felt.Felt{},
-		AccountDeploymentData: []*felt.Felt{},
-		NonceDataMode:         rpc.DAModeL1,
-		FeeMode:               rpc.DAModeL1,
-		Proof:                 []string{},
-		ProofFacts:            []*felt.Felt{},
-	}
-
-	return attestTransaction, nil
+	return newAttestTransaction(
+		ctx, s.Provider, s.Address().Felt(), nonce, calldata, maxTip, s.logger,
+	)
 }
 
 func (s *ExternalSigner) EstimateFee(

@@ -214,6 +214,43 @@ func singleFeeEstimate(estimates []rpc.FeeEstimation) (rpc.FeeEstimation, error)
 	return estimate, nil
 }
 
+// Builds the attestation transaction shared by all signers, estimating its tip capped
+// to maxTip
+func newAttestTransaction(
+	ctx context.Context,
+	provider rpc.RPCProvider,
+	sender *felt.Felt,
+	nonce *felt.Felt,
+	calldata []*felt.Felt,
+	maxTip uint64,
+	logger log.Logger,
+) (rpc.BroadcastInvokeTxnV3, error) {
+	tip, err := estimateAttestTip(ctx, provider, maxTip, logger)
+	if err != nil {
+		return rpc.BroadcastInvokeTxnV3{}, err
+	}
+
+	defaultResources := makeDefaultResources()
+
+	// Taken from starknet.go `utils.BuildInvokeTxn`
+	return rpc.BroadcastInvokeTxnV3{
+		Type:                  rpc.TransactionTypeInvoke,
+		SenderAddress:         sender,
+		Calldata:              calldata,
+		Version:               rpc.TransactionV3WithQueryBit,
+		Signature:             []*felt.Felt{},
+		Nonce:                 nonce,
+		ResourceBounds:        &defaultResources,
+		Tip:                   tip,
+		PayMasterData:         []*felt.Felt{},
+		AccountDeploymentData: []*felt.Felt{},
+		NonceDataMode:         rpc.DAModeL1,
+		FeeMode:               rpc.DAModeL1,
+		Proof:                 []string{},
+		ProofFacts:            []*felt.Felt{},
+	}, nil
+}
+
 // Estimates the tip for the attestation transaction, capped to maxTip. A warning is
 // logged if the estimated tip is above maxTip
 func estimateAttestTip(
