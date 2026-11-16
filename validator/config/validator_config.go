@@ -216,10 +216,94 @@ func (r *Reward) Fill(other *Reward) {
 	}
 }
 
+// Addresses of the contracts the validator interacts with. An empty address
+// means the default one for the chain is used
+type Contracts struct {
+	Attest  string `json:"attest"`
+	Staking string `json:"staking"`
+}
+
+func ContractsFromEnv() Contracts {
+	return Contracts{
+		Attest:  os.Getenv("ATTEST_CONTRACT_ADDRESS"),
+		Staking: os.Getenv("STAKING_CONTRACT_ADDRESS"),
+	}
+}
+
+// Merge its missing fields with data from other contracts
+func (c *Contracts) Fill(other *Contracts) {
+	if isZero(c.Attest) {
+		c.Attest = other.Attest
+	}
+	if isZero(c.Staking) {
+		c.Staking = other.Staking
+	}
+}
+
+// Metrics server configuration. A nil field means the option was not set, which
+// is different from it being set to its zero value
+type Metrics struct {
+	Enabled *bool   `json:"enabled"`
+	Host    *string `json:"host"`
+	Port    *string `json:"port"`
+}
+
+func MetricsFromEnv() (Metrics, error) {
+	var enabled *bool
+	if value := os.Getenv("METRICS_ENABLED"); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return Metrics{}, fmt.Errorf(
+				"invalid METRICS_ENABLED env var, not a valid boolean: %w",
+				err,
+			)
+		}
+		enabled = &parsed
+	}
+
+	var host *string
+	if value := os.Getenv("METRICS_HOST"); value != "" {
+		host = &value
+	}
+
+	var port *string
+	if value := os.Getenv("METRICS_PORT"); value != "" {
+		port = &value
+	}
+
+	return Metrics{
+		Enabled: enabled,
+		Host:    host,
+		Port:    port,
+	}, nil
+}
+
+// Merge its missing fields with data from other metrics
+func (m *Metrics) Fill(other *Metrics) {
+	if m.Enabled == nil {
+		m.Enabled = other.Enabled
+	}
+	if m.Host == nil {
+		m.Host = other.Host
+	}
+	if m.Port == nil {
+		m.Port = other.Port
+	}
+}
+
+// The pointer fields are nil when the option was not set, which is different
+// from it being set to its zero value
 type Config struct {
-	Provider Provider `json:"provider"`
-	Signer   Signer   `json:"signer"`
-	Reward   Reward   `json:"reward"`
+	Provider  Provider  `json:"provider"`
+	Signer    Signer    `json:"signer"`
+	Reward    Reward    `json:"reward"`
+	Contracts Contracts `json:"contracts"`
+	Metrics   Metrics   `json:"metrics"`
+	// Either a positive integer or the key word 'infinite'
+	MaxRetries *string `json:"maxRetries"`
+	// Balance, in STRK, below which a warning is triggered
+	BalanceThreshold *float64 `json:"balanceThreshold"`
+	LogLevel         *string  `json:"logLevel"`
 	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction. It's a
 	// pointer so that an explicit 0 (never pay a tip) can be told apart from a value not
 	// set, and isn't overridden by a lower priority config source
@@ -230,6 +314,33 @@ func FromEnv() (Config, error) {
 	reward, err := RewardFromEnv()
 	if err != nil {
 		return Config{}, err
+	}
+	metrics, err := MetricsFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+
+	var maxRetries *string
+	if value := os.Getenv("MAX_RETRIES"); value != "" {
+		maxRetries = &value
+	}
+
+	var balanceThreshold *float64
+	if value := os.Getenv("BALANCE_THRESHOLD"); value != "" {
+		var parsed float64
+		parsed, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			return Config{}, fmt.Errorf(
+				"invalid BALANCE_THRESHOLD env var, not a valid number: %w",
+				err,
+			)
+		}
+		balanceThreshold = &parsed
+	}
+
+	var logLevel *string
+	if value := os.Getenv("LOG_LEVEL"); value != "" {
+		logLevel = &value
 	}
 
 	var maxTip *uint64
@@ -245,10 +356,15 @@ func FromEnv() (Config, error) {
 	}
 
 	return Config{
-		Provider: ProviderFromEnv(),
-		Signer:   SignerFromEnv(),
-		Reward:   reward,
-		MaxTip:   maxTip,
+		Provider:         ProviderFromEnv(),
+		Signer:           SignerFromEnv(),
+		Reward:           reward,
+		Contracts:        ContractsFromEnv(),
+		Metrics:          metrics,
+		MaxRetries:       maxRetries,
+		BalanceThreshold: balanceThreshold,
+		LogLevel:         logLevel,
+		MaxTip:           maxTip,
 	}, nil
 }
 
@@ -281,6 +397,17 @@ func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
 	c.Reward.Fill(&other.Reward)
+	c.Contracts.Fill(&other.Contracts)
+	c.Metrics.Fill(&other.Metrics)
+	if c.MaxRetries == nil {
+		c.MaxRetries = other.MaxRetries
+	}
+	if c.BalanceThreshold == nil {
+		c.BalanceThreshold = other.BalanceThreshold
+	}
+	if c.LogLevel == nil {
+		c.LogLevel = other.LogLevel
+	}
 	if c.MaxTip == nil {
 		c.MaxTip = other.MaxTip
 	}
