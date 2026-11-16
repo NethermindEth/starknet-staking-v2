@@ -364,6 +364,144 @@ func TestThresholdFlags(t *testing.T) {
 	})
 }
 
+// Every option can be set through flags, env vars and the config file
+func TestOptionSources(t *testing.T) {
+	const invalidPort = `invalid --metrics-port "http"`
+
+	writeConfig := func(t *testing.T, content string) string {
+		t.Helper()
+		filePath := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(filePath, []byte(content), 0o600))
+
+		return filePath
+	}
+
+	// Each case sets an invalid value, which shows that the source is read
+	invalidValues := []struct {
+		name string
+		env  map[string]string
+		file string
+		want string
+	}{
+		{
+			name: "log level",
+			env:  map[string]string{"LOG_LEVEL": "verbose"},
+			file: `{"logLevel": "verbose"}`,
+			want: `unknown log level "verbose"`,
+		},
+		{
+			name: "max retries",
+			env:  map[string]string{"MAX_RETRIES": "ten"},
+			file: `{"maxRetries": "ten"}`,
+			want: "`ten` is neither a positive number nor the `infinite` key word",
+		},
+		{
+			name: "metrics",
+			env:  map[string]string{"METRICS_ENABLED": "true", "METRICS_PORT": "http"},
+			file: `{"metrics": {"enabled": true, "port": "http"}}`,
+			want: invalidPort,
+		},
+		{
+			name: "metrics host",
+			env: map[string]string{
+				"METRICS_ENABLED": "true",
+				"METRICS_HOST":    "not a host",
+				"METRICS_PORT":    "9191",
+			},
+			file: `{"metrics": {"enabled": true, "host": "not a host", "port": "9191"}}`,
+			want: "cannot listen on not a host:9191",
+		},
+		{
+			name: "balance threshold",
+			env:  map[string]string{"BALANCE_THRESHOLD": "NaN"},
+			want: "--balance-threshold must be a finite number",
+		},
+	}
+	for _, tc := range invalidValues {
+		t.Run("From env vars: "+tc.name, func(t *testing.T) {
+			for envVar, value := range tc.env {
+				t.Setenv(envVar, value)
+			}
+
+			command := main.NewCommand()
+			command.SetArgs(validFlags(testProviderHTTP, testProviderWS))
+			require.ErrorContains(t, command.ExecuteContext(t.Context()), tc.want)
+		})
+
+		if tc.file == "" {
+			continue
+		}
+		t.Run("From config file: "+tc.name, func(t *testing.T) {
+			command := main.NewCommand()
+			command.SetArgs(validFlags(
+				testProviderHTTP, testProviderWS, configFlag, writeConfig(t, tc.file),
+			))
+			require.ErrorContains(t, command.ExecuteContext(t.Context()), tc.want)
+		})
+	}
+
+	t.Run("Flags take priority over env vars", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+		t.Setenv("LOG_LEVEL", "verbose")
+		t.Setenv("MAX_RETRIES", "ten")
+		t.Setenv("BALANCE_THRESHOLD", "NaN")
+		t.Setenv("METRICS_ENABLED", "true")
+		t.Setenv("METRICS_PORT", "http")
+
+		command := newTestCommandWithArgs(
+			t,
+			validFlags(httpURL, wsURL,
+				"--log-level", "info", "--balance-threshold", "0", "--metrics=false")...,
+		)
+		require.NoError(t, command.ExecuteContext(ctx))
+	})
+
+	t.Run("Env vars take priority over the config file", func(t *testing.T) {
+		ctx, httpURL, wsURL := newTestNode(t)
+		filePath := writeConfig(t, `{
+            "logLevel": "verbose",
+            "maxRetries": "ten",
+            "metrics": {"enabled": true, "port": "http"}
+        }`)
+		t.Setenv("LOG_LEVEL", "info")
+		t.Setenv("MAX_RETRIES", "1")
+		t.Setenv("METRICS_ENABLED", "false")
+
+		command := main.NewCommand()
+		command.SetArgs(validFlags(httpURL, wsURL, configFlag, filePath))
+		require.NoError(t, command.ExecuteContext(ctx))
+	})
+
+	t.Run("Metrics flags complete the ones from other sources", func(t *testing.T) {
+		t.Setenv("METRICS_ENABLED", "true")
+
+		command := main.NewCommand()
+		command.SetArgs(validFlags(testProviderHTTP, testProviderWS, "--metrics-port", "http"))
+		require.ErrorContains(t, command.ExecuteContext(t.Context()), invalidPort)
+	})
+
+	t.Run("Config file path from env var", func(t *testing.T) {
+		t.Setenv("CONFIG_PATH", "some inexisting file name")
+
+		command := main.NewCommand()
+		command.SetArgs(validFlags(testProviderHTTP, testProviderWS))
+		require.ErrorIs(t, command.ExecuteContext(t.Context()), os.ErrNotExist)
+	})
+
+	t.Run("Config flag takes priority over its env var", func(t *testing.T) {
+		t.Setenv("CONFIG_PATH", "some inexisting file name")
+
+		command := main.NewCommand()
+		command.SetArgs(validFlags(
+			testProviderHTTP, testProviderWS,
+			configFlag, writeConfig(t, `{"logLevel": "verbose"}`),
+		))
+		require.ErrorContains(
+			t, command.ExecuteContext(t.Context()), `unknown log level "verbose"`,
+		)
+	})
+}
+
 func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
 	return append([]string{
 		"--provider-http", httpURL,

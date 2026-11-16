@@ -61,6 +61,18 @@ func TestConfigFromFile(t *testing.T) {
                 "claimThreshold": 100,
                 "claimMaxFee": 1000
             },
+            "contracts": {
+                "attest": "0xa77",
+                "staking": "0x57a"
+            },
+            "metrics": {
+                "enabled": true,
+                "host": "",
+                "port": "9191"
+            },
+            "maxRetries": "10",
+            "balanceThreshold": 0,
+            "logLevel": "debug",
             "maxTip": 5000
         }`)
 		config, err := FromData(data)
@@ -82,9 +94,33 @@ func TestConfigFromFile(t *testing.T) {
 				ClaimThreshold: 100,
 				ClaimMaxFee:    1000,
 			},
-			MaxTip: new(uint64(5000)),
+			Contracts: Contracts{Attest: "0xa77", Staking: "0x57a"},
+			Metrics: Metrics{
+				Enabled: new(true),
+				Host:    new(""),
+				Port:    new("9191"),
+			},
+			MaxRetries:       new("10"),
+			BalanceThreshold: new(0.0),
+			LogLevel:         new("debug"),
+			MaxTip:           new(uint64(5000)),
 		}
 		require.Equal(t, expectedConfig, config)
+	})
+
+	t.Run("Options missing from the file are not set", func(t *testing.T) {
+		config, err := FromData([]byte(`{"metrics": {"enabled": false}}`))
+		require.NoError(t, err)
+
+		require.Equal(t, Config{Metrics: Metrics{Enabled: new(false)}}, config)
+	})
+
+	t.Run("Port and max retries are strings", func(t *testing.T) {
+		_, err := FromData([]byte(`{"metrics": {"port": 9090}}`))
+		require.ErrorContains(t, err, "metrics.port")
+
+		_, err = FromData([]byte(`{"maxRetries": 10}`))
+		require.ErrorContains(t, err, "maxRetries")
 	})
 }
 
@@ -151,18 +187,84 @@ func TestConfigFromEnv(t *testing.T) {
 		reward,
 	)
 
+	// Test Contracts
+	t.Setenv("ATTEST_CONTRACT_ADDRESS", "0xa77")
+	t.Setenv("STAKING_CONTRACT_ADDRESS", "0x57a")
+
+	contracts := ContractsFromEnv()
+	expectedContracts := Contracts{Attest: "0xa77", Staking: "0x57a"}
+	require.Equal(t, expectedContracts, contracts)
+
+	// Test Metrics
+	t.Setenv("METRICS_ENABLED", "false")
+	t.Setenv("METRICS_HOST", "0.0.0.0")
+	t.Setenv("METRICS_PORT", "9191")
+
+	metrics, err := MetricsFromEnv()
+	require.NoError(t, err)
+	expectedMetrics := Metrics{
+		Enabled: new(false),
+		Host:    new("0.0.0.0"),
+		Port:    new("9191"),
+	}
+	require.Equal(t, expectedMetrics, metrics)
+
 	// Test Config
+	t.Setenv("MAX_RETRIES", "infinite")
+	t.Setenv("BALANCE_THRESHOLD", "0")
+	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("MAX_TIP", "5000")
 
 	config, err := FromEnv()
 	require.NoError(t, err)
 	expectedConfig := Config{
-		Provider: expectedProvider,
-		Signer:   expectedSigner,
-		Reward:   expectedReward,
-		MaxTip:   new(uint64(5000)),
+		Provider:         expectedProvider,
+		Signer:           expectedSigner,
+		Reward:           expectedReward,
+		Contracts:        expectedContracts,
+		Metrics:          expectedMetrics,
+		MaxRetries:       new("infinite"),
+		BalanceThreshold: new(0.0),
+		LogLevel:         new("debug"),
+		MaxTip:           new(uint64(5000)),
 	}
 	require.Equal(t, expectedConfig, config)
+}
+
+func TestConfigFromEnvUnset(t *testing.T) {
+	for _, envVar := range []string{
+		"METRICS_ENABLED", "METRICS_HOST", "METRICS_PORT",
+		"MAX_RETRIES", "BALANCE_THRESHOLD", "LOG_LEVEL",
+	} {
+		// An empty env var is the same as an unset one
+		t.Setenv(envVar, "")
+	}
+
+	config, err := FromEnv()
+	require.NoError(t, err)
+	require.Equal(t, Metrics{}, config.Metrics)
+	require.Nil(t, config.MaxRetries)
+	require.Nil(t, config.BalanceThreshold)
+	require.Nil(t, config.LogLevel)
+}
+
+func TestConfigFromEnvInvalidValues(t *testing.T) {
+	testCases := []struct {
+		envVar string
+		value  string
+	}{
+		{envVar: "METRICS_ENABLED", value: "maybe"},
+		{envVar: "BALANCE_THRESHOLD", value: "plenty"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.envVar, func(t *testing.T) {
+			t.Setenv(tc.envVar, tc.value)
+
+			_, err := FromEnv()
+			require.ErrorContains(t, err, "invalid "+tc.envVar+" env var")
+		})
+	}
 }
 
 func TestRewardFromEnvInvalidValues(t *testing.T) {
@@ -535,6 +637,41 @@ func TestConfigFill(t *testing.T) {
 	config1.Fill(&config2)
 	assert.Equal(t, expectedConfig1, config1)
 	assert.Equal(t, expectedConfig2, config2)
+}
+
+// A value explicitly set to its zero value is still set, so a source of lower
+// priority must not replace it
+func TestConfigFillKeepsExplicitZeroValues(t *testing.T) {
+	high := Config{
+		Metrics:          Metrics{Enabled: new(false), Host: new("")},
+		BalanceThreshold: new(0.0),
+	}
+	low := Config{
+		Contracts: Contracts{Attest: "0xa77", Staking: "0x57a"},
+		Metrics: Metrics{
+			Enabled: new(true),
+			Host:    new("localhost"),
+			Port:    new("9191"),
+		},
+		MaxRetries:       new("10"),
+		BalanceThreshold: new(50.0),
+		LogLevel:         new("debug"),
+	}
+
+	high.Fill(&low)
+
+	expected := Config{
+		Contracts: Contracts{Attest: "0xa77", Staking: "0x57a"},
+		Metrics: Metrics{
+			Enabled: new(false),
+			Host:    new(""),
+			Port:    new("9191"),
+		},
+		MaxRetries:       new("10"),
+		BalanceThreshold: new(0.0),
+		LogLevel:         new("debug"),
+	}
+	assert.Equal(t, expected, high)
 }
 
 func TestConfigCheckSources(t *testing.T) {
