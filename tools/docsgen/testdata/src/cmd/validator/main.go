@@ -1,12 +1,16 @@
 package main
 
 import (
+	"os"
+
 	"github.com/NethermindEth/juno/utils/log"
 	configP "github.com/NethermindEth/starknet-staking-v2/validator/config"
 	"github.com/spf13/cobra"
 )
 
 const logLevels = "trace, debug, info"
+
+const configPathEnvVar = "CONFIG_PATH"
 
 func NewCommand() cobra.Command {
 	var configPath string
@@ -21,6 +25,15 @@ func NewCommand() cobra.Command {
 	preRunE := func(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("reward-braavos-account") {
 			config.Reward.Braavos = &rewardBraavosF
+		}
+		if cmd.Flags().Changed("log-level") {
+			config.LogLevel = &logLevelF
+		}
+		if configPath == "" {
+			configPath = os.Getenv(configPathEnvVar)
+		}
+		if config.LogLevel != nil {
+			logLevelF = *config.LogLevel
 		}
 
 		return nil
