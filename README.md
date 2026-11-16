@@ -110,7 +110,7 @@ PROVIDER_HTTP_URL="http://localhost:6060/rpc/v0_10" ./build/validator \
 
 ## Additional configurations
 
-In addition to the configuration described above, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag:
+In addition to the configuration described above, the tool allows for other non-essential customization. You can see all available options by using the `--help` flag. Each of them can also be set through an environment variable or the configuration file, see the [configuration options reference](https://nethermindeth.github.io/starknet-staking-v2/configuration-options) for their names:
 
 1. Using specific staking and attestation contract addresses through the `--staking-contract-address` and `--attest-contract-address` flags respectively. If no values are provided, sensible defaults are provided based on the network id (only Mainnet and Sepolia).
 

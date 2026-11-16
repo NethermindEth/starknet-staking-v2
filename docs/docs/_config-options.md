@@ -2,7 +2,7 @@
 
 | Option | Environment Variable | Config File | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--config`, `-c` | - | - | - | Path to JSON config file |
+| `--config`, `-c` | `CONFIG_PATH` | - | - | Path to JSON config file |
 | `--provider-http` | `PROVIDER_HTTP_URL` | `provider.http` | - | Provider http address |
 | `--provider-ws` | `PROVIDER_WS_URL` | `provider.ws` | - | Provider ws address |
 | `--signer-url` | `SIGNER_EXTERNAL_URL` | `signer.url` | - | Signer url address, required if using an external signer. Exclusive with --signer-priv-key |
@@ -13,12 +13,12 @@
 | `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | (Optional) Amount of unclaimed rewards, in STRK, that triggers an automatic claim. Required for the auto-claim reward feature. |
 | `--reward-priv-key` | `REWARD_PRIVATE_KEY` | `reward.privateKey` | - | (Optional) Reward account private key, used for internal signing of the reward account. Required for the auto-claim reward feature. Can be replaced by the 'reward-signer-url' flag. |
 | `--reward-signer-url` | `REWARD_EXTERNAL_URL` | `reward.url` | - | (Optional) Reward signer url address, used for external signing of the reward account. Required for the auto-claim reward feature. Can be replaced by the 'reward-priv-key' flag. |
-| `--attest-contract-address` | - | - | auto | Attestation contract address. Default values are provided for Sepolia and Mainnet |
-| `--staking-contract-address` | - | - | auto | Staking contract address. Default values are provided for Sepolia and Mainnet |
-| `--metrics` | - | - | `false` | Enable metric tracking via Prometheus |
-| `--metrics-host` | - | - | `localhost` | Host for the metric server. An empty value listens on all interfaces |
-| `--metrics-port` | - | - | `9090` | Port for the metric server |
-| `--max-retries` | - | - | `infinite` | How many times to retry to get information required for attestation. It can be either a positive integer or the key word 'infinite' |
-| `--balance-threshold` | - | - | `100` | Triggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. If the auto-claim reward feature is configured, the reward account balance is checked as well. The threshold is in STRK (1 STRK = 1e18 FRI). |
+| `--attest-contract-address` | `ATTEST_CONTRACT_ADDRESS` | `contracts.attest` | auto | Attestation contract address. Default values are provided for Sepolia and Mainnet |
+| `--staking-contract-address` | `STAKING_CONTRACT_ADDRESS` | `contracts.staking` | auto | Staking contract address. Default values are provided for Sepolia and Mainnet |
+| `--metrics` | `METRICS_ENABLED` | `metrics.enabled` | `false` | Enable metric tracking via Prometheus |
+| `--metrics-host` | `METRICS_HOST` | `metrics.host` | `localhost` | Host for the metric server. An empty value listens on all interfaces |
+| `--metrics-port` | `METRICS_PORT` | `metrics.port` | `9090` | Port for the metric server |
+| `--max-retries` | `MAX_RETRIES` | `maxRetries` | `infinite` | How many times to retry to get information required for attestation. It can be either a positive integer or the key word 'infinite' |
+| `--balance-threshold` | `BALANCE_THRESHOLD` | `balanceThreshold` | `100` | Triggers a warning if it detects the signer account (i.e. operational address) stark balance below the specified threshold. If the auto-claim reward feature is configured, the reward account balance is checked as well. The threshold is in STRK (1 STRK = 1e18 FRI). |
 | `--max-tip` | `MAX_TIP` | `maxTip` | Unlimited | Max tip, in FRI per L2 gas unit, to pay for the attestation transaction. The estimated tip is capped to this value. Set it to 0 to never pay a tip. Defaults to 'unlimited' if not specified (max uint64) |
-| `--log-level` | - | - | `info` | Options: trace, debug, info, warn, error. |
+| `--log-level` | `LOG_LEVEL` | `logLevel` | `info` | Options: trace, debug, info, warn, error. |

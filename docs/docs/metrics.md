@@ -37,6 +37,20 @@ docker run --network host \
 </TabItem>
 </Tabs>
 
+The same options can be set through the `METRICS_ENABLED`, `METRICS_HOST` and `METRICS_PORT` environment variables, or in the config file:
+
+```json
+{
+  "metrics": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": "9090"
+  }
+}
+```
+
+Note that `port` is a string. An empty environment variable counts as not set, so use `METRICS_HOST="0.0.0.0"` to listen on all interfaces.
+
 If the metrics server can't listen on that host and port (an invalid port, a port already in use), the validator exits with an error at startup.
 
 ## Endpoints
