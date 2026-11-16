@@ -49,6 +49,9 @@ Full documentation: https://nethermindeth.github.io/starknet-staking-v2/
 
 const logLevels = "trace, debug, info, warn, error"
 
+// Env var holding the path to the JSON config file, used when --config is not set
+const configPathEnvVar = "CONFIG_PATH"
+
 //nolint:funlen // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {
 	var configPath string
@@ -70,13 +73,52 @@ func NewCommand() cobra.Command {
 		// errors are not about the command usage and it shouldn't be printed
 		cmd.SilenceUsage = true
 
-		if err := checkThresholdFlags(cmd, &config, balanceThreshold); err != nil {
+		if err := checkThresholdFlags(cmd, &config); err != nil {
 			return err
+		}
+
+		// These flags have default values, so only the ones explicitly set
+		// take priority over the env vars and the config file
+		if cmd.Flags().Changed("metrics") {
+			config.Metrics.Enabled = &metricsF
+		}
+		if cmd.Flags().Changed("metrics-host") {
+			config.Metrics.Host = &metricsHostF
+		}
+		if cmd.Flags().Changed("metrics-port") {
+			config.Metrics.Port = &metricsPortF
+		}
+		if cmd.Flags().Changed("max-retries") {
+			config.MaxRetries = &maxRetriesF
+		}
+		if cmd.Flags().Changed("balance-threshold") {
+			config.BalanceThreshold = &balanceThreshold
+		}
+		if cmd.Flags().Changed("log-level") {
+			config.LogLevel = &logLevelF
 		}
 		if cmd.Flags().Changed("max-tip") {
 			config.MaxTip = &maxTipF
 		}
+
+		if configPath == "" {
+			configPath = os.Getenv(configPathEnvVar)
+		}
 		if err := loadConfig(&config, configPath); err != nil {
+			return err
+		}
+
+		// The options not set by any source keep the default value of their flag
+		metricsF = valueOr(config.Metrics.Enabled, metricsF)
+		metricsHostF = valueOr(config.Metrics.Host, metricsHostF)
+		metricsPortF = valueOr(config.Metrics.Port, metricsPortF)
+		maxRetriesF = valueOr(config.MaxRetries, maxRetriesF)
+		balanceThreshold = valueOr(config.BalanceThreshold, balanceThreshold)
+		logLevelF = valueOr(config.LogLevel, logLevelF)
+		snConfig.ContractAddresses.Attest = config.Contracts.Attest
+		snConfig.ContractAddresses.Staking = config.Contracts.Staking
+
+		if err := checkBalanceThreshold(balanceThreshold); err != nil {
 			return err
 		}
 
@@ -92,20 +134,9 @@ func NewCommand() cobra.Command {
 			}
 		}
 
-		logLevel := log.NewLevel(log.INFO)
-		err = logLevel.Set(logLevelF)
-		if err != nil {
-			return fmt.Errorf("unknown log level %q (known: %s)", logLevelF, logLevels)
-		}
+		logger, err = newLogger(logLevelF)
 
-		loadedLogger, err := log.NewZapLogger(logLevel, log.WithColour(isTerminal(os.Stderr)))
-		if err != nil {
-			return err
-		}
-
-		logger = loadedLogger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-		return nil
+		return err
 	}
 
 	runE := func(cmd *cobra.Command, args []string) error {
@@ -206,13 +237,13 @@ func NewCommand() cobra.Command {
 
 	// Config starknet flags
 	cmd.Flags().StringVar(
-		&snConfig.ContractAddresses.Attest,
+		&config.Contracts.Attest,
 		"attest-contract-address",
 		"",
 		"Attestation contract address. Default values are provided for Sepolia and Mainnet",
 	)
 	cmd.Flags().StringVar(
-		&snConfig.ContractAddresses.Staking,
+		&config.Contracts.Staking,
 		"staking-contract-address",
 		"",
 		"Staking contract address. Default values are provided for Sepolia and Mainnet",
@@ -380,14 +411,40 @@ func isTerminal(file *os.File) bool {
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
-func checkThresholdFlags(
-	cmd *cobra.Command, config *configP.Config, balanceThreshold float64,
-) error {
-	if cmd.Flags().Changed("reward-claim-threshold") && config.Reward.ClaimThreshold == 0 {
-		return errors.New("--reward-claim-threshold must be a positive number of STRK")
+func newLogger(level string) (*log.ZapLogger, error) {
+	logLevel := log.NewLevel(log.INFO)
+	if err := logLevel.Set(level); err != nil {
+		return nil, fmt.Errorf("unknown log level %q (known: %s)", level, logLevels)
 	}
+
+	logger, err := log.NewZapLogger(logLevel, log.WithColour(isTerminal(os.Stderr)))
+	if err != nil {
+		return nil, err
+	}
+
+	return logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel)), nil
+}
+
+// Returns the value pointed to or, if it is not set, the fallback
+func valueOr[T any](value *T, fallback T) T {
+	if value == nil {
+		return fallback
+	}
+
+	return *value
+}
+
+func checkBalanceThreshold(balanceThreshold float64) error {
 	if math.IsNaN(balanceThreshold) || math.IsInf(balanceThreshold, 0) {
 		return fmt.Errorf("--balance-threshold must be a finite number, got %v", balanceThreshold)
+	}
+
+	return nil
+}
+
+func checkThresholdFlags(cmd *cobra.Command, config *configP.Config) error {
+	if cmd.Flags().Changed("reward-claim-threshold") && config.Reward.ClaimThreshold == 0 {
+		return errors.New("--reward-claim-threshold must be a positive number of STRK")
 	}
 
 	return nil
