@@ -73,10 +73,6 @@ func NewCommand() cobra.Command {
 		// errors are not about the command usage and it shouldn't be printed
 		cmd.SilenceUsage = true
 
-		if err := checkThresholdFlags(cmd, &config); err != nil {
-			return err
-		}
-
 		// These flags have default values, so only the ones explicitly set
 		// take priority over the env vars and the config file
 		if cmd.Flags().Changed("metrics") {
@@ -99,6 +95,9 @@ func NewCommand() cobra.Command {
 		}
 		if cmd.Flags().Changed("max-tip") {
 			config.MaxTip = &maxTipF
+		}
+		if err := checkThresholdFlags(cmd, &config); err != nil {
+			return err
 		}
 
 		if configPath == "" {

@@ -502,6 +502,8 @@ func TestOptionSources(t *testing.T) {
 	})
 }
 
+// Returns the minimum set of flags the command needs to run, followed by the
+// given extra flags
 func validFlags(httpURL, wsURL string, extraFlags ...string) []string {
 	return append([]string{
 		"--provider-http", httpURL,
