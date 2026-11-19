@@ -248,6 +248,28 @@ type Metrics struct {
 	Port    *string `json:"port"`
 }
 
+// The port can be written either as a string or as a number
+func (m *Metrics) UnmarshalJSON(data []byte) error {
+	// A type without methods, so that unmarshalling it doesn't call this again
+	type plain Metrics
+	aux := struct {
+		*plain
+		// Shadows the port of the embedded type
+		Port json.RawMessage `json:"port"`
+	}{plain: (*plain)(m), Port: nil}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	port, err := stringOrNumber(aux.Port)
+	if err != nil {
+		return fmt.Errorf("metrics.port: %w", err)
+	}
+	m.Port = port
+
+	return nil
+}
+
 func MetricsFromEnv() (Metrics, error) {
 	var enabled *bool
 	if value := os.Getenv("VALIDATOR_METRICS_ENABLED"); value != "" {
@@ -308,6 +330,49 @@ type Config struct {
 	// pointer so that an explicit 0 (never pay a tip) can be told apart from a value not
 	// set, and isn't overridden by a lower priority config source
 	MaxTip *uint64 `json:"maxTip"`
+}
+
+// The max retries can be written either as a string or as a number
+func (c *Config) UnmarshalJSON(data []byte) error {
+	// A type without methods, so that unmarshalling it doesn't call this again
+	type plain Config
+	aux := struct {
+		*plain
+		// Shadows the max retries of the embedded type
+		MaxRetries json.RawMessage `json:"maxRetries"`
+	}{plain: (*plain)(c), MaxRetries: nil}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	maxRetries, err := stringOrNumber(aux.MaxRetries)
+	if err != nil {
+		return fmt.Errorf("maxRetries: %w", err)
+	}
+	c.MaxRetries = maxRetries
+
+	return nil
+}
+
+// Reads a JSON value written either as a string or as a number, keeping the
+// number as it was written. It returns nil when the value is missing or null
+func stringOrNumber(raw json.RawMessage) (*string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return &text, nil
+	}
+
+	var number json.Number
+	if err := json.Unmarshal(raw, &number); err != nil {
+		return nil, errors.New("expected a string or a number")
+	}
+	text = number.String()
+
+	return &text, nil
 }
 
 func FromEnv() (Config, error) {

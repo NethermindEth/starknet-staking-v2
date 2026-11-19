@@ -115,12 +115,57 @@ func TestConfigFromFile(t *testing.T) {
 		require.Equal(t, Config{Metrics: Metrics{Enabled: new(false)}}, config)
 	})
 
-	t.Run("Port and max retries are strings", func(t *testing.T) {
-		_, err := FromData([]byte(`{"metrics": {"port": 9090}}`))
-		require.ErrorContains(t, err, "metrics.port")
+	t.Run("Port and max retries are either strings or numbers", func(t *testing.T) {
+		tests := []struct {
+			name       string
+			data       string
+			port       *string
+			maxRetries *string
+		}{
+			{
+				name:       "numbers",
+				data:       `{"metrics": {"port": 9090}, "maxRetries": 10}`,
+				port:       new("9090"),
+				maxRetries: new("10"),
+			},
+			{
+				name:       "strings",
+				data:       `{"metrics": {"port": "9090"}, "maxRetries": "10"}`,
+				port:       new("9090"),
+				maxRetries: new("10"),
+			},
+			{
+				name:       "a number and a key word",
+				data:       `{"metrics": {"port": 9090}, "maxRetries": "infinite"}`,
+				port:       new("9090"),
+				maxRetries: new("infinite"),
+			},
+			{
+				name: "null",
+				data: `{"metrics": {"port": null}, "maxRetries": null}`,
+			},
+			{
+				name: "missing",
+				data: `{"metrics": {}}`,
+			},
+		}
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				config, err := FromData([]byte(test.data))
+				require.NoError(t, err)
 
-		_, err = FromData([]byte(`{"maxRetries": 10}`))
-		require.ErrorContains(t, err, "maxRetries")
+				require.Equal(t, test.port, config.Metrics.Port)
+				require.Equal(t, test.maxRetries, config.MaxRetries)
+			})
+		}
+	})
+
+	t.Run("Port and max retries of any other type are rejected", func(t *testing.T) {
+		_, err := FromData([]byte(`{"metrics": {"port": true}}`))
+		require.ErrorContains(t, err, "metrics.port: expected a string or a number")
+
+		_, err = FromData([]byte(`{"maxRetries": [10]}`))
+		require.ErrorContains(t, err, "maxRetries: expected a string or a number")
 	})
 }
 
