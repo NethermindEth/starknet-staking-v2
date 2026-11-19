@@ -49,7 +49,7 @@ The same options can be set through the `VALIDATOR_METRICS_ENABLED`, `VALIDATOR_
 }
 ```
 
-Note that `port` is a string. An empty environment variable counts as not set, so use `VALIDATOR_METRICS_HOST="0.0.0.0"` to listen on all interfaces.
+The `port` can be written either as a string or as a number. An empty environment variable counts as not set, so use `VALIDATOR_METRICS_HOST="0.0.0.0"` to listen on all interfaces.
 
 If the metrics server can't listen on that host and port (an invalid port, a port already in use), the validator exits with an error at startup.
 
