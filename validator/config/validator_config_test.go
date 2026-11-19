@@ -61,6 +61,18 @@ func TestConfigFromFile(t *testing.T) {
                 "claimThreshold": 100,
                 "claimMaxFee": 1000
             },
+            "contracts": {
+                "attest": "0xa77",
+                "staking": "0x57a"
+            },
+            "metrics": {
+                "enabled": true,
+                "host": "",
+                "port": "9191"
+            },
+            "maxRetries": "10",
+            "balanceThreshold": 0,
+            "logLevel": "debug",
             "maxTip": 5000
         }`)
 		config, err := FromData(data)
@@ -82,9 +94,78 @@ func TestConfigFromFile(t *testing.T) {
 				ClaimThreshold: 100,
 				ClaimMaxFee:    1000,
 			},
-			MaxTip: new(uint64(5000)),
+			Contracts: Contracts{Attest: "0xa77", Staking: "0x57a"},
+			Metrics: Metrics{
+				Enabled: new(true),
+				Host:    new(""),
+				Port:    new("9191"),
+			},
+			MaxRetries:       new("10"),
+			BalanceThreshold: new(0.0),
+			LogLevel:         new("debug"),
+			MaxTip:           new(uint64(5000)),
 		}
 		require.Equal(t, expectedConfig, config)
+	})
+
+	t.Run("Options missing from the file are not set", func(t *testing.T) {
+		config, err := FromData([]byte(`{"metrics": {"enabled": false}}`))
+		require.NoError(t, err)
+
+		require.Equal(t, Config{Metrics: Metrics{Enabled: new(false)}}, config)
+	})
+
+	t.Run("Port and max retries are either strings or numbers", func(t *testing.T) {
+		tests := []struct {
+			name       string
+			data       string
+			port       *string
+			maxRetries *string
+		}{
+			{
+				name:       "numbers",
+				data:       `{"metrics": {"port": 9090}, "maxRetries": 10}`,
+				port:       new("9090"),
+				maxRetries: new("10"),
+			},
+			{
+				name:       "strings",
+				data:       `{"metrics": {"port": "9090"}, "maxRetries": "10"}`,
+				port:       new("9090"),
+				maxRetries: new("10"),
+			},
+			{
+				name:       "a number and a key word",
+				data:       `{"metrics": {"port": 9090}, "maxRetries": "infinite"}`,
+				port:       new("9090"),
+				maxRetries: new("infinite"),
+			},
+			{
+				name: "null",
+				data: `{"metrics": {"port": null}, "maxRetries": null}`,
+			},
+			{
+				name: "missing",
+				data: `{"metrics": {}}`,
+			},
+		}
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				config, err := FromData([]byte(test.data))
+				require.NoError(t, err)
+
+				require.Equal(t, test.port, config.Metrics.Port)
+				require.Equal(t, test.maxRetries, config.MaxRetries)
+			})
+		}
+	})
+
+	t.Run("Port and max retries of any other type are rejected", func(t *testing.T) {
+		_, err := FromData([]byte(`{"metrics": {"port": true}}`))
+		require.ErrorContains(t, err, "metrics.port: expected a string or a number")
+
+		_, err = FromData([]byte(`{"maxRetries": [10]}`))
+		require.ErrorContains(t, err, "maxRetries: expected a string or a number")
 	})
 }
 
@@ -151,18 +232,86 @@ func TestConfigFromEnv(t *testing.T) {
 		reward,
 	)
 
+	// Test Contracts
+	t.Setenv("ATTEST_CONTRACT_ADDRESS", "0xa77")
+	t.Setenv("STAKING_CONTRACT_ADDRESS", "0x57a")
+
+	contracts := ContractsFromEnv()
+	expectedContracts := Contracts{Attest: "0xa77", Staking: "0x57a"}
+	require.Equal(t, expectedContracts, contracts)
+
+	// Test Metrics
+	t.Setenv("VALIDATOR_METRICS_ENABLED", "false")
+	t.Setenv("VALIDATOR_METRICS_HOST", "0.0.0.0")
+	t.Setenv("VALIDATOR_METRICS_PORT", "9191")
+
+	metrics, err := MetricsFromEnv()
+	require.NoError(t, err)
+	expectedMetrics := Metrics{
+		Enabled: new(false),
+		Host:    new("0.0.0.0"),
+		Port:    new("9191"),
+	}
+	require.Equal(t, expectedMetrics, metrics)
+
 	// Test Config
-	t.Setenv("MAX_TIP", "5000")
+	t.Setenv("VALIDATOR_MAX_RETRIES", "infinite")
+	t.Setenv("VALIDATOR_BALANCE_THRESHOLD", "0")
+	t.Setenv("VALIDATOR_LOG_LEVEL", "debug")
+	t.Setenv("VALIDATOR_MAX_TIP", "5000")
 
 	config, err := FromEnv()
 	require.NoError(t, err)
 	expectedConfig := Config{
-		Provider: expectedProvider,
-		Signer:   expectedSigner,
-		Reward:   expectedReward,
-		MaxTip:   new(uint64(5000)),
+		Provider:         expectedProvider,
+		Signer:           expectedSigner,
+		Reward:           expectedReward,
+		Contracts:        expectedContracts,
+		Metrics:          expectedMetrics,
+		MaxRetries:       new("infinite"),
+		BalanceThreshold: new(0.0),
+		LogLevel:         new("debug"),
+		MaxTip:           new(uint64(5000)),
 	}
 	require.Equal(t, expectedConfig, config)
+}
+
+func TestConfigFromEnvUnset(t *testing.T) {
+	for _, envVar := range []string{
+		"VALIDATOR_METRICS_ENABLED", "VALIDATOR_METRICS_HOST", "VALIDATOR_METRICS_PORT",
+		"VALIDATOR_MAX_RETRIES", "VALIDATOR_BALANCE_THRESHOLD", "VALIDATOR_LOG_LEVEL",
+		"VALIDATOR_MAX_TIP",
+	} {
+		// An empty env var is the same as an unset one
+		t.Setenv(envVar, "")
+	}
+
+	config, err := FromEnv()
+	require.NoError(t, err)
+	require.Equal(t, Metrics{}, config.Metrics)
+	require.Nil(t, config.MaxRetries)
+	require.Nil(t, config.BalanceThreshold)
+	require.Nil(t, config.LogLevel)
+	require.Nil(t, config.MaxTip)
+}
+
+func TestConfigFromEnvInvalidValues(t *testing.T) {
+	testCases := []struct {
+		envVar string
+		value  string
+	}{
+		{envVar: "VALIDATOR_METRICS_ENABLED", value: "maybe"},
+		{envVar: "VALIDATOR_BALANCE_THRESHOLD", value: "plenty"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.envVar, func(t *testing.T) {
+			t.Setenv(tc.envVar, tc.value)
+
+			_, err := FromEnv()
+			require.ErrorContains(t, err, "invalid "+tc.envVar+" env var")
+		})
+	}
 }
 
 func TestRewardFromEnvInvalidValues(t *testing.T) {
@@ -209,10 +358,10 @@ func TestConfigFromEnvInvalidMaxTip(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("MAX_TIP", tc.value)
+			t.Setenv("VALIDATOR_MAX_TIP", tc.value)
 
 			_, err := FromEnv()
-			require.ErrorContains(t, err, "MAX_TIP")
+			require.ErrorContains(t, err, "VALIDATOR_MAX_TIP")
 		})
 	}
 }
@@ -455,7 +604,7 @@ func TestConfigExplicitZeroMaxTip(t *testing.T) {
 	})
 
 	t.Run("From env", func(t *testing.T) {
-		t.Setenv("MAX_TIP", "0")
+		t.Setenv("VALIDATOR_MAX_TIP", "0")
 
 		config, err := FromEnv()
 		require.NoError(t, err)
@@ -535,6 +684,41 @@ func TestConfigFill(t *testing.T) {
 	config1.Fill(&config2)
 	assert.Equal(t, expectedConfig1, config1)
 	assert.Equal(t, expectedConfig2, config2)
+}
+
+// A value explicitly set to its zero value is still set, so a source of lower
+// priority must not replace it
+func TestConfigFillKeepsExplicitZeroValues(t *testing.T) {
+	high := Config{
+		Metrics:          Metrics{Enabled: new(false), Host: new("")},
+		BalanceThreshold: new(0.0),
+	}
+	low := Config{
+		Contracts: Contracts{Attest: "0xa77", Staking: "0x57a"},
+		Metrics: Metrics{
+			Enabled: new(true),
+			Host:    new("localhost"),
+			Port:    new("9191"),
+		},
+		MaxRetries:       new("10"),
+		BalanceThreshold: new(50.0),
+		LogLevel:         new("debug"),
+	}
+
+	high.Fill(&low)
+
+	expected := Config{
+		Contracts: Contracts{Attest: "0xa77", Staking: "0x57a"},
+		Metrics: Metrics{
+			Enabled: new(false),
+			Host:    new(""),
+			Port:    new("9191"),
+		},
+		MaxRetries:       new("10"),
+		BalanceThreshold: new(0.0),
+		LogLevel:         new("debug"),
+	}
+	assert.Equal(t, expected, high)
 }
 
 func TestConfigCheckSources(t *testing.T) {

@@ -46,6 +46,7 @@ type commandModel struct {
 	config    *configModel
 	configVar string
 	copies    map[string][]string
+	fallbacks map[string]string
 	overrides map[string]override
 }
 
@@ -63,6 +64,7 @@ func parseOptions(src *source, config *configModel) ([]option, error) {
 		config:    config,
 		configVar: configVar,
 		copies:    findCopies(src, configVar),
+		fallbacks: findEnvFallbacks(src),
 		overrides: defaultOverrides(),
 	}
 
@@ -150,6 +152,37 @@ func findCopies(src *source, configVar string) map[string][]string {
 	})
 
 	return copies
+}
+
+// Finds the variables that are assigned straight from an env var, which is how
+// an option that is not part of the config falls back to its env var
+func findEnvFallbacks(src *source) map[string]string {
+	fallbacks := map[string]string{}
+	osName, ok := src.importName("os", "os")
+	if !ok {
+		return fallbacks
+	}
+	ast.Inspect(src.file, func(node ast.Node) bool {
+		assign, ok := node.(*ast.AssignStmt)
+		if !ok || assign.Tok != token.ASSIGN || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+			return true
+		}
+		ident, ok := assign.Lhs[0].(*ast.Ident)
+		if !ok {
+			return true
+		}
+		call, ok := isPackageCall(assign.Rhs[0], osName, "Getenv")
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		if envVar, ok := src.str(call.Args[0]); ok {
+			fallbacks[ident.Name] = envVar
+		}
+
+		return true
+	})
+
+	return fallbacks
 }
 
 func flagSetCall(call *ast.CallExpr) (flagSet, method string, ok bool) {
@@ -247,8 +280,10 @@ func (m *commandModel) binding(name string, target ast.Expr) (configField, error
 	if root != m.configVar || len(path) == 0 {
 		copies := m.copies[root]
 		switch {
-		case len(path) > 0 || len(copies) == 0:
+		case len(path) > 0:
 			return configField{jsonKey: "", envVar: ""}, nil
+		case len(copies) == 0:
+			return configField{jsonKey: "", envVar: m.fallbacks[root]}, nil
 		case len(copies) > 1:
 			return configField{}, m.src.errorf(
 				target, "--%s target %s is copied into %s",

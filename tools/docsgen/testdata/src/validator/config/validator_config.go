@@ -48,6 +48,7 @@ func RewardFromEnv() (Reward, error) {
 type Config struct {
 	Provider Provider `json:"provider"`
 	Reward   Reward   `json:"reward"`
+	LogLevel *string  `json:"logLevel"`
 }
 
 func FromEnv() (Config, error) {
@@ -56,5 +57,10 @@ func FromEnv() (Config, error) {
 		return Config{}, err
 	}
 
-	return Config{Provider: ProviderFromEnv(), Reward: reward}, nil
+	var logLevel *string
+	if value := os.Getenv("VALIDATOR_LOG_LEVEL"); value != "" {
+		logLevel = &value
+	}
+
+	return Config{Provider: ProviderFromEnv(), Reward: reward, LogLevel: logLevel}, nil
 }

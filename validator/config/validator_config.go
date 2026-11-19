@@ -216,14 +216,163 @@ func (r *Reward) Fill(other *Reward) {
 	}
 }
 
+// Addresses of the contracts the validator interacts with. An empty address
+// means the default one for the chain is used
+type Contracts struct {
+	Attest  string `json:"attest"`
+	Staking string `json:"staking"`
+}
+
+func ContractsFromEnv() Contracts {
+	return Contracts{
+		Attest:  os.Getenv("ATTEST_CONTRACT_ADDRESS"),
+		Staking: os.Getenv("STAKING_CONTRACT_ADDRESS"),
+	}
+}
+
+// Merge its missing fields with data from other contracts
+func (c *Contracts) Fill(other *Contracts) {
+	if isZero(c.Attest) {
+		c.Attest = other.Attest
+	}
+	if isZero(c.Staking) {
+		c.Staking = other.Staking
+	}
+}
+
+// Metrics server configuration. A nil field means the option was not set, which
+// is different from it being set to its zero value
+type Metrics struct {
+	Enabled *bool   `json:"enabled"`
+	Host    *string `json:"host"`
+	Port    *string `json:"port"`
+}
+
+// The port can be written either as a string or as a number
+func (m *Metrics) UnmarshalJSON(data []byte) error {
+	// A type without methods, so that unmarshalling it doesn't call this again
+	type plain Metrics
+	aux := struct {
+		*plain
+		// Shadows the port of the embedded type
+		Port json.RawMessage `json:"port"`
+	}{plain: (*plain)(m), Port: nil}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	port, err := stringOrNumber(aux.Port)
+	if err != nil {
+		return fmt.Errorf("metrics.port: %w", err)
+	}
+	m.Port = port
+
+	return nil
+}
+
+func MetricsFromEnv() (Metrics, error) {
+	var enabled *bool
+	if value := os.Getenv("VALIDATOR_METRICS_ENABLED"); value != "" {
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return Metrics{}, fmt.Errorf(
+				"invalid VALIDATOR_METRICS_ENABLED env var, not a valid boolean: %w",
+				err,
+			)
+		}
+		enabled = &parsed
+	}
+
+	var host *string
+	if value := os.Getenv("VALIDATOR_METRICS_HOST"); value != "" {
+		host = &value
+	}
+
+	var port *string
+	if value := os.Getenv("VALIDATOR_METRICS_PORT"); value != "" {
+		port = &value
+	}
+
+	return Metrics{
+		Enabled: enabled,
+		Host:    host,
+		Port:    port,
+	}, nil
+}
+
+// Merge its missing fields with data from other metrics
+func (m *Metrics) Fill(other *Metrics) {
+	if m.Enabled == nil {
+		m.Enabled = other.Enabled
+	}
+	if m.Host == nil {
+		m.Host = other.Host
+	}
+	if m.Port == nil {
+		m.Port = other.Port
+	}
+}
+
+// The pointer fields are nil when the option was not set, which is different
+// from it being set to its zero value
 type Config struct {
-	Provider Provider `json:"provider"`
-	Signer   Signer   `json:"signer"`
-	Reward   Reward   `json:"reward"`
+	Provider  Provider  `json:"provider"`
+	Signer    Signer    `json:"signer"`
+	Reward    Reward    `json:"reward"`
+	Contracts Contracts `json:"contracts"`
+	Metrics   Metrics   `json:"metrics"`
+	// Either a positive integer or the key word 'infinite'
+	MaxRetries *string `json:"maxRetries"`
+	// Balance, in STRK, below which a warning is triggered
+	BalanceThreshold *float64 `json:"balanceThreshold"`
+	LogLevel         *string  `json:"logLevel"`
 	// Max tip, in FRI per L2 gas unit, to pay for the attestation transaction. It's a
 	// pointer so that an explicit 0 (never pay a tip) can be told apart from a value not
 	// set, and isn't overridden by a lower priority config source
 	MaxTip *uint64 `json:"maxTip"`
+}
+
+// The max retries can be written either as a string or as a number
+func (c *Config) UnmarshalJSON(data []byte) error {
+	// A type without methods, so that unmarshalling it doesn't call this again
+	type plain Config
+	aux := struct {
+		*plain
+		// Shadows the max retries of the embedded type
+		MaxRetries json.RawMessage `json:"maxRetries"`
+	}{plain: (*plain)(c), MaxRetries: nil}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	maxRetries, err := stringOrNumber(aux.MaxRetries)
+	if err != nil {
+		return fmt.Errorf("maxRetries: %w", err)
+	}
+	c.MaxRetries = maxRetries
+
+	return nil
+}
+
+// Reads a JSON value written either as a string or as a number, keeping the
+// number as it was written. It returns nil when the value is missing or null
+func stringOrNumber(raw json.RawMessage) (*string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return &text, nil
+	}
+
+	var number json.Number
+	if err := json.Unmarshal(raw, &number); err != nil {
+		return nil, errors.New("expected a string or a number")
+	}
+	text = number.String()
+
+	return &text, nil
 }
 
 func FromEnv() (Config, error) {
@@ -231,13 +380,40 @@ func FromEnv() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	metrics, err := MetricsFromEnv()
+	if err != nil {
+		return Config{}, err
+	}
+
+	var maxRetries *string
+	if value := os.Getenv("VALIDATOR_MAX_RETRIES"); value != "" {
+		maxRetries = &value
+	}
+
+	var balanceThreshold *float64
+	if value := os.Getenv("VALIDATOR_BALANCE_THRESHOLD"); value != "" {
+		var parsed float64
+		parsed, err = strconv.ParseFloat(value, 64)
+		if err != nil {
+			return Config{}, fmt.Errorf(
+				"invalid VALIDATOR_BALANCE_THRESHOLD env var, not a valid number: %w",
+				err,
+			)
+		}
+		balanceThreshold = &parsed
+	}
+
+	var logLevel *string
+	if value := os.Getenv("VALIDATOR_LOG_LEVEL"); value != "" {
+		logLevel = &value
+	}
 
 	var maxTip *uint64
-	if value := os.Getenv("MAX_TIP"); value != "" {
+	if value := os.Getenv("VALIDATOR_MAX_TIP"); value != "" {
 		parsed, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
 			return Config{}, fmt.Errorf(
-				"invalid MAX_TIP env var, not a valid integer: %w",
+				"invalid VALIDATOR_MAX_TIP env var, not a valid integer: %w",
 				err,
 			)
 		}
@@ -245,10 +421,15 @@ func FromEnv() (Config, error) {
 	}
 
 	return Config{
-		Provider: ProviderFromEnv(),
-		Signer:   SignerFromEnv(),
-		Reward:   reward,
-		MaxTip:   maxTip,
+		Provider:         ProviderFromEnv(),
+		Signer:           SignerFromEnv(),
+		Reward:           reward,
+		Contracts:        ContractsFromEnv(),
+		Metrics:          metrics,
+		MaxRetries:       maxRetries,
+		BalanceThreshold: balanceThreshold,
+		LogLevel:         logLevel,
+		MaxTip:           maxTip,
 	}, nil
 }
 
@@ -281,6 +462,17 @@ func (c *Config) Fill(other *Config) {
 	c.Provider.Fill(&other.Provider)
 	c.Signer.Fill(&other.Signer)
 	c.Reward.Fill(&other.Reward)
+	c.Contracts.Fill(&other.Contracts)
+	c.Metrics.Fill(&other.Metrics)
+	if c.MaxRetries == nil {
+		c.MaxRetries = other.MaxRetries
+	}
+	if c.BalanceThreshold == nil {
+		c.BalanceThreshold = other.BalanceThreshold
+	}
+	if c.LogLevel == nil {
+		c.LogLevel = other.LogLevel
+	}
 	if c.MaxTip == nil {
 		c.MaxTip = other.MaxTip
 	}

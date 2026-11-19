@@ -17,7 +17,7 @@ In addition to the core configuration described in the [Setup](./setup) page, th
 
 ## Complete Options Reference
 
-Flags take priority over environment variables, which take priority over the config file. The Config File column is the key path in the JSON file: `reward.claimMaxFee` is `{"reward": {"claimMaxFee": ...}}`. An option with `-` in both columns can only be set as a flag.
+Flags take priority over environment variables, which take priority over the config file. The Config File column is the key path in the JSON file: `reward.claimMaxFee` is `{"reward": {"claimMaxFee": ...}}`. Every option can be set in all three ways, except `--config`: it has no config file key, since it is the path to that file.
 
 ```mdx-code-block
 import ConfigOptions from "./_config-options.md";

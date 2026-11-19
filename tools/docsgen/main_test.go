@@ -59,7 +59,14 @@ func TestGenerate(t *testing.T) {
 func TestGenerateRepository(t *testing.T) {
 	files, err := docsgen.Generate(os.DirFS(filepath.Join("..", "..")))
 	require.NoError(t, err)
-	require.Contains(t, string(files[docsgen.OptionsFile]), "| `--max-retries` |")
+	options := string(files[docsgen.OptionsFile])
+	require.Contains(t, options, "| `--config`, `-c` | `VALIDATOR_CONFIG_PATH` | - |")
+	require.Contains(t, options, "| `--max-retries` | `VALIDATOR_MAX_RETRIES` | `maxRetries` |")
+	for _, row := range strings.Split(options, "\n")[4:] {
+		if row != "" {
+			require.NotEqual(t, "-", strings.Split(row, " | ")[1], "no env var: "+row)
+		}
+	}
 	require.Contains(t, string(files[docsgen.MetricsFile]), "| `validator_attestation_")
 }
 
