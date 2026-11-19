@@ -52,7 +52,7 @@ const logLevels = "trace, debug, info, warn, error"
 // Env var holding the path to the JSON config file, used when --config is not set
 const configPathEnvVar = "VALIDATOR_CONFIG_PATH"
 
-//nolint:funlen // It's the main function, so it's normal to be long
+//nolint:funlen,gocyclo // A refactor will be done later
 func NewCommand() cobra.Command {
 	var configPath string
 	var logLevelF string
