@@ -50,7 +50,7 @@ Full documentation: https://nethermindeth.github.io/starknet-staking-v2/
 const logLevels = "trace, debug, info, warn, error"
 
 // Env var holding the path to the JSON config file, used when --config is not set
-const configPathEnvVar = "CONFIG_PATH"
+const configPathEnvVar = "VALIDATOR_CONFIG_PATH"
 
 //nolint:funlen // It's the main function, so it's normal to be long
 func NewCommand() cobra.Command {

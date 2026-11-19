@@ -2,7 +2,7 @@
 
 | Option | Environment Variable | Config File | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--config`, `-c` | `CONFIG_PATH` | - | - | Path to JSON config file |
+| `--config`, `-c` | `VALIDATOR_CONFIG_PATH` | - | - | Path to JSON config file |
 | `--provider-http` | `PROVIDER_HTTP_URL` | `provider.http` | - | Provider http address |
 | `--reward-claim-max-fee` | `REWARD_CLAIM_MAX_FEE` | `reward.claimMaxFee` | Unlimited | (Optional) Max fee, in FRI, to pay for the claim transaction. Defaults to 'unlimited' (\~18.4 STRK) |
 | `--reward-claim-threshold` | `REWARD_CLAIM_THRESHOLD` | `reward.claimThreshold` | - | Claim threshold, in STRK |
@@ -10,4 +10,4 @@
 | `--attest-contract-address` | - | - | auto | Attestation contract address |
 | `--metrics` | - | - | `false` | Enable metric tracking via Prometheus |
 | `--balance-threshold` | - | - | `100.5` | Fee estimation uses version 1\<\<128 + 0x3 for \*Braavos\* \| \{x\} \[y\] \`z\` a\_b |
-| `--log-level` | `LOG_LEVEL` | `logLevel` | `info` | Options: trace, debug, info. |
+| `--log-level` | `VALIDATOR_LOG_LEVEL` | `logLevel` | `info` | Options: trace, debug, info. |

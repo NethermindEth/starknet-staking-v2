@@ -250,11 +250,11 @@ type Metrics struct {
 
 func MetricsFromEnv() (Metrics, error) {
 	var enabled *bool
-	if value := os.Getenv("METRICS_ENABLED"); value != "" {
+	if value := os.Getenv("VALIDATOR_METRICS_ENABLED"); value != "" {
 		parsed, err := strconv.ParseBool(value)
 		if err != nil {
 			return Metrics{}, fmt.Errorf(
-				"invalid METRICS_ENABLED env var, not a valid boolean: %w",
+				"invalid VALIDATOR_METRICS_ENABLED env var, not a valid boolean: %w",
 				err,
 			)
 		}
@@ -262,12 +262,12 @@ func MetricsFromEnv() (Metrics, error) {
 	}
 
 	var host *string
-	if value := os.Getenv("METRICS_HOST"); value != "" {
+	if value := os.Getenv("VALIDATOR_METRICS_HOST"); value != "" {
 		host = &value
 	}
 
 	var port *string
-	if value := os.Getenv("METRICS_PORT"); value != "" {
+	if value := os.Getenv("VALIDATOR_METRICS_PORT"); value != "" {
 		port = &value
 	}
 
@@ -321,17 +321,17 @@ func FromEnv() (Config, error) {
 	}
 
 	var maxRetries *string
-	if value := os.Getenv("MAX_RETRIES"); value != "" {
+	if value := os.Getenv("VALIDATOR_MAX_RETRIES"); value != "" {
 		maxRetries = &value
 	}
 
 	var balanceThreshold *float64
-	if value := os.Getenv("BALANCE_THRESHOLD"); value != "" {
+	if value := os.Getenv("VALIDATOR_BALANCE_THRESHOLD"); value != "" {
 		var parsed float64
 		parsed, err = strconv.ParseFloat(value, 64)
 		if err != nil {
 			return Config{}, fmt.Errorf(
-				"invalid BALANCE_THRESHOLD env var, not a valid number: %w",
+				"invalid VALIDATOR_BALANCE_THRESHOLD env var, not a valid number: %w",
 				err,
 			)
 		}
@@ -339,7 +339,7 @@ func FromEnv() (Config, error) {
 	}
 
 	var logLevel *string
-	if value := os.Getenv("LOG_LEVEL"); value != "" {
+	if value := os.Getenv("VALIDATOR_LOG_LEVEL"); value != "" {
 		logLevel = &value
 	}
 

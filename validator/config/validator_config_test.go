@@ -196,9 +196,9 @@ func TestConfigFromEnv(t *testing.T) {
 	require.Equal(t, expectedContracts, contracts)
 
 	// Test Metrics
-	t.Setenv("METRICS_ENABLED", "false")
-	t.Setenv("METRICS_HOST", "0.0.0.0")
-	t.Setenv("METRICS_PORT", "9191")
+	t.Setenv("VALIDATOR_METRICS_ENABLED", "false")
+	t.Setenv("VALIDATOR_METRICS_HOST", "0.0.0.0")
+	t.Setenv("VALIDATOR_METRICS_PORT", "9191")
 
 	metrics, err := MetricsFromEnv()
 	require.NoError(t, err)
@@ -210,9 +210,9 @@ func TestConfigFromEnv(t *testing.T) {
 	require.Equal(t, expectedMetrics, metrics)
 
 	// Test Config
-	t.Setenv("MAX_RETRIES", "infinite")
-	t.Setenv("BALANCE_THRESHOLD", "0")
-	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("VALIDATOR_MAX_RETRIES", "infinite")
+	t.Setenv("VALIDATOR_BALANCE_THRESHOLD", "0")
+	t.Setenv("VALIDATOR_LOG_LEVEL", "debug")
 	t.Setenv("MAX_TIP", "5000")
 
 	config, err := FromEnv()
@@ -233,8 +233,8 @@ func TestConfigFromEnv(t *testing.T) {
 
 func TestConfigFromEnvUnset(t *testing.T) {
 	for _, envVar := range []string{
-		"METRICS_ENABLED", "METRICS_HOST", "METRICS_PORT",
-		"MAX_RETRIES", "BALANCE_THRESHOLD", "LOG_LEVEL",
+		"VALIDATOR_METRICS_ENABLED", "VALIDATOR_METRICS_HOST", "VALIDATOR_METRICS_PORT",
+		"VALIDATOR_MAX_RETRIES", "VALIDATOR_BALANCE_THRESHOLD", "VALIDATOR_LOG_LEVEL",
 	} {
 		// An empty env var is the same as an unset one
 		t.Setenv(envVar, "")
@@ -253,8 +253,8 @@ func TestConfigFromEnvInvalidValues(t *testing.T) {
 		envVar string
 		value  string
 	}{
-		{envVar: "METRICS_ENABLED", value: "maybe"},
-		{envVar: "BALANCE_THRESHOLD", value: "plenty"},
+		{envVar: "VALIDATOR_METRICS_ENABLED", value: "maybe"},
+		{envVar: "VALIDATOR_BALANCE_THRESHOLD", value: "plenty"},
 	}
 
 	for _, tc := range testCases {

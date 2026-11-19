@@ -385,35 +385,38 @@ func TestOptionSources(t *testing.T) {
 	}{
 		{
 			name: "log level",
-			env:  map[string]string{"LOG_LEVEL": "verbose"},
+			env:  map[string]string{"VALIDATOR_LOG_LEVEL": "verbose"},
 			file: `{"logLevel": "verbose"}`,
 			want: `unknown log level "verbose"`,
 		},
 		{
 			name: "max retries",
-			env:  map[string]string{"MAX_RETRIES": "ten"},
+			env:  map[string]string{"VALIDATOR_MAX_RETRIES": "ten"},
 			file: `{"maxRetries": "ten"}`,
 			want: "`ten` is neither a positive number nor the `infinite` key word",
 		},
 		{
 			name: "metrics",
-			env:  map[string]string{"METRICS_ENABLED": "true", "METRICS_PORT": "http"},
+			env: map[string]string{
+				"VALIDATOR_METRICS_ENABLED": "true",
+				"VALIDATOR_METRICS_PORT":    "http",
+			},
 			file: `{"metrics": {"enabled": true, "port": "http"}}`,
 			want: invalidPort,
 		},
 		{
 			name: "metrics host",
 			env: map[string]string{
-				"METRICS_ENABLED": "true",
-				"METRICS_HOST":    "not a host",
-				"METRICS_PORT":    "9191",
+				"VALIDATOR_METRICS_ENABLED": "true",
+				"VALIDATOR_METRICS_HOST":    "not a host",
+				"VALIDATOR_METRICS_PORT":    "9191",
 			},
 			file: `{"metrics": {"enabled": true, "host": "not a host", "port": "9191"}}`,
 			want: "cannot listen on not a host:9191",
 		},
 		{
 			name: "balance threshold",
-			env:  map[string]string{"BALANCE_THRESHOLD": "NaN"},
+			env:  map[string]string{"VALIDATOR_BALANCE_THRESHOLD": "NaN"},
 			want: "--balance-threshold must be a finite number",
 		},
 	}
@@ -442,11 +445,11 @@ func TestOptionSources(t *testing.T) {
 
 	t.Run("Flags take priority over env vars", func(t *testing.T) {
 		ctx, httpURL, wsURL := newTestNode(t)
-		t.Setenv("LOG_LEVEL", "verbose")
-		t.Setenv("MAX_RETRIES", "ten")
-		t.Setenv("BALANCE_THRESHOLD", "NaN")
-		t.Setenv("METRICS_ENABLED", "true")
-		t.Setenv("METRICS_PORT", "http")
+		t.Setenv("VALIDATOR_LOG_LEVEL", "verbose")
+		t.Setenv("VALIDATOR_MAX_RETRIES", "ten")
+		t.Setenv("VALIDATOR_BALANCE_THRESHOLD", "NaN")
+		t.Setenv("VALIDATOR_METRICS_ENABLED", "true")
+		t.Setenv("VALIDATOR_METRICS_PORT", "http")
 
 		command := newTestCommandWithArgs(
 			t,
@@ -463,9 +466,9 @@ func TestOptionSources(t *testing.T) {
             "maxRetries": "ten",
             "metrics": {"enabled": true, "port": "http"}
         }`)
-		t.Setenv("LOG_LEVEL", "info")
-		t.Setenv("MAX_RETRIES", "1")
-		t.Setenv("METRICS_ENABLED", "false")
+		t.Setenv("VALIDATOR_LOG_LEVEL", "info")
+		t.Setenv("VALIDATOR_MAX_RETRIES", "1")
+		t.Setenv("VALIDATOR_METRICS_ENABLED", "false")
 
 		command := main.NewCommand()
 		command.SetArgs(validFlags(httpURL, wsURL, configFlag, filePath))
@@ -473,7 +476,7 @@ func TestOptionSources(t *testing.T) {
 	})
 
 	t.Run("Metrics flags complete the ones from other sources", func(t *testing.T) {
-		t.Setenv("METRICS_ENABLED", "true")
+		t.Setenv("VALIDATOR_METRICS_ENABLED", "true")
 
 		command := main.NewCommand()
 		command.SetArgs(validFlags(testProviderHTTP, testProviderWS, "--metrics-port", "http"))
@@ -481,7 +484,7 @@ func TestOptionSources(t *testing.T) {
 	})
 
 	t.Run("Config file path from env var", func(t *testing.T) {
-		t.Setenv("CONFIG_PATH", "some inexisting file name")
+		t.Setenv("VALIDATOR_CONFIG_PATH", "some inexisting file name")
 
 		command := main.NewCommand()
 		command.SetArgs(validFlags(testProviderHTTP, testProviderWS))
@@ -489,7 +492,7 @@ func TestOptionSources(t *testing.T) {
 	})
 
 	t.Run("Config flag takes priority over its env var", func(t *testing.T) {
-		t.Setenv("CONFIG_PATH", "some inexisting file name")
+		t.Setenv("VALIDATOR_CONFIG_PATH", "some inexisting file name")
 
 		command := main.NewCommand()
 		command.SetArgs(validFlags(

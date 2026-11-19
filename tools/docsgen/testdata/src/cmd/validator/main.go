@@ -10,7 +10,7 @@ import (
 
 const logLevels = "trace, debug, info"
 
-const configPathEnvVar = "CONFIG_PATH"
+const configPathEnvVar = "VALIDATOR_CONFIG_PATH"
 
 func NewCommand() cobra.Command {
 	var configPath string

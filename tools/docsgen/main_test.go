@@ -60,8 +60,8 @@ func TestGenerateRepository(t *testing.T) {
 	files, err := docsgen.Generate(os.DirFS(filepath.Join("..", "..")))
 	require.NoError(t, err)
 	options := string(files[docsgen.OptionsFile])
-	require.Contains(t, options, "| `--config`, `-c` | `CONFIG_PATH` | - |")
-	require.Contains(t, options, "| `--max-retries` | `MAX_RETRIES` | `maxRetries` |")
+	require.Contains(t, options, "| `--config`, `-c` | `VALIDATOR_CONFIG_PATH` | - |")
+	require.Contains(t, options, "| `--max-retries` | `VALIDATOR_MAX_RETRIES` | `maxRetries` |")
 	for _, row := range strings.Split(options, "\n")[4:] {
 		if row != "" {
 			require.NotEqual(t, "-", strings.Split(row, " | ")[1], "no env var: "+row)

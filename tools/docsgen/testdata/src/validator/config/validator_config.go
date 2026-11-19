@@ -58,7 +58,7 @@ func FromEnv() (Config, error) {
 	}
 
 	var logLevel *string
-	if value := os.Getenv("LOG_LEVEL"); value != "" {
+	if value := os.Getenv("VALIDATOR_LOG_LEVEL"); value != "" {
 		logLevel = &value
 	}
 
