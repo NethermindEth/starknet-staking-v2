@@ -409,11 +409,11 @@ func FromEnv() (Config, error) {
 	}
 
 	var maxTip *uint64
-	if value := os.Getenv("MAX_TIP"); value != "" {
+	if value := os.Getenv("VALIDATOR_MAX_TIP"); value != "" {
 		parsed, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
 			return Config{}, fmt.Errorf(
-				"invalid MAX_TIP env var, not a valid integer: %w",
+				"invalid VALIDATOR_MAX_TIP env var, not a valid integer: %w",
 				err,
 			)
 		}

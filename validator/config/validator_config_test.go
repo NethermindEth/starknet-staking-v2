@@ -258,7 +258,7 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("VALIDATOR_MAX_RETRIES", "infinite")
 	t.Setenv("VALIDATOR_BALANCE_THRESHOLD", "0")
 	t.Setenv("VALIDATOR_LOG_LEVEL", "debug")
-	t.Setenv("MAX_TIP", "5000")
+	t.Setenv("VALIDATOR_MAX_TIP", "5000")
 
 	config, err := FromEnv()
 	require.NoError(t, err)
@@ -280,6 +280,7 @@ func TestConfigFromEnvUnset(t *testing.T) {
 	for _, envVar := range []string{
 		"VALIDATOR_METRICS_ENABLED", "VALIDATOR_METRICS_HOST", "VALIDATOR_METRICS_PORT",
 		"VALIDATOR_MAX_RETRIES", "VALIDATOR_BALANCE_THRESHOLD", "VALIDATOR_LOG_LEVEL",
+		"VALIDATOR_MAX_TIP",
 	} {
 		// An empty env var is the same as an unset one
 		t.Setenv(envVar, "")
@@ -291,6 +292,7 @@ func TestConfigFromEnvUnset(t *testing.T) {
 	require.Nil(t, config.MaxRetries)
 	require.Nil(t, config.BalanceThreshold)
 	require.Nil(t, config.LogLevel)
+	require.Nil(t, config.MaxTip)
 }
 
 func TestConfigFromEnvInvalidValues(t *testing.T) {
@@ -356,10 +358,10 @@ func TestConfigFromEnvInvalidMaxTip(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("MAX_TIP", tc.value)
+			t.Setenv("VALIDATOR_MAX_TIP", tc.value)
 
 			_, err := FromEnv()
-			require.ErrorContains(t, err, "MAX_TIP")
+			require.ErrorContains(t, err, "VALIDATOR_MAX_TIP")
 		})
 	}
 }
@@ -602,7 +604,7 @@ func TestConfigExplicitZeroMaxTip(t *testing.T) {
 	})
 
 	t.Run("From env", func(t *testing.T) {
-		t.Setenv("MAX_TIP", "0")
+		t.Setenv("VALIDATOR_MAX_TIP", "0")
 
 		config, err := FromEnv()
 		require.NoError(t, err)
