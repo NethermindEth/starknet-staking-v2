@@ -55,7 +55,8 @@ func LoadEnv(t *testing.T) (EnvVariable, error) {
 // raw JSON value.
 type MockRPC struct {
 	// Results by method name. `starknet_specVersion` and `starknet_chainId` (Sepolia)
-	// are answered by default, since creating an `rpc.Provider` requires them
+	// are answered by default, since creating an `rpc.Provider` requires them, and so is
+	// `starknet_syncing` (synced), since the validator waits for the node to sync
 	Results map[string]string
 	// `starknet_call` results by entry point selector name
 	CallResults map[string]string
@@ -75,6 +76,7 @@ func MockRPCServer(t *testing.T, mock MockRPC) *httptest.Server {
 	results := map[string]string{
 		"starknet_specVersion": `"v0.10.2"`,
 		"starknet_chainId":     `"0x534e5f5345504f4c4941"`, // SN_SEPOLIA
+		"starknet_syncing":     "false",
 	}
 	maps.Copy(results, mock.Results)
 

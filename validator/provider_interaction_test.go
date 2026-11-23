@@ -2,16 +2,22 @@ package validator_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NethermindEth/juno/utils/log"
+	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
+	"github.com/NethermindEth/starknet.go/rpc"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -481,4 +487,108 @@ func TestNewStartupLogs(t *testing.T) {
 			require.Contains(t, buf.String(), `"rewardAddress": "0x789"}`)
 		})
 	}
+}
+
+func TestWaitUntilSynced(t *testing.T) {
+	const (
+		notSyncedLine = "node is not synced. Waiting for it to sync before starting"
+		syncedLine    = "node is synced\n"
+		pollInterval  = 10 * time.Second
+	)
+	synced := rpc.SyncStatus{IsSyncing: false}
+	syncing := rpc.SyncStatus{IsSyncing: true, CurrentBlockNum: 100, HighestBlockNum: 350}
+
+	newLogger := func(t *testing.T) (log.Logger, *bytes.Buffer) {
+		t.Helper()
+
+		var buf bytes.Buffer
+		logger, err := log.NewZapLogger(
+			log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+		)
+		require.NoError(t, err)
+
+		return logger, &buf
+	}
+
+	t.Run("Node already synced", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().Syncing(gomock.Any()).Return(synced, nil)
+		sleeps := recordSleeps(t)
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, logger)
+
+		require.NoError(t, err)
+		require.Empty(t, sleeps())
+		require.Empty(t, buf.String())
+	})
+
+	t.Run("Node syncing for a while", func(t *testing.T) {
+		const syncingPolls = 8
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		gomock.InOrder(
+			provider.EXPECT().Syncing(gomock.Any()).Return(syncing, nil).Times(syncingPolls),
+			provider.EXPECT().Syncing(gomock.Any()).Return(synced, nil),
+		)
+		sleeps := recordSleeps(t)
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, logger)
+
+		require.NoError(t, err)
+		require.Equal(t, slices.Repeat([]time.Duration{pollInterval}, syncingPolls), sleeps())
+		logs := buf.String()
+		// Logged on the first poll and on the 7th
+		require.Equal(t, 2, strings.Count(logs, notSyncedLine))
+		require.Equal(t, 2, strings.Count(
+			logs, `{"currentBlock": 100, "highestBlock": 350, "blocksBehind": 250}`,
+		))
+		require.Equal(t, 1, strings.Count(logs, syncedLine))
+		require.Greater(
+			t, strings.Index(logs, syncedLine), strings.LastIndex(logs, notSyncedLine),
+		)
+	})
+
+	t.Run("Node ahead of the highest block it knows", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		gomock.InOrder(
+			provider.EXPECT().Syncing(gomock.Any()).Return(rpc.SyncStatus{
+				IsSyncing: true, CurrentBlockNum: 400, HighestBlockNum: 350,
+			}, nil),
+			provider.EXPECT().Syncing(gomock.Any()).Return(synced, nil),
+		)
+		recordSleeps(t)
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, logger)
+
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), `"blocksBehind": 0}`)
+	})
+
+	t.Run("Syncing request fails", func(t *testing.T) {
+		syncingErr := errors.New("some RPC error")
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().Syncing(gomock.Any()).Return(rpc.SyncStatus{}, syncingErr)
+		sleeps := recordSleeps(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, log.NewNopZapLogger())
+
+		require.ErrorIs(t, err, syncingErr)
+		require.Empty(t, sleeps())
+	})
+
+	t.Run("Context cancelled while waiting", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().Syncing(gomock.Any()).Return(syncing, nil).Times(1)
+		sleep := validator.Sleep
+		validator.Sleep = func(time.Duration) { cancel() }
+		t.Cleanup(func() { validator.Sleep = sleep })
+
+		err := validator.WaitUntilSynced(ctx, provider, log.NewNopZapLogger())
+
+		require.ErrorIs(t, err, context.Canceled)
+	})
 }

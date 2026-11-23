@@ -29,6 +29,7 @@ const (
 	supportedSpecVersion = "0.10.2"
 	startupRetryDelay    = 3 * time.Second
 	startupRetryLog      = "cannot start validator. Retrying in 3s"
+	syncPollDelay        = 10 * time.Second
 )
 
 var startupRetries atomic.Int64
@@ -47,6 +48,9 @@ func TestMain(m *testing.M) {
 		if delay == startupRetryDelay {
 			startupRetries.Add(1)
 
+			return
+		}
+		if delay == syncPollDelay {
 			return
 		}
 		time.Sleep(delay)
@@ -236,6 +240,12 @@ func TestStartupRetries(t *testing.T) {
 					2, "starknet_chainId", "", http.StatusBadGateway, "bad gateway",
 				),
 			},
+			{
+				name: "syncing request",
+				fault: failFirst(
+					2, "starknet_syncing", "", http.StatusServiceUnavailable, "unavailable",
+				),
+			},
 		}
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -248,6 +258,26 @@ func TestStartupRetries(t *testing.T) {
 				require.Equal(t, 2, strings.Count(logs, startupRetryLog))
 			})
 		}
+	})
+
+	t.Run("Waits for a syncing node", func(t *testing.T) {
+		const syncingBody = `{"jsonrpc": "2.0", "id": 1, "result": {` +
+			`"starting_block_hash": "0x1", "starting_block_num": 0, ` +
+			`"current_block_hash": "0x2", "current_block_num": 100, ` +
+			`"highest_block_hash": "0x3", "highest_block_num": 350}}`
+		ctx, httpURL, wsURL := newFaultyNode(t, supportedSpecVersion, failFirst(
+			2, "starknet_syncing", "", http.StatusOK, syncingBody,
+		))
+
+		retries, logs, err := runValidator(t, ctx, validatorArgs(httpURL, wsURL, ""))
+
+		require.NoError(t, err)
+		require.Equal(t, 0, retries)
+		require.Contains(t, logs, "node is not synced. Waiting for it to sync before starting")
+		require.Contains(t, logs, `"currentBlock": 100, "highestBlock": 350, "blocksBehind": 250`)
+		syncedAt := strings.Index(logs, "node is synced")
+		require.GreaterOrEqual(t, syncedAt, 0)
+		require.Less(t, syncedAt, strings.Index(logs, "using internal signer"))
 	})
 
 	t.Run("Reward startup calls failing temporarily", func(t *testing.T) {

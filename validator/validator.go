@@ -69,6 +69,12 @@ func newValidator(
 		return Validator{}, err
 	}
 
+	if err := WaitUntilSynced(ctx, provider, logger); err != nil {
+		return Validator{}, markIfTransient(
+			fmt.Errorf("waiting for node to sync: %w", err),
+		)
+	}
+
 	var signer signerP.Signer
 	if conf.Signer.IsExternal() {
 		externalSigner, err := signerP.NewExternalSigner(

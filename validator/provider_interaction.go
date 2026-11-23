@@ -90,6 +90,51 @@ func NewProvider(
 	return provider, nil
 }
 
+const (
+	syncPollInterval = 10 * time.Second
+	syncLogEvery     = 6 // one progress log per minute
+)
+
+// Polls `starknet_syncing` until the node reports it is synced
+func WaitUntilSynced(ctx context.Context, provider rpc.RPCProvider, logger log.Logger) error {
+	for polls := 0; ; polls++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		status, err := provider.Syncing(ctx)
+		if err != nil {
+			return err
+		}
+		if !status.IsSyncing {
+			if polls > 0 {
+				logger.Info("node is synced")
+			}
+
+			return nil
+		}
+
+		if polls%syncLogEvery == 0 {
+			logger.Info(
+				"node is not synced. Waiting for it to sync before starting",
+				zap.Uint64("currentBlock", status.CurrentBlockNum),
+				zap.Uint64("highestBlock", status.HighestBlockNum),
+				zap.Uint64("blocksBehind", blocksBehind(&status)),
+			)
+		}
+
+		Sleep(syncPollInterval)
+	}
+}
+
+func blocksBehind(status *rpc.SyncStatus) uint64 {
+	if status.HighestBlockNum <= status.CurrentBlockNum {
+		return 0
+	}
+
+	return status.HighestBlockNum - status.CurrentBlockNum
+}
+
 func fetchSpecVersion(ctx context.Context, providerURL string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, specVersionTimeout)
 	defer cancel()
