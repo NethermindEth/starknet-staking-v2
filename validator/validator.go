@@ -190,6 +190,11 @@ func (v *Validator) Attest(
 	defer wg.Wait()
 	defer close(dispatcher.PrepareAttest)
 
+	// Stopped before waiting for the goroutines, since it only ends with its context
+	monitorCtx, stopMonitor := context.WithCancel(ctx)
+	defer stopMonitor()
+	wg.Go(func() { NewSyncMonitor(v.provider, v.logger, tracer).Run(monitorCtx) })
+
 	return redactErrorURLs(RunBlockHeaderWatcher(
 		ctx, v.wsProvider, v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
 	))
