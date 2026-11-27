@@ -302,6 +302,10 @@ func TestStartupRetries(t *testing.T) {
 				"Starting without checking that the node is synced\t"+
 				`{"error": "feeder gateway request failed: 503 Service Unavailable"}`,
 		)
+		// Logged before the check, so a feeder gateway slow to fail is not a silent wait
+		checkingAt := strings.Index(logs, "checking that the node is synced with the chain head")
+		require.GreaterOrEqual(t, checkingAt, 0)
+		require.Less(t, checkingAt, strings.Index(logs, "cannot read the chain head"))
 		require.NotContains(t, logs, "node is synced\n")
 		require.Contains(t, logs, "using internal signer")
 	})
@@ -327,6 +331,7 @@ func TestStartupRetries(t *testing.T) {
 			t, logs, "no feeder gateway known for this chain. "+
 				`Starting without checking that the node is synced	{"chainID": "SN_SEPOLIA"}`,
 		)
+		require.NotContains(t, logs, "checking that the node is synced with the chain head")
 		require.Contains(t, logs, "using internal signer")
 		require.Zero(t, feederRequests)
 	})

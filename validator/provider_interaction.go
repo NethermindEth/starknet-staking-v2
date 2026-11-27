@@ -123,6 +123,14 @@ func WaitUntilSynced(
 		if behind < blocksBehindWarnThreshold {
 			if polls > 0 {
 				logger.Info("node is synced")
+			} else {
+				// The usual case, which needs no info log
+				logger.Debug(
+					"node is synced",
+					zap.Uint64("currentBlock", nodeBlock),
+					zap.Uint64("highestBlock", headBlock),
+					zap.Uint64("blocksBehind", behind),
+				)
 			}
 
 			return nil

@@ -562,6 +562,26 @@ func TestWaitUntilSynced(t *testing.T) {
 		})
 	}
 
+	t.Run("Node already synced, at the debug level", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(341), nil)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		var buf bytes.Buffer
+		logger, err := log.NewZapLogger(
+			log.NewLevel(log.DEBUG), log.WithWriter(&buf), log.WithColour(false),
+		)
+		require.NoError(t, err)
+
+		err = validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), "DEBUG")
+		require.Contains(
+			t, buf.String(),
+			`node is synced	{"currentBlock": 341, "highestBlock": 350, "blocksBehind": 9}`,
+		)
+	})
+
 	t.Run("Node behind for a while", func(t *testing.T) {
 		const behindPolls = 8
 		provider := mocks.NewMockRPCProvider(gomock.NewController(t))

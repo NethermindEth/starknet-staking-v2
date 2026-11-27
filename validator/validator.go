@@ -175,6 +175,8 @@ func waitForSyncedNode(
 		return nil
 	}
 
+	// Logged before the check, which is silent while the feeder gateway does not answer
+	logger.Info("checking that the node is synced with the chain head")
 	if err := WaitUntilSynced(ctx, provider, chainHead, logger); err != nil {
 		return markIfTransient(fmt.Errorf("waiting for node to sync: %w", err))
 	}
