@@ -2,6 +2,7 @@ package validator_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/sourcegraph/conc"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func newWSNode(
@@ -316,4 +318,44 @@ func TestRunBlockHeaderWatcherProcessingErrorAfterSubscriptionEnd(t *testing.T) 
 	require.ErrorContains(t, err, "injected outage")
 	require.Equal(t, int32(1), subscriptions.Load())
 	require.Equal(t, []time.Duration{time.Second}, sleeps())
+}
+
+func TestRunBlockHeaderWatcherStopsWhileDialing(t *testing.T) {
+	// A node that refuses every WS connection
+	wsURL, subscriptions := newWSNode(t, 0, func(int32, *websocket.Conn) {})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	// The validator is stopped while it waits to dial again
+	var sleeps atomic.Int32
+	sleep := validator.Sleep
+	validator.Sleep = func(time.Duration) {
+		sleeps.Add(1)
+		cancel()
+	}
+	t.Cleanup(func() { validator.Sleep = sleep })
+	var logs bytes.Buffer
+	logger, err := log.NewZapLogger(
+		log.NewLevel(log.INFO), log.WithWriter(&logs), log.WithColour(false),
+	)
+	require.NoError(t, err)
+	dispatcher := validator.NewEventDispatcher[*mocks.MockSigner](testMaxTip)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- validator.RunBlockHeaderWatcher(
+			ctx, wsURL, logger, mocks.NewMockSigner(gomock.NewController(t)), &dispatcher,
+			types.NewRetries(), conc.NewWaitGroup(), metrics.NewNoOpMetrics(),
+		)
+	}()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "the block header watcher did not stop")
+	}
+	require.Equal(t, int32(1), sleeps.Load())
+	require.Zero(t, subscriptions.Load())
+	// Only the dial that failed before the validator was stopped is logged
+	require.Equal(t, 1, strings.Count(logs.String(), "cannot connect to ws provider"))
 }

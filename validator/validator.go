@@ -251,6 +251,10 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			ctx, wsProviderURL, logger,
 		)
 		if err != nil {
+			// A dial failing because the validator is stopping is not retried
+			if ctx.Err() != nil {
+				return nil //nolint:nilerr // Stopping is not a failure of the watcher
+			}
 			if retries.IsZero() {
 				return err
 			}
