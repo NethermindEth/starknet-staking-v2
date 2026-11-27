@@ -95,18 +95,32 @@ const (
 	syncLogEvery     = 6 // one progress log per minute
 )
 
-// Polls `starknet_syncing` until the node reports it is synced
-func WaitUntilSynced(ctx context.Context, provider rpc.RPCProvider, logger log.Logger) error {
+// Polls the node until its latest block is close to the chain head reported by the
+// sequencer. When the chain head cannot be read, the node is not waited for
+func WaitUntilSynced(
+	ctx context.Context, provider rpc.RPCProvider, chainHead ChainHeadReader, logger log.Logger,
+) error {
 	for polls := 0; ; polls++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 
-		status, err := provider.Syncing(ctx)
+		nodeBlock, headBlock, err := readSyncProgress(ctx, provider, chainHead)
+		if errors.Is(err, ErrChainHead) && ctx.Err() == nil {
+			logger.Warn(
+				"cannot read the chain head. "+
+					"Starting without checking that the node is synced",
+				zap.Error(err),
+			)
+
+			return nil
+		}
 		if err != nil {
 			return err
 		}
-		if !status.IsSyncing {
+
+		behind := blocksBehind(nodeBlock, headBlock)
+		if behind < blocksBehindWarnThreshold {
 			if polls > 0 {
 				logger.Info("node is synced")
 			}
@@ -117,9 +131,9 @@ func WaitUntilSynced(ctx context.Context, provider rpc.RPCProvider, logger log.L
 		if polls%syncLogEvery == 0 {
 			logger.Info(
 				"node is not synced. Waiting for it to sync before starting",
-				zap.Uint64("currentBlock", status.CurrentBlockNum),
-				zap.Uint64("highestBlock", status.HighestBlockNum),
-				zap.Uint64("blocksBehind", blocksBehind(&status)),
+				zap.Uint64("currentBlock", nodeBlock),
+				zap.Uint64("highestBlock", headBlock),
+				zap.Uint64("blocksBehind", behind),
 			)
 		}
 
@@ -127,12 +141,13 @@ func WaitUntilSynced(ctx context.Context, provider rpc.RPCProvider, logger log.L
 	}
 }
 
-func blocksBehind(status *rpc.SyncStatus) uint64 {
-	if status.HighestBlockNum <= status.CurrentBlockNum {
+// Returns how many blocks the node is behind the chain head, 0 when it is ahead of it
+func blocksBehind(nodeBlock, headBlock uint64) uint64 {
+	if headBlock <= nodeBlock {
 		return 0
 	}
 
-	return status.HighestBlockNum - status.CurrentBlockNum
+	return headBlock - nodeBlock
 }
 
 func fetchSpecVersion(ctx context.Context, providerURL string) (string, error) {

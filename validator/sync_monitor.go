@@ -63,7 +63,7 @@ func (m *SyncMonitor) Check(ctx context.Context) {
 		return
 	}
 
-	behind := blocksBehind(&status)
+	behind := blocksBehind(status.CurrentBlockNum, status.HighestBlockNum)
 	m.tracer.UpdateNodeBlocksBehind(behind)
 
 	if behind < blocksBehindWarnThreshold {

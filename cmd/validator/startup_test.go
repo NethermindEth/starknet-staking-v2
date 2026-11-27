@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -30,11 +31,15 @@ const (
 	startupRetryDelay    = 3 * time.Second
 	startupRetryLog      = "cannot start validator. Retrying in 3s"
 	syncPollDelay        = 10 * time.Second
+	// What a `nodeFault` gets as the method of a feeder gateway request
+	feederRequest = "feeder get_block"
 )
 
 var startupRetries atomic.Int64
 
 func TestMain(m *testing.M) {
+	// No test may reach a real feeder gateway. Tests set a local one with `UseFeeder`
+	validator.FeederURLs = nil
 	if os.Getenv(runMainEnvVar) != "" {
 		validator.Sleep = func(time.Duration) {}
 		command := main.NewCommand()
@@ -98,6 +103,9 @@ func newFaultyNode(
 			Params []json.RawMessage `json:"params"`
 		}
 		_ = json.Unmarshal(body, &req)
+		if r.Method == http.MethodGet {
+			req.Method = feederRequest
+		}
 		var entryPoint string
 		if req.Method == "starknet_call" && len(req.Params) > 0 {
 			var call struct {
@@ -123,6 +131,7 @@ func newFaultyNode(
 		proxy.ServeHTTP(w, r)
 	}))
 	t.Cleanup(front.Close)
+	validator.UseFeeder(t, front.URL)
 
 	return ctx, front.URL, "ws" + strings.TrimPrefix(backend.URL, "http")
 }
@@ -241,9 +250,10 @@ func TestStartupRetries(t *testing.T) {
 				),
 			},
 			{
-				name: "syncing request",
+				name: "latest block request",
 				fault: failFirst(
-					2, "starknet_syncing", "", http.StatusServiceUnavailable, "unavailable",
+					2, "starknet_blockHashAndNumber", "", http.StatusServiceUnavailable,
+					"unavailable",
 				),
 			},
 		}
@@ -260,13 +270,11 @@ func TestStartupRetries(t *testing.T) {
 		}
 	})
 
-	t.Run("Waits for a syncing node", func(t *testing.T) {
-		const syncingBody = `{"jsonrpc": "2.0", "id": 1, "result": {` +
-			`"starting_block_hash": "0x1", "starting_block_num": 0, ` +
-			`"current_block_hash": "0x2", "current_block_num": 100, ` +
-			`"highest_block_hash": "0x3", "highest_block_num": 350}}`
+	t.Run("Waits for a node behind the chain head", func(t *testing.T) {
+		const behindBody = `{"jsonrpc": "2.0", "id": 1, "result": ` +
+			`{"block_hash": "0x2", "block_number": 10}}`
 		ctx, httpURL, wsURL := newFaultyNode(t, supportedSpecVersion, failFirst(
-			2, "starknet_syncing", "", http.StatusOK, syncingBody,
+			2, "starknet_blockHashAndNumber", "", http.StatusOK, behindBody,
 		))
 
 		retries, logs, err := runValidator(t, ctx, validatorArgs(httpURL, wsURL, ""))
@@ -274,10 +282,53 @@ func TestStartupRetries(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, retries)
 		require.Contains(t, logs, "node is not synced. Waiting for it to sync before starting")
-		require.Contains(t, logs, `"currentBlock": 100, "highestBlock": 350, "blocksBehind": 250`)
+		require.Contains(t, logs, `"currentBlock": 10, "highestBlock": 100, "blocksBehind": 90`)
 		syncedAt := strings.Index(logs, "node is synced")
 		require.GreaterOrEqual(t, syncedAt, 0)
 		require.Less(t, syncedAt, strings.Index(logs, "using internal signer"))
+	})
+
+	t.Run("Starts without the sync check when the feeder gateway fails", func(t *testing.T) {
+		ctx, httpURL, wsURL := newFaultyNode(t, supportedSpecVersion, failFirst(
+			math.MaxInt, feederRequest, "", http.StatusServiceUnavailable, "unavailable",
+		))
+
+		retries, logs, err := runValidator(t, ctx, validatorArgs(httpURL, wsURL, ""))
+
+		require.NoError(t, err)
+		require.Equal(t, 0, retries)
+		require.Contains(
+			t, logs, "cannot read the chain head. "+
+				"Starting without checking that the node is synced\t"+
+				`{"error": "feeder gateway request failed: 503 Service Unavailable"}`,
+		)
+		require.NotContains(t, logs, "node is synced\n")
+		require.Contains(t, logs, "using internal signer")
+	})
+
+	t.Run("Starts without the sync check on a chain with no known feeder", func(t *testing.T) {
+		feederRequests := 0
+		ctx, httpURL, wsURL := newFaultyNode(
+			t, supportedSpecVersion, func(method, _ string) (int, string, bool) {
+				if method == feederRequest {
+					feederRequests++
+				}
+
+				return 0, "", false
+			},
+		)
+		validator.FeederURLs = nil
+
+		retries, logs, err := runValidator(t, ctx, validatorArgs(httpURL, wsURL, ""))
+
+		require.NoError(t, err)
+		require.Equal(t, 0, retries)
+		require.Contains(
+			t, logs, "no feeder gateway known for this chain. "+
+				`Starting without checking that the node is synced	{"chainID": "SN_SEPOLIA"}`,
+		)
+		require.Contains(t, logs, "using internal signer")
+		require.Zero(t, feederRequests)
 	})
 
 	t.Run("Reward startup calls failing temporarily", func(t *testing.T) {

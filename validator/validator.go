@@ -69,10 +69,8 @@ func newValidator(
 		return Validator{}, err
 	}
 
-	if err := WaitUntilSynced(ctx, provider, logger); err != nil {
-		return Validator{}, markIfTransient(
-			fmt.Errorf("waiting for node to sync: %w", err),
-		)
+	if err := waitForSyncedNode(ctx, provider, logger); err != nil {
+		return Validator{}, err
 	}
 
 	var signer signerP.Signer
@@ -154,6 +152,34 @@ func newValidator(
 		rewardSigner: rewardSigner,
 		wsProvider:   conf.Provider.WS,
 	}, nil
+}
+
+// Waits for the node to be synced with the chain head reported by the sequencer. The
+// node is not waited for when the chain has no known feeder gateway
+func waitForSyncedNode(
+	ctx context.Context, provider *rpc.Provider, logger log.Logger,
+) error {
+	chainID, err := provider.ChainID(ctx)
+	if err != nil {
+		return markIfTransient(fmt.Errorf("failed to fetch the chain id: %w", err))
+	}
+
+	chainHead := NewChainHeadReader(chainID)
+	if chainHead == nil {
+		logger.Warn(
+			"no feeder gateway known for this chain. "+
+				"Starting without checking that the node is synced",
+			zap.String("chainID", chainID),
+		)
+
+		return nil
+	}
+
+	if err := WaitUntilSynced(ctx, provider, chainHead, logger); err != nil {
+		return markIfTransient(fmt.Errorf("waiting for node to sync: %w", err))
+	}
+
+	return nil
 }
 
 func (v *Validator) ChainID(ctx context.Context) string {
