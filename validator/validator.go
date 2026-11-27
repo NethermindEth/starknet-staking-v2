@@ -69,6 +69,10 @@ func newValidator(
 		return Validator{}, err
 	}
 
+	if err := waitForSyncedNode(ctx, provider, logger); err != nil {
+		return Validator{}, err
+	}
+
 	var signer signerP.Signer
 	if conf.Signer.IsExternal() {
 		externalSigner, err := signerP.NewExternalSigner(
@@ -150,6 +154,36 @@ func newValidator(
 	}, nil
 }
 
+// Waits for the node to be synced with the chain head reported by the sequencer. The
+// node is not waited for when the chain has no known feeder gateway
+func waitForSyncedNode(
+	ctx context.Context, provider *rpc.Provider, logger log.Logger,
+) error {
+	chainID, err := provider.ChainID(ctx)
+	if err != nil {
+		return markIfTransient(fmt.Errorf("failed to fetch the chain id: %w", err))
+	}
+
+	chainHead := NewChainHeadReader(chainID)
+	if chainHead == nil {
+		logger.Warn(
+			"no feeder gateway known for this chain. "+
+				"Starting without checking that the node is synced",
+			zap.String("chainID", chainID),
+		)
+
+		return nil
+	}
+
+	// Logged before the check, which is silent while the feeder gateway does not answer
+	logger.Info("checking that the node is synced with the chain head")
+	if err := WaitUntilSynced(ctx, provider, chainHead, logger); err != nil {
+		return markIfTransient(fmt.Errorf("waiting for node to sync: %w", err))
+	}
+
+	return nil
+}
+
 func (v *Validator) ChainID(ctx context.Context) string {
 	chainID, err := v.provider.ChainID(ctx)
 	// This shouldn't ever happened because the chainID query is done during the validator
@@ -184,6 +218,11 @@ func (v *Validator) Attest(
 	defer wg.Wait()
 	defer close(dispatcher.PrepareAttest)
 
+	// Stopped before waiting for the goroutines, since it only ends with its context
+	monitorCtx, stopMonitor := context.WithCancel(ctx)
+	defer stopMonitor()
+	wg.Go(func() { NewSyncMonitor(v.provider, v.logger, tracer).Run(monitorCtx) })
+
 	return redactErrorURLs(RunBlockHeaderWatcher(
 		ctx, v.wsProvider, v.logger, v.signer, &dispatcher, maxRetries, wg, tracer,
 	))
@@ -212,6 +251,10 @@ func RunBlockHeaderWatcher[S signerP.Signer](
 			ctx, wsProviderURL, logger,
 		)
 		if err != nil {
+			// A dial failing because the validator is stopping is not retried
+			if ctx.Err() != nil {
+				return nil //nolint:nilerr // Stopping is not a failure of the watcher
+			}
 			if retries.IsZero() {
 				return err
 			}

@@ -3,6 +3,7 @@
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
 | `validator_attestation_starknet_latest_block_number` | Gauge | `network` | The latest block number seen by the validator on the Starknet network |
+| `validator_attestation_node_blocks_behind` | Gauge | `network` | How many blocks the node is behind the chain head it knows of, as reported by starknet\_syncing (the feeder gateway head on Juno). 0 when the node is synced |
 | `validator_attestation_current_epoch_id` | Gauge | `network` | The ID of the current epoch the validator is participating in |
 | `validator_attestation_current_epoch_length` | Gauge | `network` | The total length (in blocks) of the current epoch |
 | `validator_attestation_current_epoch_starting_block_number` | Gauge | `network` | The first block number of the current epoch |

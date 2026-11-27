@@ -5,7 +5,7 @@ Validator software written in Go for Starknet staking v2 as specified in [SNIP 2
 
 ## Requirements
 
-- A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) that serves RPC v0.10 (the `/rpc/v0_10` path on Juno and Pathfinder). For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/software-mansion/pathfinder).
+- A connection to a [Starknet node or RPC endpoint](https://www.starknet.io/fullnodes-rpc-services/) that serves RPC v0.10 (the `/rpc/v0_10` path on Juno and Pathfinder). For reliability reasons we recommend stakers to host their own nodes. See [Juno](https://github.com/NethermindEth/juno) and [Pathfinder](https://github.com/software-mansion/pathfinder). At startup, the validator waits until the node reports it is synced.
 - An account with enough funds to pay for the attestation transactions.
 
 ## Installation

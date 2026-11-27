@@ -642,6 +642,7 @@ func newTestNode(t *testing.T) (ctx context.Context, httpURL, wsURL string) {
 		},
 		OnWSUpgrade: cancel,
 	})
+	validator.UseFeeder(t, server.URL)
 
 	return ctx, server.URL, "ws" + strings.TrimPrefix(server.URL, "http")
 }

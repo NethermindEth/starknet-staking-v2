@@ -6,6 +6,7 @@ import (
 
 type Tracer interface {
 	UpdateLatestBlockNumber(blockNumber uint64)
+	UpdateNodeBlocksBehind(blocks uint64)
 	UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64)
 	UpdateSignerBalance(balance float64)
 	RecordAttestationSubmitted()

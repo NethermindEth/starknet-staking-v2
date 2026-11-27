@@ -12,6 +12,8 @@ func NewNoOpMetrics() *NoOpMetrics {
 
 func (m *NoOpMetrics) UpdateLatestBlockNumber(blockNumber uint64) {}
 
+func (m *NoOpMetrics) UpdateNodeBlocksBehind(blocks uint64) {}
+
 func (m *NoOpMetrics) UpdateEpochInfo(epochInfo *types.EpochInfo, targetBlock uint64) {}
 
 func (m *NoOpMetrics) UpdateSignerBalance(balance float64) {}

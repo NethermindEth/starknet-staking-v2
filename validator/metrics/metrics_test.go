@@ -103,6 +103,29 @@ func TestUpdateEpochInfoDebugLog(t *testing.T) {
 	}, entries[0].ContextMap())
 }
 
+func TestUpdateNodeBlocksBehind(t *testing.T) {
+	address := freeAddress(t)
+	core, logs := observer.New(zapcore.DebugLevel)
+	m := metrics.NewMetrics(address, "SN_SEPOLIA", log.NewZapLoggerWithCore(core))
+	served := make(chan error, 1)
+	go func() { served <- m.Start() }()
+	defer func() {
+		require.NoError(t, m.Stop(t.Context()))
+		require.ErrorIs(t, <-served, http.ErrServerClosed)
+	}()
+
+	m.UpdateNodeBlocksBehind(250)
+
+	require.Contains(
+		t,
+		scrapeMetrics(t, address),
+		`validator_attestation_node_blocks_behind{network="SN_SEPOLIA"} 250`,
+	)
+	entries := logs.FilterMessage("UpdateNodeBlocksBehind").All()
+	require.Len(t, entries, 1)
+	require.Equal(t, map[string]any{"blocksBehind": uint64(250)}, entries[0].ContextMap())
+}
+
 func TestRecordEpochInfoFetchFailure(t *testing.T) {
 	address := freeAddress(t)
 	m := metrics.NewMetrics(address, "SN_SEPOLIA", log.NewNopZapLogger())

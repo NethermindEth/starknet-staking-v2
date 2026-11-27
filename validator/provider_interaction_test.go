@@ -2,16 +2,25 @@ package validator_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/NethermindEth/juno/starknet"
 	"github.com/NethermindEth/juno/utils/log"
+	"github.com/NethermindEth/starknet-staking-v2/mocks"
 	"github.com/NethermindEth/starknet-staking-v2/validator"
 	"github.com/NethermindEth/starknet-staking-v2/validator/config"
+	"github.com/NethermindEth/starknet.go/client/rpcerr"
+	"github.com/NethermindEth/starknet.go/rpc"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -431,6 +440,7 @@ func TestNewStartupLogs(t *testing.T) {
 		},
 		OnWSUpgrade: nil,
 	})
+	validator.UseFeeder(t, server.URL)
 
 	testCases := []struct {
 		name         string
@@ -481,4 +491,273 @@ func TestNewStartupLogs(t *testing.T) {
 			require.Contains(t, buf.String(), `"rewardAddress": "0x789"}`)
 		})
 	}
+}
+
+// Answers the chain head with the given block numbers, one per request. The last one is
+// repeated once they run out
+type fakeChainHead struct {
+	blocks   []uint64
+	err      error
+	requests int
+}
+
+func (f *fakeChainHead) BlockHeader(
+	_ context.Context, blockID string,
+) (starknet.BlockHeader, error) {
+	if blockID != "latest" {
+		return starknet.BlockHeader{}, fmt.Errorf("unexpected block id %q", blockID)
+	}
+	f.requests++
+	if f.err != nil {
+		return starknet.BlockHeader{}, f.err
+	}
+
+	return starknet.BlockHeader{
+		Hash:   nil,
+		Number: f.blocks[min(f.requests, len(f.blocks))-1],
+	}, nil
+}
+
+func nodeBlock(number uint64) *rpc.BlockHashAndNumberOutput {
+	return &rpc.BlockHashAndNumberOutput{Number: number, Hash: nil}
+}
+
+func TestWaitUntilSynced(t *testing.T) {
+	const (
+		notSyncedLine = "node is not synced. Waiting for it to sync before starting"
+		syncedLine    = "node is synced\n"
+		pollInterval  = 10 * time.Second
+	)
+
+	newLogger := func(t *testing.T) (log.Logger, *bytes.Buffer) {
+		t.Helper()
+
+		var buf bytes.Buffer
+		logger, err := log.NewZapLogger(
+			log.NewLevel(log.INFO), log.WithWriter(&buf), log.WithColour(false),
+		)
+		require.NoError(t, err)
+
+		return logger, &buf
+	}
+
+	syncedNodes := map[string]uint64{
+		"Node already synced":                    350,
+		"Node behind by less than the threshold": 341,
+		"Node ahead of the chain head":           400,
+	}
+	for name, latestBlock := range syncedNodes {
+		t.Run(name, func(t *testing.T) {
+			provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+			provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(latestBlock), nil)
+			chainHead := &fakeChainHead{blocks: []uint64{350}}
+			sleeps := recordSleeps(t)
+			logger, buf := newLogger(t)
+
+			err := validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+			require.NoError(t, err)
+			require.Empty(t, sleeps())
+			require.Empty(t, buf.String())
+		})
+	}
+
+	t.Run("Node already synced, at the debug level", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(341), nil)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		var buf bytes.Buffer
+		logger, err := log.NewZapLogger(
+			log.NewLevel(log.DEBUG), log.WithWriter(&buf), log.WithColour(false),
+		)
+		require.NoError(t, err)
+
+		err = validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), "DEBUG")
+		require.Contains(
+			t, buf.String(),
+			`node is synced	{"currentBlock": 341, "highestBlock": 350, "blocksBehind": 9}`,
+		)
+	})
+
+	t.Run("Node behind for a while", func(t *testing.T) {
+		const behindPolls = 8
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		gomock.InOrder(
+			provider.EXPECT().BlockHashAndNumber(gomock.Any()).
+				Return(nodeBlock(100), nil).Times(behindPolls),
+			provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(350), nil),
+		)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		sleeps := recordSleeps(t)
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+		require.NoError(t, err)
+		require.Equal(t, slices.Repeat([]time.Duration{pollInterval}, behindPolls), sleeps())
+		logs := buf.String()
+		// Logged on the first poll and on the 7th
+		require.Equal(t, 2, strings.Count(logs, notSyncedLine))
+		require.Equal(t, 2, strings.Count(
+			logs, `{"currentBlock": 100, "highestBlock": 350, "blocksBehind": 250}`,
+		))
+		require.Equal(t, 1, strings.Count(logs, syncedLine))
+		require.Greater(
+			t, strings.Index(logs, syncedLine), strings.LastIndex(logs, notSyncedLine),
+		)
+	})
+
+	t.Run("Node behind by the threshold, then by less", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		gomock.InOrder(
+			provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(340), nil),
+			provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(341), nil),
+		)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		sleeps := recordSleeps(t)
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+		require.NoError(t, err)
+		require.Equal(t, []time.Duration{pollInterval}, sleeps())
+		require.Contains(t, buf.String(), `"blocksBehind": 10}`)
+	})
+
+	t.Run("Node with no blocks yet", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		gomock.InOrder(
+			provider.EXPECT().BlockHashAndNumber(gomock.Any()).
+				Return(nil, &rpcerr.RPCError{Code: 32, Message: "There are no blocks"}),
+			provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(350), nil),
+		)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		sleeps := recordSleeps(t)
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+		require.NoError(t, err)
+		require.Equal(t, []time.Duration{pollInterval}, sleeps())
+		require.Contains(
+			t, buf.String(), `{"currentBlock": 0, "highestBlock": 350, "blocksBehind": 350}`,
+		)
+	})
+
+	t.Run("Node request fails", func(t *testing.T) {
+		nodeErr := errors.New("some RPC error")
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nil, nodeErr)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		sleeps := recordSleeps(t)
+
+		err := validator.WaitUntilSynced(
+			t.Context(), provider, chainHead, log.NewNopZapLogger(),
+		)
+
+		require.ErrorIs(t, err, nodeErr)
+		require.NotErrorIs(t, err, validator.ErrChainHead)
+		require.Empty(t, sleeps())
+		require.Zero(t, chainHead.requests)
+	})
+
+	t.Run("Chain head request fails", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(100), nil)
+		chainHead := &fakeChainHead{err: errors.New("503 Service Unavailable")}
+		sleeps := recordSleeps(t)
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+		require.NoError(t, err)
+		require.Empty(t, sleeps())
+		require.Contains(t, buf.String(), "WARN")
+		require.Contains(
+			t, buf.String(), "cannot read the chain head. "+
+				"Starting without checking that the node is synced\t"+
+				`{"error": "feeder gateway request failed: 503 Service Unavailable"}`,
+		)
+		require.NotContains(t, buf.String(), syncedLine)
+	})
+
+	t.Run("Chain head request fails while the node is behind", func(t *testing.T) {
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(100), nil).Times(2)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		sleep := validator.Sleep
+		validator.Sleep = func(time.Duration) { chainHead.err = errors.New("timed out") }
+		t.Cleanup(func() { validator.Sleep = sleep })
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(t.Context(), provider, chainHead, logger)
+
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), notSyncedLine)
+		require.Contains(t, buf.String(), "Starting without checking that the node is synced")
+	})
+
+	t.Run("Context cancelled while waiting", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockHashAndNumber(gomock.Any()).Return(nodeBlock(100), nil).Times(1)
+		chainHead := &fakeChainHead{blocks: []uint64{350}}
+		sleep := validator.Sleep
+		validator.Sleep = func(time.Duration) { cancel() }
+		t.Cleanup(func() { validator.Sleep = sleep })
+
+		err := validator.WaitUntilSynced(ctx, provider, chainHead, log.NewNopZapLogger())
+
+		require.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("Context cancelled during the chain head request", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		provider := mocks.NewMockRPCProvider(gomock.NewController(t))
+		provider.EXPECT().BlockHashAndNumber(gomock.Any()).DoAndReturn(
+			func(context.Context) (*rpc.BlockHashAndNumberOutput, error) {
+				cancel()
+
+				return nodeBlock(100), nil
+			},
+		)
+		chainHead := &fakeChainHead{err: context.Canceled}
+		logger, buf := newLogger(t)
+
+		err := validator.WaitUntilSynced(ctx, provider, chainHead, logger)
+
+		require.ErrorIs(t, err, context.Canceled)
+		require.Empty(t, buf.String())
+	})
+}
+
+func TestNewChainHeadReader(t *testing.T) {
+	for _, chainID := range []string{"SN_MAIN", "SN_SEPOLIA"} {
+		require.NotNil(t, validator.NewChainHeadReader(chainID), chainID)
+	}
+	require.Nil(t, validator.NewChainHeadReader("SN_CUSTOM"))
+}
+
+func TestChainHeadReaderRequest(t *testing.T) {
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.Method+" "+r.URL.String())
+		_, err := w.Write([]byte(`{"block_hash": "0x1", "block_number": 350}`))
+		assert.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+	validator.UseFeeder(t, server.URL+"/feeder_gateway/")
+
+	header, err := validator.NewChainHeadReader("SN_SEPOLIA").BlockHeader(t.Context(), "latest")
+
+	require.NoError(t, err)
+	require.Equal(t, uint64(350), header.Number)
+	require.Equal(t, []string{
+		"GET /feeder_gateway/get_block?blockNumber=latest&headerOnly=true",
+	}, requests)
+	require.Zero(t, http.DefaultClient.Timeout)
 }

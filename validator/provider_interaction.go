@@ -90,6 +90,74 @@ func NewProvider(
 	return provider, nil
 }
 
+const (
+	syncPollInterval = 10 * time.Second
+	syncLogEvery     = 6 // one progress log per minute
+)
+
+// Polls the node until its latest block is close to the chain head reported by the
+// sequencer. When the chain head cannot be read, the node is not waited for
+func WaitUntilSynced(
+	ctx context.Context, provider rpc.RPCProvider, chainHead ChainHeadReader, logger log.Logger,
+) error {
+	for polls := 0; ; polls++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		nodeBlock, headBlock, err := readSyncProgress(ctx, provider, chainHead)
+		if errors.Is(err, ErrChainHead) && ctx.Err() == nil {
+			logger.Warn(
+				"cannot read the chain head. "+
+					"Starting without checking that the node is synced",
+				zap.Error(err),
+			)
+
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		behind := blocksBehind(nodeBlock, headBlock)
+		if behind < blocksBehindWarnThreshold {
+			if polls > 0 {
+				logger.Info("node is synced")
+			} else {
+				// The usual case, which needs no info log
+				logger.Debug(
+					"node is synced",
+					zap.Uint64("currentBlock", nodeBlock),
+					zap.Uint64("highestBlock", headBlock),
+					zap.Uint64("blocksBehind", behind),
+				)
+			}
+
+			return nil
+		}
+
+		if polls%syncLogEvery == 0 {
+			logger.Info(
+				"node is not synced. Waiting for it to sync before starting",
+				zap.Uint64("currentBlock", nodeBlock),
+				zap.Uint64("highestBlock", headBlock),
+				zap.Uint64("blocksBehind", behind),
+			)
+		}
+
+		Sleep(syncPollInterval)
+	}
+}
+
+// Returns how many blocks the node is behind the chain head, 0 when it is ahead of it
+func blocksBehind(nodeBlock, headBlock uint64) uint64 {
+	if headBlock <= nodeBlock {
+		return 0
+	}
+
+	return headBlock - nodeBlock
+}
+
 func fetchSpecVersion(ctx context.Context, providerURL string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, specVersionTimeout)
 	defer cancel()

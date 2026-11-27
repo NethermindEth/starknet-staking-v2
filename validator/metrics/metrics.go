@@ -26,6 +26,7 @@ type Metrics struct {
 	network                         string
 	registry                        *prometheus.Registry
 	latestBlockNumber               *prometheus.GaugeVec
+	nodeBlocksBehind                *prometheus.GaugeVec
 	currentEpochID                  *prometheus.GaugeVec
 	currentEpochLength              *prometheus.GaugeVec
 	currentEpochStartingBlockNumber *prometheus.GaugeVec
@@ -63,6 +64,13 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 			prometheus.GaugeOpts{
 				Name: "validator_attestation_starknet_latest_block_number",
 				Help: "The latest block number seen by the validator on the Starknet network",
+			},
+			[]string{networkLabel},
+		),
+		nodeBlocksBehind: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "validator_attestation_node_blocks_behind",
+				Help: "How many blocks the node is behind the chain head it knows of, as reported by starknet_syncing (the feeder gateway head on Juno). 0 when the node is synced",
 			},
 			[]string{networkLabel},
 		),
@@ -211,6 +219,7 @@ func NewMetrics(serverAddress, chainID string, logger log.Logger) *Metrics {
 	// Register metrics with Prometheus registry
 	registry.MustRegister(
 		m.latestBlockNumber,
+		m.nodeBlocksBehind,
 		m.currentEpochID,
 		m.currentEpochLength,
 		m.currentEpochStartingBlockNumber,
@@ -275,6 +284,12 @@ func (m *Metrics) Stop(ctx context.Context) error {
 func (m *Metrics) UpdateLatestBlockNumber(blockNumber uint64) {
 	m.logger.Debug("UpdateLatestBlockNumber", zap.Uint64("blockNumber", blockNumber))
 	m.latestBlockNumber.WithLabelValues(m.network).Set(float64(blockNumber))
+}
+
+// UpdateNodeBlocksBehind sets how many blocks the node is behind the chain head
+func (m *Metrics) UpdateNodeBlocksBehind(blocks uint64) {
+	m.logger.Debug("UpdateNodeBlocksBehind", zap.Uint64("blocksBehind", blocks))
+	m.nodeBlocksBehind.WithLabelValues(m.network).Set(float64(blocks))
 }
 
 // UpdateEpochInfo updates the epoch-related metrics
